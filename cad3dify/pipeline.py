@@ -13,6 +13,7 @@ from .v2.drawing_analyzer import DrawingAnalyzerChain
 from .v2.modeling_strategist import ModelingStrategist
 from .v2.code_generator import CodeGeneratorChain
 from .v2.smart_refiner import SmartRefiner
+from .v2.validators import validate_step_geometry
 
 def index_map(index: int) -> str:
     if index == 0:
@@ -79,6 +80,7 @@ def generate_step_v2(
     output_filepath: str,
     num_refinements: int = 3,
     on_spec_ready: callable = None,
+    on_progress: callable = None,
 ):
     """V2 增强管道：VL 读图 → 策略选择 → Coder 写码 → 智能改进
 
@@ -86,14 +88,19 @@ def generate_step_v2(
         image_filepath: 输入图片路径
         output_filepath: 输出 STEP 文件路径
         num_refinements: 改进轮数（默认 3）
-        on_spec_ready: DrawingSpec 就绪回调（可选，用于 UI 展示中间结果）
+        on_spec_ready: DrawingSpec 就绪回调 on_spec_ready(spec, reasoning=None)
+        on_progress: 进度回调 on_progress(stage: str, data: dict)
+            stage="geometry": data={"is_valid", "volume", "bbox", "error"}
+            stage="refinement_round": data={"round", "total", "status"}
     """
     image_data = ImageData.load_from_file(image_filepath)
 
     # 阶段 1: VL 分析图纸
     logger.info("[V2] Stage 1: Analyzing drawing with VL model...")
     analyzer = DrawingAnalyzerChain()
-    spec = analyzer.invoke(image_data)["result"]
+    analyzer_result = analyzer.invoke(image_data)
+    spec = analyzer_result["result"]
+    reasoning = analyzer_result.get("reasoning")
 
     if spec is None:
         logger.error("[V2] Drawing analysis failed, falling back to v1 pipeline")
@@ -104,7 +111,7 @@ def generate_step_v2(
     logger.info(f"[V2] Drawing spec: {spec.part_type}, dims={spec.overall_dimensions}")
 
     if on_spec_ready:
-        on_spec_ready(spec)
+        on_spec_ready(spec, reasoning)
 
     # 阶段 1.5: 选择建模策略
     logger.info("[V2] Stage 1.5: Selecting modeling strategy...")
@@ -129,6 +136,23 @@ def generate_step_v2(
     output = execute_python_code(code, model_type="qwen-coder", only_execute=False)
     logger.debug(output)
 
+    # 阶段 3.5: 几何验证
+    geo = validate_step_geometry(output_filepath)
+    if geo.is_valid:
+        logger.info(
+            f"[V2] Geometry valid — volume={geo.volume:.1f}, bbox={geo.bbox}"
+        )
+    else:
+        logger.error(f"[V2] Generated geometry invalid: {geo.error}")
+
+    if on_progress:
+        on_progress("geometry", {
+            "is_valid": geo.is_valid,
+            "volume": geo.volume,
+            "bbox": geo.bbox,
+            "error": geo.error,
+        })
+
     # 阶段 4: 智能改进
     refiner = SmartRefiner()
     for i in range(num_refinements):
@@ -146,10 +170,15 @@ def generate_step_v2(
                 original_image=image_data,
                 rendered_image=rendered_image,
                 drawing_spec=spec,
+                step_filepath=output_filepath,
             )
 
             if refined_code is None:
                 logger.info(f"[V2] Refinement round {i+1}: PASS — no changes needed")
+                if on_progress:
+                    on_progress("refinement_round", {
+                        "round": i + 1, "total": num_refinements, "status": "PASS",
+                    })
                 break
 
             code = Template(refined_code).substitute(output_filename=output_filepath)
@@ -161,6 +190,15 @@ def generate_step_v2(
                 logger.debug(output)
             except Exception as e:
                 logger.error(f"[V2] Execution failed after refinement: {e}")
+                if on_progress:
+                    on_progress("refinement_round", {
+                        "round": i + 1, "total": num_refinements, "status": "error",
+                    })
                 continue
+
+            if on_progress:
+                on_progress("refinement_round", {
+                    "round": i + 1, "total": num_refinements, "status": "refined",
+                })
 
     logger.info(f"[V2] Pipeline complete. Output: {output_filepath}")

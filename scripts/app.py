@@ -49,20 +49,62 @@ if uploaded_file is not None:
     if pipeline_mode == "v2 增强 (推荐)":
         # V2 模式：显示中间结果
         spec_container = st.empty()
+        progress_container = st.empty()
+        # 用列表存储可变状态（Python 闭包需要可变容器）
+        progress_state = {"geometry": None, "rounds": []}
 
-        def on_spec_ready(spec):
+        def on_spec_ready(spec, reasoning=None):
             with spec_container.container():
-                st.subheader("图纸分析结果")
+                st.subheader("📐 图纸分析结果")
+                if reasoning:
+                    with st.expander("📝 CoT 推理过程", expanded=False):
+                        st.code(reasoning, language=None)
                 st.write(f"**零件类型:** {spec.part_type.value}")
                 st.write(f"**描述:** {spec.description}")
                 st.write(f"**总体尺寸:** {spec.overall_dimensions}")
                 with st.expander("详细 JSON", expanded=False):
                     st.json(spec.model_dump())
 
+        def on_progress(stage, data):
+            if stage == "geometry":
+                progress_state["geometry"] = data
+            elif stage == "refinement_round":
+                progress_state["rounds"].append(data)
+
+            with progress_container.container():
+                geo = progress_state["geometry"]
+                if geo is not None:
+                    if geo["is_valid"]:
+                        bbox = geo["bbox"]
+                        if bbox:
+                            st.success(
+                                f"✅ 几何验证通过 — 体积: {geo['volume']:.1f} mm³, "
+                                f"包围盒: {bbox[0]:.0f}×{bbox[1]:.0f}×{bbox[2]:.0f} mm"
+                            )
+                        else:
+                            st.success(f"✅ 几何验证通过 — 体积: {geo['volume']:.1f} mm³")
+                    else:
+                        st.error(f"❌ 几何验证失败: {geo['error']}")
+
+                if progress_state["rounds"]:
+                    st.write("**改进轮次状态:**")
+                    for rd in progress_state["rounds"]:
+                        status = rd["status"]
+                        if status == "PASS":
+                            icon = "✅"
+                        elif status == "refined":
+                            icon = "🔄"
+                        else:
+                            icon = "⚠️"
+                        st.write(
+                            f"  {icon} 第 {rd['round']}/{rd['total']} 轮: {status}"
+                        )
+
         with st.spinner("V2 管道处理中..."):
             generate_step_v2(
                 temp_file, "output.step",
                 on_spec_ready=on_spec_ready,
+                on_progress=on_progress,
             )
         st.success("3D CAD 模型生成完成!")
     else:
