@@ -24,7 +24,7 @@ class CadCodeRefinerChain(SequentialChain):
             "## Start here\n"
             "Corrected code:"
         )
-        if model_type in ["gpt", "claude", "gemini"]:
+        if model_type in ["gpt", "claude", "gemini", "qwen"]:
             prompt = ChatPromptTemplate(
                 input_variables=[
                     "code",
@@ -104,7 +104,7 @@ class CadCodeRefinerChain(SequentialChain):
             and "code" in inputs
             and isinstance(inputs["code"], str)
         ), "inputs must have 'original_input' and 'rendered_result' and 'code' keys"
-        if self.model_type in ["gpt", "claude", "gemini"]:
+        if self.model_type in ["gpt", "claude", "gemini", "qwen"]:
             if self.model_type == "claude" and inputs["original_input"].type != "png":
                 # if the image type is not png and the model is claude, convert it to png.
                 inputs["original_input"] = inputs["original_input"].convert("png")
