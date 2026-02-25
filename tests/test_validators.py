@@ -14,9 +14,11 @@ from cad3dify.knowledge.part_types import (
     PartType,
 )
 from cad3dify.v2.validators import (
+    BBoxResult,
     ValidationResult,
     collect_spec_values,
     extract_numeric_assignments,
+    validate_bounding_box,
     validate_code_params,
 )
 
@@ -205,3 +207,39 @@ class TestValidateCodeParams:
         result = validate_code_params("", _default_spec())
         assert result.passed is False
         assert result.extracted_values == {}
+
+
+# ---------------------------------------------------------------------------
+# Test: Bounding-box validation
+# ---------------------------------------------------------------------------
+
+
+class TestBoundingBox:
+    def test_matching_bbox_passes(self) -> None:
+        dims = {"max_diameter": 100, "total_height": 30}
+        actual_bbox = (100.0, 100.0, 30.0)
+        result = validate_bounding_box(actual_bbox, dims)
+        assert result.passed is True
+
+    def test_wrong_height_fails(self) -> None:
+        dims = {"max_diameter": 100, "total_height": 30}
+        actual_bbox = (100.0, 100.0, 10.0)
+        result = validate_bounding_box(actual_bbox, dims)
+        assert result.passed is False
+
+    def test_partial_dims_ok(self) -> None:
+        dims = {"total_height": 30}
+        actual_bbox = (80.0, 80.0, 30.0)
+        result = validate_bounding_box(actual_bbox, dims)
+        assert result.passed is True
+
+    def test_within_tolerance_passes(self) -> None:
+        dims = {"max_diameter": 100, "total_height": 30}
+        actual_bbox = (95.0, 95.0, 28.0)  # within 10%
+        result = validate_bounding_box(actual_bbox, dims)
+        assert result.passed is True
+
+    def test_empty_dims_passes(self) -> None:
+        actual_bbox = (100.0, 100.0, 30.0)
+        result = validate_bounding_box(actual_bbox, {})
+        assert result.passed is True

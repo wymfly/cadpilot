@@ -347,3 +347,70 @@ def validate_code_params(
         warnings=warnings,
         extracted_values=extracted,
     )
+
+
+# ---------------------------------------------------------------------------
+# Bounding-box validation
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class BBoxResult:
+    passed: bool = True
+    detail: str = ""
+    actual: tuple[float, float, float] = (0, 0, 0)
+    expected: dict[str, float] = field(default_factory=dict)
+
+
+def _get_bbox_from_step(step_filepath: str) -> tuple[float, float, float] | None:
+    """从 STEP 文件读取包围盒 (xlen, ylen, zlen)"""
+    try:
+        import cadquery as cq
+        shape = cq.importers.importStep(step_filepath)
+        bb = shape.val().BoundingBox()
+        return (bb.xlen, bb.ylen, bb.zlen)
+    except Exception as e:
+        logger.error(f"Failed to read bounding box from {step_filepath}: {e}")
+        return None
+
+
+def validate_bounding_box(
+    actual_bbox: tuple[float, float, float],
+    overall_dims: dict[str, float],
+    tolerance: float = 0.10,
+) -> BBoxResult:
+    """
+    Compare actual bounding box (xlen, ylen, zlen) with DrawingSpec.overall_dimensions.
+    tolerance: relative error threshold (default 10%)
+
+    Mapping rules:
+    - total_height/height/total_length/length → Z axis
+    - max_diameter/diameter/width → X axis (for rotational parts X≈Y)
+    """
+    result = BBoxResult(actual=actual_bbox, expected=overall_dims)
+    mismatches = []
+
+    # Height → Z axis
+    for key in ["total_height", "height", "total_length", "length"]:
+        if key in overall_dims:
+            exp = overall_dims[key]
+            actual_z = actual_bbox[2]
+            if exp > 0 and abs(actual_z - exp) / exp > tolerance:
+                mismatches.append(f"Z-axis: actual={actual_z:.1f} vs spec {key}={exp}")
+
+    # Diameter/Width → X axis
+    for key in ["max_diameter", "diameter", "width"]:
+        if key in overall_dims:
+            exp = overall_dims[key]
+            actual_x = actual_bbox[0]
+            if exp > 0 and abs(actual_x - exp) / exp > tolerance:
+                mismatches.append(f"X-axis: actual={actual_x:.1f} vs spec {key}={exp}")
+
+    if mismatches:
+        result.passed = False
+        result.detail = "; ".join(mismatches)
+    else:
+        result.detail = "Bounding box within tolerance"
+
+    logger.info(f"BBox validation: passed={result.passed}, actual={actual_bbox}, {result.detail}")
+    return result
