@@ -1,7 +1,11 @@
-ROTATIONAL_EXAMPLES: list[tuple[str, str]] = [
-    (
-        "三层阶梯法兰盘：φ100/φ40/φ24，中心通孔φ10，6×φ10螺栓孔PCD70，R3圆角",
-        '''\
+"""Few-shot examples for rotational and rotational-stepped parts."""
+
+from ._base import TaggedExample
+
+ROTATIONAL_EXAMPLES: list[TaggedExample] = [
+    TaggedExample(
+        description="三层阶梯法兰盘：φ100/φ40/φ24，中心通孔φ10，6×φ10螺栓孔PCD70，R3圆角",
+        code="""\
 import cadquery as cq
 import math
 
@@ -26,7 +30,7 @@ profile_pts = [
 ]
 result = cq.Workplane("XZ").polyline(profile_pts).close().revolve(360, (0,0,0), (0,1,0))
 
-# 2. 阶梯过渡圆角（在 cut 之前）
+# 2. 阶梯过渡圆角
 for pt in [(r_base, 0, h_base), (r_mid, 0, h_base), (r_mid, 0, h_base+h_mid)]:
     try:
         result = result.edges(cq.selectors.NearestToPointSelector(pt)).fillet(r_fillet)
@@ -41,11 +45,12 @@ for i in range(n_bolts):
     result = result.cut(hole)
 
 cq.exporters.export(result, "${output_filename}")
-''',
+""",
+        features=frozenset({"revolve", "stepped", "hole_pattern", "bore", "fillet"}),
     ),
-    (
-        "简单轴：总长120，两端φ30轴颈各长25，中间φ50轴身长70，键槽",
-        '''\
+    TaggedExample(
+        description="简单轴：总长120，两端φ30轴颈各长25，中间φ50轴身长70，键槽",
+        code="""\
 import cadquery as cq
 
 # 尺寸参数
@@ -84,6 +89,74 @@ key_slot = (cq.Workplane("XZ")
 result = result.cut(key_slot)
 
 cq.exporters.export(result, "${output_filename}")
-''',
+""",
+        features=frozenset({"revolve", "stepped", "keyway", "fillet"}),
+    ),
+    TaggedExample(
+        description="单台阶轴：φ60轴身长80，φ40轴颈长40，两端倒角C1",
+        code="""\
+import cadquery as cq
+
+# 尺寸参数
+d_body, d_neck = 60, 40
+l_body, l_neck = 80, 40
+chamfer = 1
+
+r_body, r_neck = d_body / 2, d_neck / 2
+
+# revolve 一次成型
+profile_pts = [
+    (0, 0),
+    (r_neck, 0),
+    (r_neck, l_neck),
+    (r_body, l_neck),
+    (r_body, l_neck + l_body),
+    (0, l_neck + l_body),
+]
+result = cq.Workplane("XZ").polyline(profile_pts).close().revolve(360, (0, 0, 0), (0, 1, 0))
+
+# 两端倒角
+try:
+    result = result.edges("<Y").chamfer(chamfer)
+    result = result.edges(">Y").chamfer(chamfer)
+except Exception:
+    pass
+
+cq.exporters.export(result, "${output_filename}")
+""",
+        features=frozenset({"revolve", "stepped", "chamfer"}),
+    ),
+    TaggedExample(
+        description="空心轴套：外径φ80，内径φ60，长50，两端面倒角C1",
+        code="""\
+import cadquery as cq
+
+# 尺寸参数
+d_outer, d_inner = 80, 60
+length = 50
+chamfer = 1
+
+r_outer, r_inner = d_outer / 2, d_inner / 2
+
+# 薄壁轮廓
+profile_pts = [
+    (r_inner, 0),
+    (r_outer, 0),
+    (r_outer, length),
+    (r_inner, length),
+]
+result = (cq.Workplane("XZ").polyline(profile_pts).close()
+    .revolve(360, (0, 0, 0), (0, 1, 0)))
+
+# 两端倒角
+try:
+    result = result.edges("<Y").chamfer(chamfer)
+    result = result.edges(">Y").chamfer(chamfer)
+except Exception:
+    pass
+
+cq.exporters.export(result, "${output_filename}")
+""",
+        features=frozenset({"revolve", "bore", "chamfer"}),
     ),
 ]
