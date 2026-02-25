@@ -243,3 +243,45 @@ class TestBoundingBox:
         actual_bbox = (100.0, 100.0, 30.0)
         result = validate_bounding_box(actual_bbox, {})
         assert result.passed is True
+
+
+# ---------------------------------------------------------------------------
+# STEP geometry validation
+# ---------------------------------------------------------------------------
+
+from cad3dify.v2.validators import validate_step_geometry, GeometryResult
+
+
+class TestValidateStepGeometry:
+    def test_valid_step_file(self, tmp_path):
+        """Generate a simple STEP file and validate it."""
+        import cadquery as cq
+        step_path = str(tmp_path / "test.step")
+        result = cq.Workplane("XY").box(100, 100, 30)
+        cq.exporters.export(result, step_path)
+
+        geo = validate_step_geometry(step_path)
+        assert geo.is_valid is True
+        assert geo.volume > 0
+        assert geo.bbox is not None
+        assert abs(geo.bbox[0] - 100.0) < 0.1
+        assert abs(geo.bbox[2] - 30.0) < 0.1
+
+    def test_nonexistent_file(self):
+        geo = validate_step_geometry("/nonexistent/path.step")
+        assert geo.is_valid is False
+        assert geo.error != ""
+
+    def test_cylinder_volume(self, tmp_path):
+        """Validate volume for a known cylinder."""
+        import math
+        import cadquery as cq
+        step_path = str(tmp_path / "cyl.step")
+        r, h = 50, 30
+        result = cq.Workplane("XY").circle(r).extrude(h)
+        cq.exporters.export(result, step_path)
+
+        geo = validate_step_geometry(step_path)
+        assert geo.is_valid is True
+        expected_vol = math.pi * r**2 * h
+        assert abs(geo.volume - expected_vol) / expected_vol < 0.01

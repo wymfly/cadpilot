@@ -414,3 +414,43 @@ def validate_bounding_box(
 
     logger.info(f"BBox validation: passed={result.passed}, actual={actual_bbox}, {result.detail}")
     return result
+
+
+# ---------------------------------------------------------------------------
+# STEP geometry validation
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class GeometryResult:
+    """Result of STEP file geometry validation."""
+    is_valid: bool = False
+    volume: float = 0.0
+    bbox: tuple[float, float, float] | None = None  # (xlen, ylen, zlen)
+    error: str = ""
+
+
+def validate_step_geometry(step_filepath: str) -> GeometryResult:
+    """Validate a STEP file: check isValid(), compute Volume and BoundingBox.
+
+    Returns GeometryResult with is_valid=False if file doesn't exist or geometry is broken.
+    """
+    try:
+        import cadquery as cq
+        shape = cq.importers.importStep(step_filepath)
+        solid = shape.val()
+        bb = solid.BoundingBox()
+        geo = GeometryResult(
+            is_valid=solid.isValid(),
+            volume=solid.Volume(),
+            bbox=(bb.xlen, bb.ylen, bb.zlen),
+        )
+        logger.info(
+            f"Geometry validation: valid={geo.is_valid}, "
+            f"volume={geo.volume:.1f}, bbox={geo.bbox}"
+        )
+        return geo
+    except FileNotFoundError:
+        return GeometryResult(is_valid=False, error=f"File not found: {step_filepath}")
+    except Exception as e:
+        return GeometryResult(is_valid=False, error=str(e))
