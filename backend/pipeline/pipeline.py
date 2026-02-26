@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable
 from string import Template
 
 from loguru import logger
@@ -14,11 +15,13 @@ from ..core.modeling_strategist import ModelingStrategist
 from ..core.rollback import RollbackTracker
 from ..core.smart_refiner import SmartRefiner
 from ..core.validators import (
+    compare_topology,
+    count_topology,
     cross_section_analysis,
     validate_bounding_box,
     validate_step_geometry,
-    _get_bbox_from_step,
 )
+from ..knowledge.part_types import DrawingSpec
 from ..infra.agents import execute_python_code
 from ..infra.chat_models import MODEL_TYPE
 from ..infra.image import ImageData
@@ -56,7 +59,7 @@ def generate_step_from_2d_cad_image(
     chain = CadCodeGeneratorChain(model_type=model_type)
 
     result = chain.invoke(image_data)["result"]
-    code = Template(result).substitute(output_filename=output_filepath)
+    code = Template(result).safe_substitute(output_filename=output_filepath)
     logger.info("1st code generation complete. Running code...")
     logger.debug("Generated 1st code:")
     logger.debug(code)
@@ -76,7 +79,7 @@ def generate_step_from_2d_cad_image(
             if result is None:
                 logger.error(f"Refinement failed. Skipping to the next step.")
                 continue
-            code = Template(result).substitute(output_filename=output_filepath)
+            code = Template(result).safe_substitute(output_filename=output_filepath)
             logger.info("Refined code generation complete. Running code...")
             logger.debug(f"Generated {index_map(i)} refined code:")
             logger.debug(code)
@@ -90,7 +93,7 @@ def generate_step_from_2d_cad_image(
 
 def _score_geometry(
     output_filepath: str,
-    spec: object,
+    spec: DrawingSpec,
     config: PipelineConfig,
 ) -> tuple[bool, bool, bool, bool]:
     """Score geometry checks for a candidate: (compiled, volume_ok, bbox_ok, topology_ok)."""
@@ -101,22 +104,23 @@ def _score_geometry(
     topology_ok = False
 
     if compiled and config.volume_check:
-        # Volume check: just ensure volume > 0 for now
         volume_ok = geo.volume > 0
 
-    if compiled:
-        bbox = _get_bbox_from_step(output_filepath)
-        if bbox:
-            from ..core.validators import validate_bounding_box as vbb
-            bbox_result = vbb(bbox, spec.overall_dimensions)
-            bbox_ok = bbox_result.passed
+    if compiled and geo.bbox:
+        bbox_result = validate_bounding_box(geo.bbox, spec.overall_dimensions)
+        bbox_ok = bbox_result.passed
 
     if compiled and config.topology_check:
         try:
-            from ..core.validators import count_topology, compare_topology
             topo = count_topology(output_filepath)
             if not topo.error:
-                topo_cmp = compare_topology(topo, expected_holes=0)
+                expected_holes = 0
+                for feat in spec.features:
+                    if feat.get("type") == "hole_pattern":
+                        expected_holes += int(feat.get("count", 0))
+                if spec.base_body.bore is not None:
+                    expected_holes += 1
+                topo_cmp = compare_topology(topo, expected_holes=expected_holes)
                 topology_ok = topo_cmp.passed
         except Exception:
             pass
@@ -128,8 +132,8 @@ def generate_step_v2(
     image_filepath: str,
     output_filepath: str,
     num_refinements: int = 3,
-    on_spec_ready: callable = None,
-    on_progress: callable = None,
+    on_spec_ready: Callable | None = None,
+    on_progress: Callable | None = None,
     config: PipelineConfig | None = None,
 ):
     """V2 增强管道：VL 读图 → 策略选择 → Coder 写码 → 智能改进
@@ -216,7 +220,7 @@ def generate_step_v2(
                 logger.warning(f"[V2] Candidate {candidate_idx + 1}: no code returned")
                 continue
 
-            candidate_code = Template(gen_result).substitute(
+            candidate_code = Template(gen_result).safe_substitute(
                 output_filename=output_filepath
             )
 
@@ -318,7 +322,7 @@ def generate_step_v2(
             logger.error("[V2] Code generation failed")
             return
 
-        code = Template(result).substitute(output_filename=output_filepath)
+        code = Template(result).safe_substitute(output_filename=output_filepath)
         logger.info("[V2] Code generation complete.")
         logger.debug(f"Generated code:\n{code}")
 
@@ -432,7 +436,6 @@ def generate_step_v2(
             drawing_spec=spec,
             step_filepath=output_filepath,
             structured_feedback=config.structured_feedback,
-            rendered_images=rendered_images,
             topology_check=config.topology_check,
         )
 
@@ -444,7 +447,7 @@ def generate_step_v2(
                 })
             break
 
-        new_code = Template(refined_code).substitute(output_filename=output_filepath)
+        new_code = Template(refined_code).safe_substitute(output_filename=output_filepath)
         logger.info(f"[V2] Refinement round {i+1}: applying fixes...")
         logger.debug(f"Refined code:\n{new_code}")
 

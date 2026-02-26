@@ -112,12 +112,11 @@ class TestSmartRefinerAcceptsPhase2Params:
         sig = inspect.signature(SmartRefiner.refine)
         assert "structured_feedback" in sig.parameters
 
-    def test_refine_accepts_rendered_images(self) -> None:
-        import inspect
-        from backend.core.smart_refiner import SmartRefiner
+    def test_structured_compare_prompt_exists(self) -> None:
+        from backend.core.smart_refiner import _STRUCTURED_COMPARE_PROMPT
 
-        sig = inspect.signature(SmartRefiner.refine)
-        assert "rendered_images" in sig.parameters
+        assert "verdict" in _STRUCTURED_COMPARE_PROMPT
+        assert "JSON" in _STRUCTURED_COMPARE_PROMPT
 
     def test_refine_accepts_topology_check(self) -> None:
         import inspect

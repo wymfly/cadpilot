@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from cad3dify.knowledge.part_types import BaseBodySpec, DimensionLayer, DrawingSpec, PartType
+from backend.knowledge.part_types import BaseBodySpec, DimensionLayer, DrawingSpec, PartType
 
 
 def _make_stepped_spec() -> DrawingSpec:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Union
+from typing import Any
 
 from langchain.chains import LLMChain, SequentialChain, TransformChain
 from langchain.prompts import (
@@ -155,7 +155,8 @@ def _extract_comparison(input: dict) -> dict:
 class SmartCompareChain(SequentialChain):
     """阶段 4a: VL 模型对比原图和渲染图"""
 
-    def __init__(self) -> None:
+    def __init__(self, structured: bool = False) -> None:
+        compare_template = _STRUCTURED_COMPARE_PROMPT if structured else _COMPARE_PROMPT
         prompt = ChatPromptTemplate(
             input_variables=[
                 "drawing_spec", "code",
@@ -167,7 +168,7 @@ class SmartCompareChain(SequentialChain):
                     prompt=[
                         PromptTemplate(
                             input_variables=["drawing_spec", "code"],
-                            template=_COMPARE_PROMPT,
+                            template=compare_template,
                         ),
                         ImagePromptTemplate(
                             input_variables=["original_image_type", "original_image_data"],
@@ -243,6 +244,7 @@ class SmartRefiner:
 
     def __init__(self):
         self.compare_chain = SmartCompareChain()
+        self.structured_compare_chain = SmartCompareChain(structured=True)
         self.fix_chain = SmartFixChain()
 
     def refine(
@@ -253,7 +255,6 @@ class SmartRefiner:
         drawing_spec: DrawingSpec,
         step_filepath: str | None = None,
         structured_feedback: bool = False,
-        rendered_images: dict[str, ImageData] | None = None,
         topology_check: bool = False,
     ) -> str | None:
         """
@@ -269,7 +270,6 @@ class SmartRefiner:
             drawing_spec: 图纸分析规格
             step_filepath: STEP 文件路径（用于包围盒/拓扑校验）
             structured_feedback: 启用结构化 JSON 反馈解析
-            rendered_images: 多视角渲染图像字典 {view_name: ImageData}
             topology_check: 启用拓扑验证并注入诊断
 
         返回修正后的代码，如果 VL 判定 PASS 则返回 None。
@@ -343,7 +343,8 @@ class SmartRefiner:
 
         # ---- Layer 3: VL 对比（始终运行，是质量的唯一裁判） ----
         logger.info("Smart refiner Layer 3: running VL comparison...")
-        comparison = self.compare_chain.invoke({
+        chain = self.structured_compare_chain if structured_feedback else self.compare_chain
+        comparison = chain.invoke({
             "drawing_spec": drawing_spec.to_prompt_text(),
             "code": code,
             "original_image_type": original_image.type,
