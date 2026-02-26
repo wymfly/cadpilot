@@ -66,6 +66,32 @@ class TestAstPreCheck:
         assert result.passed is False
         assert any("os" in e for e in result.errors)
 
+    def test_blocked_api_call_fails(self) -> None:
+        """Code calling blocked API (show_object) fails."""
+        code = textwrap.dedent("""\
+            import cadquery as cq
+
+            result = cq.Workplane("XY").box(10, 10, 10)
+            show_object(result)
+            cq.exporters.export(result, "output.step")
+        """)
+        result = ast_pre_check(code)
+        assert result.passed is False
+        assert any("show_object" in e for e in result.errors)
+
+    def test_blocked_api_attribute_call_fails(self) -> None:
+        """Code calling blocked API as attribute (obj.debug) fails."""
+        code = textwrap.dedent("""\
+            import cadquery as cq
+
+            result = cq.Workplane("XY").box(10, 10, 10)
+            cq.debug(result)
+            cq.exporters.export(result, "output.step")
+        """)
+        result = ast_pre_check(code)
+        assert result.passed is False
+        assert any("debug" in e for e in result.errors)
+
     def test_undefined_export_variable_warns(self) -> None:
         """Export call with undefined variable produces a warning."""
         code = textwrap.dedent("""\

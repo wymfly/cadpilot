@@ -131,7 +131,7 @@ def _score_geometry(
 def generate_step_v2(
     image_filepath: str,
     output_filepath: str,
-    num_refinements: int = 3,
+    num_refinements: int | None = None,
     on_spec_ready: Callable | None = None,
     on_progress: Callable | None = None,
     config: PipelineConfig | None = None,
@@ -141,7 +141,7 @@ def generate_step_v2(
     Args:
         image_filepath: 输入图片路径
         output_filepath: 输出 STEP 文件路径
-        num_refinements: 改进轮数（默认 3）
+        num_refinements: 改进轮数，显式传入时优先于 config；None 则使用 config 值
         on_spec_ready: DrawingSpec 就绪回调 on_spec_ready(spec, reasoning=None)
         on_progress: 进度回调 on_progress(stage: str, data: dict)
             stage="geometry": data={"is_valid", "volume", "bbox", "error"}
@@ -152,8 +152,8 @@ def generate_step_v2(
     if config is None:
         config = PRESETS["balanced"]
 
-    # 使用 config.max_refinements 覆盖默认值（如果 caller 未显式传入）
-    effective_refinements = config.max_refinements
+    # 显式传入 num_refinements 优先，否则使用 config 预设值
+    effective_refinements = num_refinements if num_refinements is not None else config.max_refinements
 
     image_data = ImageData.load_from_file(image_filepath)
 

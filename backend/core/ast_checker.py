@@ -4,7 +4,8 @@ Performs lightweight static analysis before code execution:
 1. Syntax validity (ast.parse)
 2. Export statement presence
 3. Blocked import detection (security)
-4. Undefined export variable warning
+4. Blocked API call detection (show_object, debug, etc.)
+5. Undefined export variable warning
 """
 
 from __future__ import annotations
@@ -92,6 +93,26 @@ def _check_blocked_imports(tree: ast.Module) -> list[str]:
     return errors
 
 
+def _check_blocked_api_calls(tree: ast.Module) -> list[str]:
+    """Check for calls to blocked APIs (show_object, debug, etc.)."""
+    from ..core.api_whitelist import BLOCKED_APIS
+
+    errors: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = ""
+            if isinstance(func, ast.Name):
+                name = func.id
+            elif isinstance(func, ast.Attribute):
+                name = func.attr
+            if name and name in BLOCKED_APIS:
+                errors.append(
+                    f"Blocked API call: '{name}' is not allowed in generated code"
+                )
+    return errors
+
+
 def _check_export_variable_defined(tree: ast.Module) -> list[str]:
     """Warn if the first argument of an export call is not defined in code assignments."""
     warnings: list[str] = []
@@ -135,7 +156,8 @@ def ast_pre_check(code: str) -> AstCheckResult:
     1. Syntax validity (ast.parse)
     2. Export statement present
     3. No blocked imports (os, subprocess, etc.)
-    4. Warning if export variable not defined
+    4. No blocked API calls (show_object, debug, etc.)
+    5. Warning if export variable not defined
 
     Parameters
     ----------
@@ -163,7 +185,10 @@ def ast_pre_check(code: str) -> AstCheckResult:
     # Step 3: blocked imports
     errors.extend(_check_blocked_imports(tree))
 
-    # Step 4: undefined export variable (warning only)
+    # Step 4: blocked API calls
+    errors.extend(_check_blocked_api_calls(tree))
+
+    # Step 5: undefined export variable (warning only)
     warnings.extend(_check_export_variable_defined(tree))
 
     return AstCheckResult(
