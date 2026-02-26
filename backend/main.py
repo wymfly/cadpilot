@@ -12,6 +12,7 @@ from backend.api import (
     health,
     pipeline,
     print_config,
+    rag,
     standards,
     templates,
 )
@@ -36,3 +37,4 @@ app.include_router(benchmark.router, prefix="/api")
 app.include_router(templates.router, prefix="/api")
 app.include_router(standards.router, prefix="/api")
 app.include_router(print_config.router, prefix="/api")
+app.include_router(rag.router, prefix="/api")
