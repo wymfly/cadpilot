@@ -1,0 +1,117 @@
+import { useMemo } from 'react';
+import { Form, Button, Card, Space, Typography, Tag, Empty } from 'antd';
+import { CheckOutlined, UndoOutlined } from '@ant-design/icons';
+import ParamField from './ParamField.tsx';
+import ConstraintAlert from './ConstraintAlert.tsx';
+import type { ParamDefinition } from '../../types/template.ts';
+import type { ParamRecommendation, ConstraintViolation } from '../../types/standard.ts';
+
+const { Title, Text } = Typography;
+
+export interface ParamFormProps {
+  params: ParamDefinition[];
+  values: Record<string, number | string | boolean>;
+  recommendations?: ParamRecommendation[];
+  violations?: ConstraintViolation[];
+  onChange: (name: string, value: number | string | boolean) => void;
+  onConfirm: () => void;
+  onReset?: () => void;
+  loading?: boolean;
+  title?: string;
+}
+
+export default function ParamForm({
+  params,
+  values,
+  recommendations = [],
+  violations = [],
+  onChange,
+  onConfirm,
+  onReset,
+  loading = false,
+  title = '参数确认',
+}: ParamFormProps) {
+  const recMap = useMemo(() => {
+    const map: Record<string, ParamRecommendation> = {};
+    for (const r of recommendations) {
+      map[r.param_name] = r;
+    }
+    return map;
+  }, [recommendations]);
+
+  const hasErrors = violations.some((v) => v.severity === 'error');
+
+  if (params.length === 0) {
+    return (
+      <Card size="small" title={title}>
+        <Empty description="暂无参数定义" />
+      </Card>
+    );
+  }
+
+  return (
+    <Card
+      size="small"
+      title={
+        <Space>
+          <Title level={5} style={{ margin: 0 }}>
+            {title}
+          </Title>
+          <Tag>{params.length} 个参数</Tag>
+          {recommendations.length > 0 && (
+            <Tag color="blue">{recommendations.length} 个推荐</Tag>
+          )}
+        </Space>
+      }
+    >
+      <ConstraintAlert violations={violations} />
+
+      <Form layout="vertical">
+        {params.map((param) => (
+          <ParamField
+            key={param.name}
+            param={param}
+            value={values[param.name]}
+            recommendation={recMap[param.name]}
+            onChange={onChange}
+          />
+        ))}
+      </Form>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 8,
+          marginTop: 16,
+          paddingTop: 16,
+          borderTop: '1px solid #f0f0f0',
+        }}
+      >
+        {onReset && (
+          <Button icon={<UndoOutlined />} onClick={onReset}>
+            重置
+          </Button>
+        )}
+        <Button
+          type="primary"
+          icon={<CheckOutlined />}
+          onClick={onConfirm}
+          loading={loading}
+          disabled={hasErrors}
+        >
+          确认参数
+        </Button>
+        {hasErrors && (
+          <Text type="danger" style={{ alignSelf: 'center' }}>
+            请先修正错误
+          </Text>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+export { default as ParamField } from './ParamField.tsx';
+export { default as ParamSlider } from './ParamSlider.tsx';
+export { default as ConstraintAlert } from './ConstraintAlert.tsx';
