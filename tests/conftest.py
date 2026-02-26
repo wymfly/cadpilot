@@ -42,7 +42,12 @@ _STUB_ROOTS: frozenset[str] = frozenset({
     "rlpycairo",
     "streamlit",
     "httpx",
+    "sentence_transformers",
     # loguru — NOT stubbed, used by validators for real logging
+    "paddleocr",
+    "pytesseract",
+    "PIL",
+    "pillow",
 })
 
 
