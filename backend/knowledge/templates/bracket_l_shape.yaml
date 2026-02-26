@@ -1,0 +1,103 @@
+name: bracket_l_shape
+display_name: L型支架
+part_type: bracket
+description: L型支架：底板+立板+可选加强筋板，截面 extrude 成型
+params:
+  - name: base_length
+    display_name: 底板长度
+    unit: mm
+    param_type: float
+    range_min: 20
+    range_max: 500
+    default: 100
+  - name: base_width
+    display_name: 底板宽度
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 300
+    default: 80
+  - name: base_thickness
+    display_name: 底板厚度
+    unit: mm
+    param_type: float
+    range_min: 2
+    range_max: 40
+    default: 10
+  - name: wall_height
+    display_name: 立板高度
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 300
+    default: 60
+  - name: wall_thickness
+    display_name: 立板厚度
+    unit: mm
+    param_type: float
+    range_min: 2
+    range_max: 40
+    default: 10
+  - name: fillet_radius
+    display_name: 内角圆角半径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 30
+    default: 5
+  - name: has_rib
+    display_name: 是否有加强筋
+    param_type: bool
+    default: false
+constraints:
+  - "wall_thickness <= base_length"
+  - "fillet_radius < min(wall_height, base_length - wall_thickness)"
+code_template: |
+  import cadquery as cq
+
+  # Parameters
+  base_length = {{ base_length }}
+  base_width = {{ base_width }}
+  base_thickness = {{ base_thickness }}
+  wall_height = {{ wall_height }}
+  wall_thickness = {{ wall_thickness }}
+  fillet_radius = {{ fillet_radius }}
+
+  # L-shape profile in XZ plane (X = length, Z = height)
+  pts = [
+      (0, 0),
+      (base_length, 0),
+      (base_length, base_thickness),
+      (wall_thickness, base_thickness),
+      (wall_thickness, base_thickness + wall_height),
+      (0, base_thickness + wall_height),
+  ]
+  result = cq.Workplane("XZ").polyline(pts).close().extrude(base_width)
+
+  # Inner corner fillet
+  {% if fillet_radius > 0 %}
+  try:
+      result = result.edges(
+          cq.selectors.NearestToPointSelector((wall_thickness / 2, base_width / 2, base_thickness))
+      ).fillet(fillet_radius)
+  except Exception:
+      pass
+  {% endif %}
+
+  # Optional triangular rib
+  {% if has_rib %}
+  rib_size = min(base_length - wall_thickness, wall_height) * 0.6
+  rib_t = min(wall_thickness, 8)
+  rib_pts = [
+      (wall_thickness, base_thickness),
+      (wall_thickness + rib_size, base_thickness),
+      (wall_thickness, base_thickness + rib_size),
+  ]
+  rib = (cq.Workplane("XZ")
+      .polyline(rib_pts).close()
+      .extrude(rib_t))
+  rib = rib.translate((0, (base_width - rib_t) / 2, 0))
+  result = result.union(rib)
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

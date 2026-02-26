@@ -1,0 +1,102 @@
+name: general_block_with_holes
+display_name: 多孔块体
+part_type: general
+description: 长方体+通孔阵列，box + pushPoints 打孔
+params:
+  - name: length
+    display_name: 长度
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 500
+    default: 100
+  - name: width
+    display_name: 宽度
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 500
+    default: 60
+  - name: height
+    display_name: 高度
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 300
+    default: 40
+  - name: hole_diameter
+    display_name: 孔径
+    unit: mm
+    param_type: float
+    range_min: 2
+    range_max: 50
+    default: 8
+  - name: holes_x
+    display_name: X方向孔数
+    param_type: int
+    range_min: 1
+    range_max: 10
+    default: 3
+  - name: holes_y
+    display_name: Y方向孔数
+    param_type: int
+    range_min: 1
+    range_max: 10
+    default: 2
+  - name: corner_radius
+    display_name: 圆角半径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 30
+    default: 0
+constraints:
+  - "height > 0"
+  - "hole_diameter < min(length, width) / 2"
+  - "corner_radius < min(length, width) / 2"
+code_template: |
+  import cadquery as cq
+
+  # Parameters
+  length = {{ length }}
+  width = {{ width }}
+  height = {{ height }}
+  hole_diameter = {{ hole_diameter }}
+  holes_x = {{ holes_x }}
+  holes_y = {{ holes_y }}
+  corner_radius = {{ corner_radius }}
+
+  # 1. Base block
+  result = cq.Workplane("XY").box(length, width, height)
+
+  # 2. Optional corner fillets
+  {% if corner_radius > 0 %}
+  try:
+      result = result.edges("|Z").fillet(corner_radius)
+  except Exception:
+      pass
+  {% endif %}
+
+  # 3. Hole array on top face
+  margin = max(15, hole_diameter * 1.5)
+  hole_positions = []
+  if holes_x > 1:
+      spacing_x = (length - 2 * margin) / (holes_x - 1)
+  else:
+      spacing_x = 0
+  if holes_y > 1:
+      spacing_y = (width - 2 * margin) / (holes_y - 1)
+  else:
+      spacing_y = 0
+
+  for ix in range(holes_x):
+      for iy in range(holes_y):
+          hx = -length / 2 + margin + ix * spacing_x
+          hy = -width / 2 + margin + iy * spacing_y
+          hole_positions.append((hx, hy))
+
+  result = (result.faces(">Z").workplane()
+      .pushPoints(hole_positions)
+      .hole(hole_diameter))
+
+  cq.exporters.export(result, "{{ output_filename }}")

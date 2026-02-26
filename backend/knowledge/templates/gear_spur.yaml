@@ -1,0 +1,71 @@
+name: gear_spur
+display_name: 直齿轮
+part_type: gear
+description: 标准直齿轮，简化矩形齿槽近似，齿顶圆柱切槽法
+params:
+  - name: module_val
+    display_name: 模数
+    unit: mm
+    param_type: float
+    range_min: 0.5
+    range_max: 10
+    default: 2
+  - name: num_teeth
+    display_name: 齿数
+    param_type: int
+    range_min: 10
+    range_max: 200
+    default: 24
+  - name: face_width
+    display_name: 齿宽
+    unit: mm
+    param_type: float
+    range_min: 3
+    range_max: 200
+    default: 20
+  - name: bore_diameter
+    display_name: 中心孔直径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 300
+    default: 16
+constraints:
+  - "num_teeth >= 10"
+  - "bore_diameter < module_val * num_teeth"
+  - "face_width > 0"
+code_template: |
+  import cadquery as cq
+  import math
+
+  # Parameters
+  module_val = {{ module_val }}
+  num_teeth = {{ num_teeth }}
+  face_width = {{ face_width }}
+  bore_diameter = {{ bore_diameter }}
+
+  # Gear geometry
+  rp = module_val * num_teeth / 2       # pitch radius
+  ra = rp + module_val                   # addendum radius (tip)
+  rf = rp - 1.25 * module_val            # dedendum radius (root)
+  gap_w = math.pi * module_val / 2       # tooth gap width at pitch circle
+  gap_depth = (ra - rf) * 2 + 2          # radial depth for slot cut
+
+  # 1. Base cylinder at addendum diameter
+  result = cq.Workplane("XY").circle(ra).extrude(face_width)
+
+  # 2. Cut tooth gaps (simplified rectangular slots)
+  for i in range(num_teeth):
+      angle = (i + 0.5) * 360.0 / num_teeth
+      result = (result.faces(">Z").workplane()
+          .transformed(rotate=(0, 0, angle))
+          .center(rp, 0)
+          .rect(gap_depth, gap_w)
+          .cutBlind(face_width + 1))
+
+  # 3. Central bore
+  {% if bore_diameter > 0 %}
+  result = result.faces(">Z").workplane().hole(bore_diameter)
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

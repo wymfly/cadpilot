@@ -1,0 +1,100 @@
+name: rotational_flange_disk
+display_name: 法兰盘
+part_type: rotational
+description: 带中心孔和螺栓孔阵列的标准法兰盘，使用 revolve 一次成型
+params:
+  - name: outer_diameter
+    display_name: 外径
+    unit: mm
+    param_type: float
+    range_min: 30
+    range_max: 500
+    default: 120
+  - name: thickness
+    display_name: 厚度
+    unit: mm
+    param_type: float
+    range_min: 3
+    range_max: 100
+    default: 15
+  - name: bore_diameter
+    display_name: 中心孔直径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 400
+    default: 30
+  - name: bolt_count
+    display_name: 螺栓孔数量
+    param_type: int
+    range_min: 0
+    range_max: 24
+    default: 6
+  - name: bolt_diameter
+    display_name: 螺栓孔直径
+    unit: mm
+    param_type: float
+    range_min: 3
+    range_max: 30
+    default: 10
+    depends_on: bolt_count
+  - name: bolt_pcd
+    display_name: 螺栓孔分布圆直径
+    unit: mm
+    param_type: float
+    range_min: 20
+    range_max: 480
+    default: 90
+    depends_on: bolt_count
+constraints:
+  - "bore_diameter < outer_diameter"
+  - "bolt_pcd < outer_diameter"
+  - "bolt_diameter < (outer_diameter - bore_diameter) / 2"
+  - "thickness > 0"
+code_template: |
+  import cadquery as cq
+  {% if bolt_count > 0 %}
+  import math
+  {% endif %}
+
+  # Parameters
+  outer_diameter = {{ outer_diameter }}
+  thickness = {{ thickness }}
+  bore_diameter = {{ bore_diameter }}
+  bolt_count = {{ bolt_count }}
+  bolt_diameter = {{ bolt_diameter }}
+  bolt_pcd = {{ bolt_pcd }}
+
+  r_outer = outer_diameter / 2
+  r_bore = bore_diameter / 2
+
+  # 1. Revolve profile in XZ plane
+  {% if bore_diameter > 0 %}
+  profile_pts = [
+      (r_bore, 0),
+      (r_outer, 0),
+      (r_outer, thickness),
+      (r_bore, thickness),
+  ]
+  result = cq.Workplane("XZ").polyline(profile_pts).close().revolve(360, (0, 0, 0), (0, 1, 0))
+  {% else %}
+  profile_pts = [
+      (0, 0),
+      (r_outer, 0),
+      (r_outer, thickness),
+      (0, thickness),
+  ]
+  result = cq.Workplane("XZ").polyline(profile_pts).close().revolve(360, (0, 0, 0), (0, 1, 0))
+  {% endif %}
+
+  # 2. Bolt holes
+  {% if bolt_count > 0 %}
+  for i in range(bolt_count):
+      angle = math.radians(i * 360 / bolt_count)
+      x = (bolt_pcd / 2) * math.cos(angle)
+      y = (bolt_pcd / 2) * math.sin(angle)
+      hole = cq.Workplane("XY").center(x, y).circle(bolt_diameter / 2).extrude(thickness + 1)
+      result = result.cut(hole)
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

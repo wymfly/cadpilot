@@ -1,0 +1,91 @@
+name: housing_box_shell
+display_name: 箱体壳
+part_type: housing
+description: 矩形箱体抽壳，顶面开口，底部四角安装凸台
+params:
+  - name: length
+    display_name: 长度
+    unit: mm
+    param_type: float
+    range_min: 20
+    range_max: 500
+    default: 120
+  - name: width
+    display_name: 宽度
+    unit: mm
+    param_type: float
+    range_min: 20
+    range_max: 400
+    default: 80
+  - name: height
+    display_name: 高度
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 300
+    default: 60
+  - name: wall_thickness
+    display_name: 壁厚
+    unit: mm
+    param_type: float
+    range_min: 1
+    range_max: 20
+    default: 3
+  - name: boss_diameter
+    display_name: 安装凸台直径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 40
+    default: 12
+  - name: boss_height
+    display_name: 安装凸台高度
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 30
+    default: 5
+  - name: boss_hole_diameter
+    display_name: 安装孔直径
+    unit: mm
+    param_type: float
+    range_min: 2
+    range_max: 20
+    default: 5
+constraints:
+  - "wall_thickness < min(length, width) / 2"
+  - "boss_hole_diameter < boss_diameter"
+  - "boss_height < height - wall_thickness"
+code_template: |
+  import cadquery as cq
+
+  # Parameters
+  length = {{ length }}
+  width = {{ width }}
+  height = {{ height }}
+  wall_thickness = {{ wall_thickness }}
+  boss_diameter = {{ boss_diameter }}
+  boss_height = {{ boss_height }}
+  boss_hole_diameter = {{ boss_hole_diameter }}
+
+  # 1. Box body + shell (top face open)
+  result = (cq.Workplane("XY")
+      .box(length, width, height)
+      .faces(">Z").shell(-wall_thickness))
+
+  # 2. Mounting bosses at bottom corners
+  {% if boss_diameter > 0 and boss_height > 0 %}
+  margin = 10
+  result = (result.faces("<Z").workplane(invert=True)
+      .rect(length - margin * 2, width - margin * 2, forConstruction=True)
+      .vertices()
+      .circle(boss_diameter / 2).extrude(boss_height))
+
+  # 3. Mounting holes through bosses
+  result = (result.faces("<Z").workplane(invert=True)
+      .rect(length - margin * 2, width - margin * 2, forConstruction=True)
+      .vertices()
+      .hole(boss_hole_diameter))
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

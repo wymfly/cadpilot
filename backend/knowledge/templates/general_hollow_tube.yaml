@@ -1,0 +1,68 @@
+name: general_hollow_tube
+display_name: 空心管
+part_type: general
+description: 空心管：外径+内径+长度，revolve 薄壁截面成型
+params:
+  - name: outer_diameter
+    display_name: 外径
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 500
+    default: 60
+  - name: inner_diameter
+    display_name: 内径
+    unit: mm
+    param_type: float
+    range_min: 3
+    range_max: 490
+    default: 50
+  - name: length
+    display_name: 长度
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 2000
+    default: 100
+  - name: chamfer
+    display_name: 端面倒角
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 10
+    default: 1
+constraints:
+  - "inner_diameter < outer_diameter"
+  - "length > 0"
+  - "chamfer < (outer_diameter - inner_diameter) / 2"
+code_template: |
+  import cadquery as cq
+
+  # Parameters
+  outer_diameter = {{ outer_diameter }}
+  inner_diameter = {{ inner_diameter }}
+  length = {{ length }}
+  chamfer = {{ chamfer }}
+
+  r_outer = outer_diameter / 2
+  r_inner = inner_diameter / 2
+
+  # Revolve thin-wall profile in XZ plane
+  profile_pts = [
+      (r_inner, 0),
+      (r_outer, 0),
+      (r_outer, length),
+      (r_inner, length),
+  ]
+  result = cq.Workplane("XZ").polyline(profile_pts).close().revolve(360, (0, 0, 0), (0, 1, 0))
+
+  # Optional end chamfer
+  {% if chamfer > 0 %}
+  try:
+      result = result.edges("<Y").chamfer(chamfer)
+      result = result.edges(">Y").chamfer(chamfer)
+  except Exception:
+      pass
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

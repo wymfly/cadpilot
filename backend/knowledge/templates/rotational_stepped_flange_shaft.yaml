@@ -1,0 +1,138 @@
+name: rotational_stepped_flange_shaft
+display_name: 法兰轴
+part_type: rotational_stepped
+description: 带法兰和螺栓孔阵列的阶梯轴，revolve 一次成型
+params:
+  - name: d_flange
+    display_name: 法兰直径
+    unit: mm
+    param_type: float
+    range_min: 30
+    range_max: 400
+    default: 100
+  - name: h_flange
+    display_name: 法兰厚度
+    unit: mm
+    param_type: float
+    range_min: 3
+    range_max: 60
+    default: 12
+  - name: d_shaft
+    display_name: 轴径
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 300
+    default: 40
+  - name: l_shaft
+    display_name: 轴长
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 500
+    default: 80
+  - name: bore_diameter
+    display_name: 中心孔直径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 250
+    default: 0
+  - name: bolt_count
+    display_name: 螺栓孔数量
+    param_type: int
+    range_min: 0
+    range_max: 16
+    default: 4
+  - name: bolt_diameter
+    display_name: 螺栓孔直径
+    unit: mm
+    param_type: float
+    range_min: 3
+    range_max: 20
+    default: 10
+    depends_on: bolt_count
+  - name: bolt_pcd
+    display_name: 螺栓分布圆直径
+    unit: mm
+    param_type: float
+    range_min: 20
+    range_max: 380
+    default: 75
+    depends_on: bolt_count
+  - name: fillet_radius
+    display_name: 过渡圆角半径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 15
+    default: 3
+constraints:
+  - "d_flange > d_shaft"
+  - "bore_diameter < d_shaft"
+  - "bolt_pcd < d_flange"
+  - "bolt_pcd > d_shaft"
+code_template: |
+  import cadquery as cq
+  {% if bolt_count > 0 %}
+  import math
+  {% endif %}
+
+  # Parameters
+  d_flange = {{ d_flange }}
+  h_flange = {{ h_flange }}
+  d_shaft = {{ d_shaft }}
+  l_shaft = {{ l_shaft }}
+  bore_diameter = {{ bore_diameter }}
+  bolt_count = {{ bolt_count }}
+  bolt_diameter = {{ bolt_diameter }}
+  bolt_pcd = {{ bolt_pcd }}
+  fillet_radius = {{ fillet_radius }}
+
+  r_flange = d_flange / 2
+  r_shaft = d_shaft / 2
+  r_bore = bore_diameter / 2
+
+  # Revolve profile in XZ plane — flange + shaft in one profile
+  {% if bore_diameter > 0 %}
+  profile_pts = [
+      (r_bore, 0),
+      (r_flange, 0),
+      (r_flange, h_flange),
+      (r_shaft, h_flange),
+      (r_shaft, h_flange + l_shaft),
+      (r_bore, h_flange + l_shaft),
+  ]
+  {% else %}
+  profile_pts = [
+      (0, 0),
+      (r_flange, 0),
+      (r_flange, h_flange),
+      (r_shaft, h_flange),
+      (r_shaft, h_flange + l_shaft),
+      (0, h_flange + l_shaft),
+  ]
+  {% endif %}
+  result = cq.Workplane("XZ").polyline(profile_pts).close().revolve(360, (0, 0, 0), (0, 1, 0))
+
+  # Transition fillet at flange-shaft junction
+  {% if fillet_radius > 0 %}
+  try:
+      result = result.edges(
+          cq.selectors.NearestToPointSelector((r_shaft, 0, h_flange))
+      ).fillet(fillet_radius)
+  except Exception:
+      pass
+  {% endif %}
+
+  # Bolt holes through flange
+  {% if bolt_count > 0 %}
+  for i in range(bolt_count):
+      angle = math.radians(i * 360 / bolt_count)
+      x = (bolt_pcd / 2) * math.cos(angle)
+      y = (bolt_pcd / 2) * math.sin(angle)
+      hole = cq.Workplane("XY").center(x, y).circle(bolt_diameter / 2).extrude(h_flange + 1)
+      result = result.cut(hole)
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

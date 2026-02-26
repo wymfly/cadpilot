@@ -1,0 +1,102 @@
+name: rotational_stepped_shaft
+display_name: 阶梯轴
+part_type: rotational_stepped
+description: 2-3段阶梯轴，带过渡圆角，revolve 一次成型
+params:
+  - name: d_large
+    display_name: 大径
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 300
+    default: 60
+  - name: l_large
+    display_name: 大径段长度
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 500
+    default: 40
+  - name: d_medium
+    display_name: 中径
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 280
+    default: 40
+  - name: l_medium
+    display_name: 中径段长度
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 500
+    default: 60
+  - name: d_small
+    display_name: 小径
+    unit: mm
+    param_type: float
+    range_min: 3
+    range_max: 260
+    default: 25
+  - name: l_small
+    display_name: 小径段长度
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 500
+    default: 30
+  - name: fillet_radius
+    display_name: 过渡圆角半径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 20
+    default: 2
+constraints:
+  - "d_large > d_medium"
+  - "d_medium > d_small"
+  - "fillet_radius < (d_large - d_medium) / 2"
+code_template: |
+  import cadquery as cq
+
+  # Parameters
+  d_large = {{ d_large }}
+  l_large = {{ l_large }}
+  d_medium = {{ d_medium }}
+  l_medium = {{ l_medium }}
+  d_small = {{ d_small }}
+  l_small = {{ l_small }}
+  fillet_radius = {{ fillet_radius }}
+
+  r_large = d_large / 2
+  r_medium = d_medium / 2
+  r_small = d_small / 2
+
+  # Revolve profile in XZ plane — all steps in one profile
+  profile_pts = [
+      (0, 0),
+      (r_large, 0),
+      (r_large, l_large),
+      (r_medium, l_large),
+      (r_medium, l_large + l_medium),
+      (r_small, l_large + l_medium),
+      (r_small, l_large + l_medium + l_small),
+      (0, l_large + l_medium + l_small),
+  ]
+  result = cq.Workplane("XZ").polyline(profile_pts).close().revolve(360, (0, 0, 0), (0, 1, 0))
+
+  # Transition fillets at each step
+  {% if fillet_radius > 0 %}
+  for pt in [
+      (r_large, 0, l_large),
+      (r_medium, 0, l_large),
+      (r_medium, 0, l_large + l_medium),
+      (r_small, 0, l_large + l_medium),
+  ]:
+      try:
+          result = result.edges(cq.selectors.NearestToPointSelector(pt)).fillet(fillet_radius)
+      except Exception:
+          pass
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

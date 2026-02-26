@@ -1,0 +1,75 @@
+name: bracket_u_shape
+display_name: U型支架
+part_type: bracket
+description: U型支架：底板+两侧板，截面 extrude 成型
+params:
+  - name: outer_width
+    display_name: 外宽
+    unit: mm
+    param_type: float
+    range_min: 20
+    range_max: 400
+    default: 100
+  - name: channel_height
+    display_name: 通道高度
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 300
+    default: 60
+  - name: depth
+    display_name: 深度
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 500
+    default: 80
+  - name: wall_thickness
+    display_name: 壁厚
+    unit: mm
+    param_type: float
+    range_min: 2
+    range_max: 40
+    default: 10
+  - name: hole_diameter
+    display_name: 底板安装孔直径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 30
+    default: 8
+constraints:
+  - "wall_thickness < outer_width / 2"
+  - "channel_height > wall_thickness"
+code_template: |
+  import cadquery as cq
+
+  # Parameters
+  outer_width = {{ outer_width }}
+  channel_height = {{ channel_height }}
+  depth = {{ depth }}
+  wall_thickness = {{ wall_thickness }}
+  hole_diameter = {{ hole_diameter }}
+
+  # U-shape profile in XZ plane (X = width, Z = height)
+  pts = [
+      (0, 0),
+      (outer_width, 0),
+      (outer_width, channel_height),
+      (outer_width - wall_thickness, channel_height),
+      (outer_width - wall_thickness, wall_thickness),
+      (wall_thickness, wall_thickness),
+      (wall_thickness, channel_height),
+      (0, channel_height),
+  ]
+  result = cq.Workplane("XZ").polyline(pts).close().extrude(depth)
+
+  # Bottom mounting holes (4 corners)
+  {% if hole_diameter > 0 %}
+  result = (result.faces("<Z").workplane()
+      .rect(outer_width - 20, depth - 20, forConstruction=True)
+      .vertices()
+      .hole(hole_diameter))
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

@@ -1,0 +1,57 @@
+name: plate_rect
+display_name: 矩形板
+part_type: plate
+description: 矩形板件，可选圆角边缘
+params:
+  - name: length
+    display_name: 长度
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 1000
+    default: 150
+  - name: width
+    display_name: 宽度
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 1000
+    default: 100
+  - name: thickness
+    display_name: 厚度
+    unit: mm
+    param_type: float
+    range_min: 1
+    range_max: 100
+    default: 10
+  - name: corner_radius
+    display_name: 圆角半径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 100
+    default: 0
+constraints:
+  - "thickness > 0"
+  - "corner_radius < min(length, width) / 2"
+code_template: |
+  import cadquery as cq
+
+  # Parameters
+  length = {{ length }}
+  width = {{ width }}
+  thickness = {{ thickness }}
+  corner_radius = {{ corner_radius }}
+
+  # Create rectangular plate
+  result = cq.Workplane("XY").box(length, width, thickness)
+
+  # Optional corner fillet on vertical edges
+  {% if corner_radius > 0 %}
+  try:
+      result = result.edges("|Z").fillet(corner_radius)
+  except Exception:
+      pass
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

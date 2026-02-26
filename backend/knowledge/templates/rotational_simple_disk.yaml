@@ -1,0 +1,78 @@
+name: rotational_simple_disk
+display_name: 简单圆盘
+part_type: rotational
+description: 简单圆盘，可选中心孔，使用 revolve 成型
+params:
+  - name: diameter
+    display_name: 直径
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 500
+    default: 100
+  - name: thickness
+    display_name: 厚度
+    unit: mm
+    param_type: float
+    range_min: 1
+    range_max: 200
+    default: 20
+  - name: bore_diameter
+    display_name: 中心孔直径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 490
+    default: 0
+  - name: chamfer
+    display_name: 边缘倒角
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 20
+    default: 0
+constraints:
+  - "bore_diameter < diameter"
+  - "thickness > 0"
+  - "chamfer < thickness / 2"
+code_template: |
+  import cadquery as cq
+
+  # Parameters
+  diameter = {{ diameter }}
+  thickness = {{ thickness }}
+  bore_diameter = {{ bore_diameter }}
+  chamfer = {{ chamfer }}
+
+  r_outer = diameter / 2
+  r_bore = bore_diameter / 2
+
+  # Revolve profile in XZ plane
+  {% if bore_diameter > 0 %}
+  profile_pts = [
+      (r_bore, 0),
+      (r_outer, 0),
+      (r_outer, thickness),
+      (r_bore, thickness),
+  ]
+  result = cq.Workplane("XZ").polyline(profile_pts).close().revolve(360, (0, 0, 0), (0, 1, 0))
+  {% else %}
+  profile_pts = [
+      (0, 0),
+      (r_outer, 0),
+      (r_outer, thickness),
+      (0, thickness),
+  ]
+  result = cq.Workplane("XZ").polyline(profile_pts).close().revolve(360, (0, 0, 0), (0, 1, 0))
+  {% endif %}
+
+  # Optional chamfer on outer edges
+  {% if chamfer > 0 %}
+  try:
+      result = result.edges("<Y").chamfer(chamfer)
+      result = result.edges(">Y").chamfer(chamfer)
+  except Exception:
+      pass
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

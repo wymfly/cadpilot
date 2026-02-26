@@ -1,0 +1,115 @@
+name: housing_cylinder_shell
+display_name: 圆柱壳体
+part_type: housing
+description: 圆柱壳体，顶面开口抽壳，可选底部法兰
+params:
+  - name: outer_diameter
+    display_name: 外径
+    unit: mm
+    param_type: float
+    range_min: 20
+    range_max: 400
+    default: 100
+  - name: height
+    display_name: 高度
+    unit: mm
+    param_type: float
+    range_min: 10
+    range_max: 500
+    default: 80
+  - name: wall_thickness
+    display_name: 壁厚
+    unit: mm
+    param_type: float
+    range_min: 1
+    range_max: 30
+    default: 4
+  - name: has_flange
+    display_name: 是否有底部法兰
+    param_type: bool
+    default: true
+  - name: flange_diameter
+    display_name: 法兰直径
+    unit: mm
+    param_type: float
+    range_min: 25
+    range_max: 500
+    default: 130
+    depends_on: has_flange
+  - name: flange_thickness
+    display_name: 法兰厚度
+    unit: mm
+    param_type: float
+    range_min: 3
+    range_max: 40
+    default: 8
+    depends_on: has_flange
+  - name: bolt_count
+    display_name: 法兰螺栓孔数
+    param_type: int
+    range_min: 0
+    range_max: 16
+    default: 4
+    depends_on: has_flange
+  - name: bolt_diameter
+    display_name: 螺栓孔直径
+    unit: mm
+    param_type: float
+    range_min: 3
+    range_max: 20
+    default: 10
+    depends_on: bolt_count
+constraints:
+  - "wall_thickness < outer_diameter / 2"
+  - "flange_diameter >= outer_diameter"
+code_template: |
+  import cadquery as cq
+  {% if bolt_count > 0 %}
+  import math
+  {% endif %}
+
+  # Parameters
+  outer_diameter = {{ outer_diameter }}
+  height = {{ height }}
+  wall_thickness = {{ wall_thickness }}
+  has_flange = {{ has_flange }}
+  flange_diameter = {{ flange_diameter }}
+  flange_thickness = {{ flange_thickness }}
+  bolt_count = {{ bolt_count }}
+  bolt_diameter = {{ bolt_diameter }}
+
+  r_outer = outer_diameter / 2
+  r_flange = flange_diameter / 2
+
+  # Build the cylindrical shell
+  {% if has_flange %}
+  # 1. Bottom flange
+  result = cq.Workplane("XY").circle(r_flange).extrude(flange_thickness)
+
+  # 2. Cylinder on top of flange
+  cylinder = (cq.Workplane("XY")
+      .workplane(offset=flange_thickness)
+      .circle(r_outer)
+      .extrude(height))
+  result = result.union(cylinder)
+
+  # 3. Shell (top face open)
+  result = result.faces(">Z").shell(-wall_thickness)
+
+  # 4. Bolt holes through flange
+  {% if bolt_count > 0 %}
+  bolt_pcd = (flange_diameter + outer_diameter) / 2
+  for i in range(bolt_count):
+      angle = math.radians(i * 360 / bolt_count)
+      x = (bolt_pcd / 2) * math.cos(angle)
+      y = (bolt_pcd / 2) * math.sin(angle)
+      hole = cq.Workplane("XY").center(x, y).circle(bolt_diameter / 2).extrude(flange_thickness + 1)
+      result = result.cut(hole)
+  {% endif %}
+  {% else %}
+  # Simple cylinder + shell
+  result = cq.Workplane("XY").circle(r_outer).extrude(height)
+  result = result.faces(">Z").shell(-wall_thickness)
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

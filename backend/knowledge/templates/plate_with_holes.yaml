@@ -1,0 +1,94 @@
+name: plate_with_holes
+display_name: 带孔板
+part_type: plate
+description: 矩形板件带网格排列的通孔阵列
+params:
+  - name: length
+    display_name: 长度
+    unit: mm
+    param_type: float
+    range_min: 20
+    range_max: 1000
+    default: 200
+  - name: width
+    display_name: 宽度
+    unit: mm
+    param_type: float
+    range_min: 20
+    range_max: 1000
+    default: 120
+  - name: thickness
+    display_name: 厚度
+    unit: mm
+    param_type: float
+    range_min: 2
+    range_max: 80
+    default: 10
+  - name: hole_diameter
+    display_name: 孔径
+    unit: mm
+    param_type: float
+    range_min: 2
+    range_max: 50
+    default: 10
+  - name: holes_x
+    display_name: X方向孔数
+    param_type: int
+    range_min: 1
+    range_max: 20
+    default: 3
+  - name: holes_y
+    display_name: Y方向孔数
+    param_type: int
+    range_min: 1
+    range_max: 20
+    default: 2
+  - name: margin
+    display_name: 边距
+    unit: mm
+    param_type: float
+    range_min: 5
+    range_max: 100
+    default: 25
+constraints:
+  - "thickness > 0"
+  - "hole_diameter < min(length, width) / 2"
+  - "margin > hole_diameter / 2"
+code_template: |
+  import cadquery as cq
+
+  # Parameters
+  length = {{ length }}
+  width = {{ width }}
+  thickness = {{ thickness }}
+  hole_diameter = {{ hole_diameter }}
+  holes_x = {{ holes_x }}
+  holes_y = {{ holes_y }}
+  margin = {{ margin }}
+
+  # Create base plate
+  result = cq.Workplane("XY").box(length, width, thickness)
+
+  # Compute hole grid positions
+  hole_positions = []
+  if holes_x > 1:
+      spacing_x = (length - 2 * margin) / (holes_x - 1)
+  else:
+      spacing_x = 0
+  if holes_y > 1:
+      spacing_y = (width - 2 * margin) / (holes_y - 1)
+  else:
+      spacing_y = 0
+
+  for ix in range(holes_x):
+      for iy in range(holes_y):
+          hx = -length / 2 + margin + ix * spacing_x
+          hy = -width / 2 + margin + iy * spacing_y
+          hole_positions.append((hx, hy))
+
+  # Drill holes through top face
+  result = (result.faces(">Z").workplane()
+      .pushPoints(hole_positions)
+      .hole(hole_diameter))
+
+  cq.exporters.export(result, "{{ output_filename }}")
