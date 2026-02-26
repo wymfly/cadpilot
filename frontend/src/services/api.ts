@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type { TooltipSpec, PipelineConfig } from '../types/pipeline.ts';
 import type { BenchmarkSummary, BenchmarkReport } from '../types/benchmark.ts';
+import type { ParametricTemplate, ValidateResponse } from '../types/template.ts';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -76,6 +77,51 @@ export async function getBenchmarkReport(runId: string): Promise<BenchmarkReport
 
 export async function getBenchmarkDatasets(): Promise<string[]> {
   const { data } = await api.get<string[]>('/benchmark/datasets');
+  return data;
+}
+
+// Template API
+export async function getTemplates(partType?: string): Promise<ParametricTemplate[]> {
+  const params = partType ? { part_type: partType } : {};
+  const { data } = await api.get<ParametricTemplate[]>('/templates', { params });
+  return data;
+}
+
+export async function getTemplate(name: string): Promise<ParametricTemplate> {
+  const { data } = await api.get<ParametricTemplate>(`/templates/${name}`);
+  return data;
+}
+
+export async function createTemplate(
+  template: Partial<ParametricTemplate>,
+): Promise<ParametricTemplate> {
+  const { data } = await api.post<ParametricTemplate>('/templates', template);
+  return data;
+}
+
+export async function updateTemplate(
+  name: string,
+  template: Partial<ParametricTemplate>,
+): Promise<ParametricTemplate> {
+  const { data } = await api.put<ParametricTemplate>(
+    `/templates/${name}`,
+    template,
+  );
+  return data;
+}
+
+export async function deleteTemplate(name: string): Promise<void> {
+  await api.delete(`/templates/${name}`);
+}
+
+export async function validateTemplateParams(
+  name: string,
+  params: Record<string, unknown>,
+): Promise<ValidateResponse> {
+  const { data } = await api.post<ValidateResponse>(
+    `/templates/${name}/validate`,
+    params,
+  );
   return data;
 }
 
