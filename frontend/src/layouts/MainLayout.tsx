@@ -3,6 +3,7 @@ import {
   HomeOutlined,
   ExperimentOutlined,
   AppstoreOutlined,
+  BookOutlined,
   BarChartOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
@@ -14,6 +15,7 @@ const menuItems = [
   { key: '/', icon: <HomeOutlined />, label: '首页' },
   { key: '/generate', icon: <ExperimentOutlined />, label: '生成' },
   { key: '/templates', icon: <AppstoreOutlined />, label: '模板' },
+  { key: '/standards', icon: <BookOutlined />, label: '标准' },
   { key: '/benchmark', icon: <BarChartOutlined />, label: '评测' },
   { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];

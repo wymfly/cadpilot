@@ -8,6 +8,7 @@ import Templates from './pages/Templates/index.tsx';
 import Benchmark from './pages/Benchmark/index.tsx';
 import RunBenchmark from './pages/Benchmark/RunBenchmark.tsx';
 import ReportDetail from './pages/Benchmark/ReportDetail.tsx';
+import Standards from './pages/Standards/index.tsx';
 import Settings from './pages/Settings/index.tsx';
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/generate" element={<Generate />} />
             <Route path="/templates" element={<Templates />} />
+            <Route path="/standards" element={<Standards />} />
             <Route path="/benchmark" element={<Benchmark />} />
             <Route path="/benchmark/run" element={<RunBenchmark />} />
             <Route path="/benchmark/:runId" element={<ReportDetail />} />

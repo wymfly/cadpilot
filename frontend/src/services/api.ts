@@ -2,6 +2,14 @@ import axios from 'axios';
 import type { TooltipSpec, PipelineConfig } from '../types/pipeline.ts';
 import type { BenchmarkSummary, BenchmarkReport } from '../types/benchmark.ts';
 import type { ParametricTemplate, ValidateResponse } from '../types/template.ts';
+import type {
+  StandardEntry,
+  RecommendRequest,
+  RecommendResponse,
+  CheckRequest,
+  CheckResponse,
+} from '../types/standard.ts';
+import type { PrintProfile } from '../types/printability.ts';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -123,6 +131,66 @@ export async function validateTemplateParams(
     params,
   );
   return data;
+}
+
+// Standards API
+export async function getStandardCategories(): Promise<string[]> {
+  const { data } = await api.get<string[]>('/standards');
+  return data;
+}
+
+export async function getStandardEntries(category: string): Promise<StandardEntry[]> {
+  const { data } = await api.get<StandardEntry[]>(`/standards/${category}`);
+  return data;
+}
+
+export async function recommendParams(
+  request: RecommendRequest,
+): Promise<RecommendResponse> {
+  const { data } = await api.post<RecommendResponse>('/standards/recommend', request);
+  return data;
+}
+
+export async function checkConstraints(
+  request: CheckRequest,
+): Promise<CheckResponse> {
+  const { data } = await api.post<CheckResponse>('/standards/check', request);
+  return data;
+}
+
+// Print Profile API
+export async function listPrintProfiles(): Promise<
+  Array<PrintProfile & { is_preset: boolean }>
+> {
+  const { data } = await api.get<Array<PrintProfile & { is_preset: boolean }>>(
+    '/print-profiles',
+  );
+  return data;
+}
+
+export async function createPrintProfile(
+  body: Record<string, unknown>,
+): Promise<PrintProfile & { is_preset: boolean }> {
+  const { data } = await api.post<PrintProfile & { is_preset: boolean }>(
+    '/print-profiles',
+    body,
+  );
+  return data;
+}
+
+export async function updatePrintProfile(
+  name: string,
+  body: Record<string, unknown>,
+): Promise<PrintProfile & { is_preset: boolean }> {
+  const { data } = await api.put<PrintProfile & { is_preset: boolean }>(
+    `/print-profiles/${name}`,
+    body,
+  );
+  return data;
+}
+
+export async function deletePrintProfile(name: string): Promise<void> {
+  await api.delete(`/print-profiles/${name}`);
 }
 
 export default api;

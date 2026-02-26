@@ -5,7 +5,16 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import benchmark, export, generate, health, pipeline, templates
+from backend.api import (
+    benchmark,
+    export,
+    generate,
+    health,
+    pipeline,
+    print_config,
+    standards,
+    templates,
+)
 from backend.config import Settings
 
 settings = Settings()
@@ -25,3 +34,5 @@ app.include_router(generate.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 app.include_router(benchmark.router, prefix="/api")
 app.include_router(templates.router, prefix="/api")
+app.include_router(standards.router, prefix="/api")
+app.include_router(print_config.router, prefix="/api")
