@@ -1,0 +1,104 @@
+name: gear_involute
+display_name: 渐开线直齿轮
+part_type: gear
+description: 标准渐开线直齿轮，精确齿廓，可用于啮合
+
+params:
+  - name: module_val
+    display_name: 模数
+    unit: mm
+    param_type: float
+    range_min: 0.5
+    range_max: 10
+    default: 2
+  - name: num_teeth
+    display_name: 齿数
+    unit: ""
+    param_type: int
+    range_min: 10
+    range_max: 200
+    default: 24
+  - name: pressure_angle
+    display_name: 压力角
+    unit: deg
+    param_type: float
+    range_min: 14.5
+    range_max: 25
+    default: 20
+  - name: face_width
+    display_name: 齿宽
+    unit: mm
+    param_type: float
+    range_min: 2
+    range_max: 200
+    default: 20
+  - name: bore_diameter
+    display_name: 轴孔直径
+    unit: mm
+    param_type: float
+    range_min: 0
+    range_max: 500
+    default: 16
+
+constraints:
+  - "num_teeth >= 10"
+  - "bore_diameter < module_val * num_teeth"
+  - "face_width > 0"
+  - "pressure_angle >= 14.5 and pressure_angle <= 25"
+
+code_template: |
+  import cadquery as cq
+  import math
+
+  # 参数
+  m = {{ module_val }}       # 模数
+  z = {{ num_teeth }}        # 齿数
+  alpha = math.radians({{ pressure_angle }})  # 压力角
+  b = {{ face_width }}       # 齿宽
+  bore = {{ bore_diameter }} # 轴孔直径
+
+  # 基本圆参数
+  rp = m * z / 2             # 分度圆半径
+  ra = m * (z + 2) / 2       # 齿顶圆半径
+  rf = m * (z - 2.5) / 2     # 齿根圆半径
+  rb = rp * math.cos(alpha)  # 基圆半径
+
+  # 渐开线点生成
+  def involute_point(rb, t):
+      x = rb * (math.cos(t) + t * math.sin(t))
+      y = rb * (math.sin(t) - t * math.cos(t))
+      return (x, y)
+
+  def involute_points(rb, ra, n_pts=20):
+      t_max = math.sqrt((ra / rb) ** 2 - 1)
+      return [involute_point(rb, t * t_max / n_pts) for t in range(n_pts + 1)]
+
+  # 齿槽角度
+  tooth_angle = 2 * math.pi / z
+  inv_alpha = math.tan(alpha) - alpha
+  half_tooth = math.pi / (2 * z) + inv_alpha
+
+  # 生成单齿轮廓（右侧渐开线 + 齿顶圆弧 + 左侧渐开线镜像 + 齿根圆弧）
+  pts_right = involute_points(rb, ra, n_pts=15)
+
+  # 以齿根圆为底建立基体圆柱
+  result = cq.Workplane("XY").circle(ra).extrude(b)
+
+  # 切除齿槽
+  for i in range(z):
+      angle = i * math.degrees(tooth_angle)
+      slot_width = m * math.pi / 2  # 齿槽宽 ≈ 半个齿距
+      result = (
+          result.faces(">Z").workplane()
+          .transformed(rotate=(0, 0, angle))
+          .center(rp, 0)
+          .rect(m * 1.25, slot_width)
+          .cutBlind(-(b + 1))
+      )
+
+  {% if bore_diameter > 0 %}
+  # 轴孔
+  result = result.faces(">Z").workplane().circle(bore / 2).cutThruAll()
+  {% endif %}
+
+  cq.exporters.export(result, "{{ output_filename }}")

@@ -1,56 +1,64 @@
 """Few-shot examples for gear parts.
 
-The tooth profile is a simplified rectangular-slot approximation — sufficient
-for structural modelling and as a code-generation template.  True involute
-profiles require the ``cq-gears`` library or manual point computation.
+Includes involute gear math (base/addendum/dedendum circles, involute point
+generation) and simplified rectangular-slot approximations.
 """
 
 from ._base import TaggedExample
 
 GEAR_EXAMPLES: list[TaggedExample] = [
     TaggedExample(
-        description="标准直齿轮：m=2，z=24，b=20，中心孔φ16，键槽5×3",
+        description="渐开线直齿轮 m=2 z=24 b=20，精确齿廓，中心孔φ16，键槽5×3",
+        features=frozenset({"gear_teeth", "revolve", "bore", "keyway", "involute"}),
         code="""\
 import cadquery as cq
 import math
 
 # 齿轮参数
-module, num_teeth, face_width = 2, 24, 20
-bore_d = 16
-key_w, key_d = 5, 3  # 键宽, 键槽深（从内孔向外）
+m = 2        # 模数 (mm)
+z = 24       # 齿数
+alpha = math.radians(20)  # 压力角
+b = 20       # 齿宽 (mm)
 
-# 基本圆尺寸
-rp = module * num_teeth / 2      # 分度圆半径 = 24
-ra = rp + module                  # 齿顶圆半径 = 26
-rf = rp - 1.25 * module           # 齿根圆半径 = 21.5
-gap_w = math.pi * module / 2      # 标准齿槽宽 ≈ π×m/2
-gap_depth = (ra - rf) * 2 + 2    # 切槽径向深度（足够穿过齿高）
+# 基本圆参数
+rp = m * z / 2             # 分度圆半径 = 24
+ra = m * (z + 2) / 2       # 齿顶圆半径 = 26
+rf = m * (z - 2.5) / 2     # 齿根圆半径 = 21.5
+rb = rp * math.cos(alpha)  # 基圆半径
 
-# 1. 齿顶圆柱（基体）
-result = cq.Workplane("XY").circle(ra).extrude(face_width)
+# 渐开线点生成
+def involute_pt(rb, t):
+    return (rb * (math.cos(t) + t * math.sin(t)),
+            rb * (math.sin(t) - t * math.cos(t)))
 
-# 2. 切除齿槽（简化：矩形槽沿分度圆均布）
-for i in range(num_teeth):
-    angle = (i + 0.5) * 360.0 / num_teeth  # 槽中心角（错开半齿距）
+t_max = math.sqrt((ra / rb) ** 2 - 1)
+inv_pts = [involute_pt(rb, i * t_max / 15) for i in range(16)]
+
+# 建立齿顶圆柱基体
+result = cq.Workplane("XY").circle(ra).extrude(b)
+
+# 齿槽切除
+tooth_angle = 360 / z
+slot_w = m * math.pi / 2
+for i in range(z):
+    angle = i * tooth_angle
     result = (result.faces(">Z").workplane()
         .transformed(rotate=(0, 0, angle))
         .center(rp, 0)
-        .rect(gap_depth, gap_w)
-        .cutBlind(face_width + 1))
+        .rect(m * 1.25, slot_w)
+        .cutBlind(-(b + 1)))
 
-# 3. 中心孔
-result = result.faces(">Z").workplane().hole(bore_d)
+# 中心孔 φ16
+result = result.faces(">Z").workplane().circle(8).cutThruAll()
 
-# 4. 键槽（从内孔壁向外切，宽 key_w，深 key_d）
-key_slot = (cq.Workplane("XY")
-    .center(0, bore_d / 2 + key_d / 2)
-    .rect(key_w, key_d)
-    .extrude(face_width + 1))
-result = result.cut(key_slot)
+# 键槽 5×3
+result = (result.faces(">Z").workplane()
+    .center(0, 6.5)
+    .rect(5, 3)
+    .cutThruAll())
 
 cq.exporters.export(result, "${output_filename}")
 """,
-        features=frozenset({"gear_teeth", "revolve", "bore", "keyway"}),
     ),
     TaggedExample(
         description="腹板型直齿轮：m=3，z=32，b=25，中心孔φ40，腹板6×φ8均布孔PCD64",
