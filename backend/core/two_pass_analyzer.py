@@ -6,8 +6,11 @@ Both passes use dependency-injected async callables for testability.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 from ..knowledge.part_types import BaseBodySpec, DrawingSpec, PartType
 

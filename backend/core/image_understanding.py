@@ -8,9 +8,12 @@ In tests, inject a mock ``vl_fn`` to avoid real API calls.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 from ..knowledge.part_types import PartType
 
@@ -43,7 +46,7 @@ _PARAM_ALIASES: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 _MOD_PATTERN = re.compile(
-    r"(?:将\s*)?(\w+)\s*(?:改为|改成|设为|=)\s*(\d+(?:\.\d+)?)"
+    r"(?:将\s*)?([\u4e00-\u9fff]+)\s*(?:改为|改成|设为|=)\s*(\d+(?:\.\d+)?)"
 )
 
 
@@ -113,10 +116,6 @@ def apply_text_modifications(
                 result[key] = value
                 matched = True
                 break
-
-        # 3. No match → skip (unknown param)
-        if not matched:
-            pass
 
     return result
 

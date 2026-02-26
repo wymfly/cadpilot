@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from ..infra.rag import RAGPipeline, embed_text_mock
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
@@ -14,11 +18,20 @@ _pipeline: RAGPipeline | None = None
 
 
 def _get_pipeline() -> RAGPipeline:
-    """Return the shared RAGPipeline, loading knowledge base on first call."""
+    """Return the shared RAGPipeline, loading knowledge base on first call.
+
+    .. note::
+
+       Currently uses ``embed_text_mock`` (SHA256-based deterministic embedding).
+       Replace with a real embedding model (e.g. sentence-transformers) in production.
+    """
     global _pipeline  # noqa: PLW0603
     if _pipeline is None:
+        # TODO: replace embed_text_mock with real embedding model for production
+        logger.info("Initializing RAG pipeline with mock embedding function")
         _pipeline = RAGPipeline(embed_fn=embed_text_mock)
-        _pipeline.load_from_knowledge_base()
+        count = _pipeline.load_from_knowledge_base()
+        logger.info("RAG pipeline loaded %d entries from knowledge base", count)
     return _pipeline
 
 

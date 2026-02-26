@@ -9,9 +9,12 @@ CostOptimizer combines both into a single facade.
 from __future__ import annotations
 
 import hashlib
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 # Default degradation rules: role -> {round_num -> model_name}
@@ -29,7 +32,7 @@ class ModelDegradationStrategy:
     """
 
     def __init__(self, rules: Optional[dict[str, dict[int, str]]] = None) -> None:
-        self._rules = rules or _DEFAULT_RULES
+        self._rules = rules if rules is not None else _DEFAULT_RULES
 
     def select_model(self, role: str, round_num: int) -> str:
         """Return model name for *role* at *round_num*.
@@ -59,10 +62,14 @@ class ResultCache:
     """In-memory cache with TTL expiry and SHA256 key generation.
 
     Uses ``time.monotonic()`` for reliable, non-adjustable timing.
+    Enforces a maximum size; oldest entries are evicted when full.
     """
 
-    def __init__(self, ttl_seconds: float = 3600.0) -> None:
+    def __init__(
+        self, ttl_seconds: float = 3600.0, max_size: int = 1000
+    ) -> None:
         self._ttl = ttl_seconds
+        self._max_size = max_size
         self._store: dict[str, _CacheEntry] = {}
         self._hits = 0
         self._misses = 0
@@ -73,6 +80,10 @@ class ResultCache:
 
     def set(self, key: str, value: Any) -> None:
         """Store *value* under *key* with TTL expiry."""
+        if key not in self._store and len(self._store) >= self._max_size:
+            # Evict the oldest entry (first inserted — dict preserves order)
+            oldest_key = next(iter(self._store))
+            del self._store[oldest_key]
         self._store[key] = _CacheEntry(
             value=value,
             expires_at=time.monotonic() + self._ttl,

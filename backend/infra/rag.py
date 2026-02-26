@@ -7,10 +7,13 @@ Real embedding model (sentence-transformers) replaces embed_text_mock in prod.
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from .embedding import EmbeddingStore
 
@@ -87,7 +90,13 @@ class RAGPipeline:
     # -- mutate ---------------------------------------------------------------
 
     def add(self, entry: RAGEntry) -> None:
-        """Add a RAGEntry to the store, embedding its text representation."""
+        """Add a RAGEntry to the store, embedding its text representation.
+
+        If an entry with the same ID already exists, it is overwritten
+        and a warning is logged.
+        """
+        if entry.id in self._entries:
+            logger.warning("Overwriting existing RAG entry: %s", entry.id)
         vec = self._embed_fn(entry.to_embedding_text())
         self._store.add(
             key=entry.id,

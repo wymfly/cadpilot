@@ -13,10 +13,13 @@ Controlled by PipelineConfig:
 
 from __future__ import annotations
 
+import logging
 import statistics
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from ..knowledge.part_types import BaseBodySpec, DrawingSpec, PartType
 

@@ -67,6 +67,13 @@ class TestModelDegradationStrategy:
         assert isinstance(model, str)
         assert len(model) > 0
 
+    def test_empty_dict_rules_uses_empty(self):
+        """Empty dict {} is a valid config — should NOT fall back to defaults."""
+        strategy = ModelDegradationStrategy(rules={})
+        model = strategy.select_model("vl", round_num=1)
+        # Empty rules → unknown role fallback → default vl round-1
+        assert model == "qwen-vl-max"
+
 
 class TestResultCache:
     def test_set_and_get(self):
@@ -153,6 +160,27 @@ class TestResultCache:
     def test_default_ttl(self):
         cache = ResultCache()
         assert cache._ttl == 3600.0
+
+    def test_max_size_eviction(self):
+        """When cache exceeds max_size, oldest entry is evicted."""
+        cache = ResultCache(ttl_seconds=3600, max_size=2)
+        cache.set("k1", "v1")
+        cache.set("k2", "v2")
+        cache.set("k3", "v3")  # should evict k1
+        assert cache.get("k1") is None
+        assert cache.get("k2") == "v2"
+        assert cache.get("k3") == "v3"
+        assert cache.stats()["size"] == 2
+
+    def test_overwrite_does_not_evict(self):
+        """Overwriting existing key should NOT trigger eviction."""
+        cache = ResultCache(ttl_seconds=3600, max_size=2)
+        cache.set("k1", "v1")
+        cache.set("k2", "v2")
+        cache.set("k1", "v1_updated")  # overwrite, not new entry
+        assert cache.get("k1") == "v1_updated"
+        assert cache.get("k2") == "v2"
+        assert cache.stats()["size"] == 2
 
 
 class TestCostOptimizer:

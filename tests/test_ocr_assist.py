@@ -72,6 +72,19 @@ class TestParseDimensionText:
         result = parse_dimension_text("ra1.6")
         assert result is None
 
+    def test_surface_finish_rz_skip(self):
+        result = parse_dimension_text("Rz6.3")
+        assert result is None
+
+    def test_surface_finish_rz_lowercase_skip(self):
+        result = parse_dimension_text("rz3.2")
+        assert result is None
+
+    def test_radius_rejects_trailing_text(self):
+        """R15abc should NOT match as radius — anchor prevents partial match."""
+        result = parse_dimension_text("R15abc")
+        assert result is None
+
     def test_empty_string(self):
         result = parse_dimension_text("")
         assert result is None

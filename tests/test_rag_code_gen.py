@@ -135,3 +135,26 @@ class TestRAGCodeGen:
         assert len(ctx.examples) == 2
         for desc, _code in ctx.examples:
             assert "RAG" in desc
+
+    def test_rag_exception_falls_back_to_jaccard(self) -> None:
+        """When RAG search raises an exception, gracefully fall back to Jaccard."""
+
+        class BrokenRAG(RAGPipeline):
+            def search(self, *args, **kwargs):
+                raise RuntimeError("embedding model unavailable")
+
+        rag = BrokenRAG(embed_fn=embed_text_mock)
+        # Add an entry so len(rag) > 0 triggers the RAG path
+        rag.add(
+            RAGEntry(
+                id="e1", description="dummy", code="code", tags=set()
+            )
+        )
+        strategist = ModelingStrategist(rag_pipeline=rag)
+        ctx = strategist.select(_make_spec(), max_examples=3)
+
+        # Should fall back to Jaccard despite RAG failure
+        assert isinstance(ctx, ModelingContext)
+        assert len(ctx.examples) > 0
+        for desc, _code in ctx.examples:
+            assert "RAG" not in desc  # Jaccard examples, not RAG

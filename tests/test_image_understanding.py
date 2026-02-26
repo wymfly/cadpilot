@@ -112,6 +112,13 @@ class TestApplyTextModifications:
         # "颜色" has no alias and no key match → skip
         assert modified == base
 
+    def test_english_text_not_matched(self):
+        """English text should not trigger modification (Chinese-only regex)."""
+        base = {"diameter": 100.0}
+        modified = apply_text_modifications(base, "diameter改为 200")
+        # "diameter" is not Chinese characters → no match
+        assert modified["diameter"] == 100.0
+
     def test_original_not_mutated(self):
         """Ensure original dict is not mutated."""
         base = {"diameter": 100.0}

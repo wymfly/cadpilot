@@ -5,9 +5,12 @@ Real OCR: PaddleOCR or Tesseract.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -38,10 +41,10 @@ def parse_dimension_text(text: str) -> Optional[DimensionAnnotation]:
     """Parse a single OCR text string into a DimensionAnnotation.
 
     Recognized patterns:
-    - N*phiD (e.g. "6*phi10") -> diameter with count
-    - phiD (e.g. "phi50") -> diameter
-    - RN (e.g. "R15") -> radius (but NOT Ra surface finish)
-    - N+-T (e.g. "50+-0.1") -> linear with tolerance
+    - N×φD (e.g. "6×φ10") -> diameter with count
+    - φD (e.g. "φ50") -> diameter
+    - RN (e.g. "R15") -> radius (but NOT Ra/Rz surface finish)
+    - N±T (e.g. "50±0.1") -> linear with tolerance
     - plain number (e.g. "120") -> linear
 
     Returns None for non-dimension text (e.g. Ra surface finish, free text).
@@ -50,8 +53,8 @@ def parse_dimension_text(text: str) -> Optional[DimensionAnnotation]:
     if not text:
         return None
 
-    # Skip surface finish annotations (Ra/ra followed by digit)
-    if re.match(r"[Rr]a\d", text):
+    # Skip surface finish annotations (Ra/Rz followed by digit)
+    if re.match(r"[Rr][az]\d", text):
         return None
 
     # Pattern: NxphiD (e.g. "6xphi10")
@@ -73,8 +76,8 @@ def parse_dimension_text(text: str) -> Optional[DimensionAnnotation]:
             symbol="φ",
         )
 
-    # Pattern: RN — radius, but not Ra (surface finish already filtered above)
-    m = re.match(r"R(\d+(?:\.\d+)?)", text)
+    # Pattern: RN — radius, but not Ra/Rz (surface finish already filtered above)
+    m = re.match(r"R(\d+(?:\.\d+)?)$", text)
     if m:
         return DimensionAnnotation(
             type="radius",

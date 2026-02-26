@@ -277,6 +277,15 @@ class TestRAGPipeline:
         pipe.search("test")
         assert call_count == 2  # 1 for add, 1 for search
 
+    def test_duplicate_id_overwrites_entry(self) -> None:
+        """Adding entry with existing ID logs warning and updates entry dict."""
+        pipe = RAGPipeline(embed_fn=embed_text_mock)
+        pipe.add(RAGEntry(id="e1", description="original", code="c1", tags=set()))
+        pipe.add(RAGEntry(id="e1", description="updated", code="c2", tags=set()))
+        # The entry dict should reflect the latest
+        assert pipe._entries["e1"].description == "updated"
+        assert pipe._entries["e1"].code == "c2"
+
 
 # ---------------------------------------------------------------------------
 # RAG API endpoints

@@ -6,8 +6,11 @@ extracted from a DrawingSpec and the ``features`` frozenset of each TaggedExampl
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from ..knowledge.examples import EXAMPLES_BY_TYPE, TaggedExample, get_tagged_examples
 from ..knowledge.modeling_strategies import get_strategy
@@ -114,9 +117,8 @@ class ModelingStrategist:
     ) -> ModelingContext:
         """Select strategy and top-k feature-matched examples.
 
-        When an *embedding_store* is available, vector retrieval is attempted
-        first.  If it yields results they are used; otherwise the method falls
-        back to Jaccard-based ranking.
+        Retrieval priority: RAG pipeline → embedding store → Jaccard similarity.
+        Each level falls back to the next on failure or empty results.
 
         When *max_examples* is 0 or negative, returns an empty list.
         """
@@ -131,7 +133,11 @@ class ModelingStrategist:
 
         # Try RAG pipeline first (has full search capabilities).
         if self._rag_pipeline is not None and len(self._rag_pipeline) > 0:
-            examples = self._select_by_rag(spec, max_examples)
+            try:
+                examples = self._select_by_rag(spec, max_examples)
+            except Exception:
+                logger.warning("RAG retrieval failed, falling back", exc_info=True)
+                examples = []
             if examples:
                 return ModelingContext(
                     drawing_spec=spec,
