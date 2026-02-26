@@ -208,36 +208,29 @@ class SmartRefiner:
         step_filepath: str | None = None,
     ) -> str | None:
         """
-        三层防线改进流程：
-        1. 静态参数校验 — 拦截明显参数偏差（不走 VL）
-        2. 包围盒校验 — 确认几何尺寸（不走 VL）
-        3. VL 对比 — 仅在前两层通过后触发
+        零风险改进流程：Layer 1/2 仅用于诊断上下文，VL 始终运行（质量唯一裁判）。
 
-        返回修正后的代码，如果 PASS 则返回 None。
+        Layer 1（静态参数校验）和 Layer 2（包围盒校验）收集诊断信息并注入
+        Coder 修复指令，但不跳过 VL 调用。VL 是决定是否需要修复的唯一依据。
+
+        返回修正后的代码，如果 VL 判定 PASS 则返回 None。
         """
-        # ---- Layer 1: 静态参数校验 ----
+        static_notes: list[str] = []
+
+        # ---- Layer 1: 静态参数校验（诊断，不影响 VL 执行） ----
         param_result = validate_code_params(code, drawing_spec)
         if not param_result.passed:
             logger.warning(
-                f"Smart refiner Layer 1: static validation failed — "
-                f"{len(param_result.mismatches)} mismatches"
+                f"Smart refiner Layer 1: static validation — "
+                f"{len(param_result.mismatches)} mismatches (VL will still run)"
             )
             for m in param_result.mismatches:
                 logger.warning(f"  - {m}")
+            static_notes.extend(param_result.mismatches)
+        else:
+            logger.info("Smart refiner Layer 1: static validation PASSED")
 
-            fix_instructions = (
-                "参数校验发现以下问题，请修正数值参数：\n"
-                + "\n".join(f"- {m}" for m in param_result.mismatches)
-            )
-            result = self.fix_chain.invoke({
-                "code": code,
-                "fix_instructions": fix_instructions,
-            })["result"]
-            return result
-
-        logger.info("Smart refiner Layer 1: static validation PASSED")
-
-        # ---- Layer 2: 包围盒校验 ----
+        # ---- Layer 2: 包围盒校验（诊断，不影响 VL 执行） ----
         if step_filepath:
             bbox = _get_bbox_from_step(step_filepath)
             if bbox:
@@ -246,28 +239,21 @@ class SmartRefiner:
                 )
                 if not bbox_result.passed:
                     logger.warning(
-                        f"Smart refiner Layer 2: bbox validation failed — "
-                        f"{bbox_result.detail}"
+                        f"Smart refiner Layer 2: bbox validation — "
+                        f"{bbox_result.detail} (VL will still run)"
                     )
-                    fix_instructions = (
-                        f"包围盒校验失败：{bbox_result.detail}\n"
-                        f"实际包围盒: X={bbox[0]:.1f}, Y={bbox[1]:.1f}, Z={bbox[2]:.1f}\n"
-                        f"预期尺寸: {drawing_spec.overall_dimensions}\n"
-                        f"请检查并修正相关尺寸参数。"
+                    static_notes.append(
+                        f"包围盒偏差: 实际 X={bbox[0]:.1f} Y={bbox[1]:.1f} Z={bbox[2]:.1f}, "
+                        f"预期: {drawing_spec.overall_dimensions} ({bbox_result.detail})"
                     )
-                    result = self.fix_chain.invoke({
-                        "code": code,
-                        "fix_instructions": fix_instructions,
-                    })["result"]
-                    return result
-
-                logger.info("Smart refiner Layer 2: bbox validation PASSED")
+                else:
+                    logger.info("Smart refiner Layer 2: bbox validation PASSED")
             else:
                 logger.warning("Smart refiner Layer 2: could not read STEP bbox, skipping")
         else:
             logger.info("Smart refiner Layer 2: no step_filepath, skipping bbox check")
 
-        # ---- Layer 3: VL 对比（仅在前两层通过后） ----
+        # ---- Layer 3: VL 对比（始终运行，是质量的唯一裁判） ----
         logger.info("Smart refiner Layer 3: running VL comparison...")
         comparison = self.compare_chain.invoke({
             "drawing_spec": drawing_spec.to_prompt_text(),
@@ -284,10 +270,22 @@ class SmartRefiner:
 
         logger.info(f"Smart refiner Layer 3: found differences:\n{comparison}")
 
-        # Coder 修正
+        # 合并 VL 发现 + 静态检查诊断，提升 Coder 修复精度
+        if static_notes:
+            fix_instructions = (
+                comparison
+                + "\n\n## 静态检查补充（供参考）\n"
+                + "\n".join(f"- {n}" for n in static_notes)
+            )
+            logger.info(
+                f"Smart refiner: Coder fix with VL findings + {len(static_notes)} static notes"
+            )
+        else:
+            fix_instructions = comparison
+
         result = self.fix_chain.invoke({
             "code": code,
-            "fix_instructions": comparison,
+            "fix_instructions": fix_instructions,
         })["result"]
 
         return result
