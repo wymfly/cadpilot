@@ -7,10 +7,14 @@ extracted from a DrawingSpec and the ``features`` frozenset of each TaggedExampl
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from ..knowledge.examples import EXAMPLES_BY_TYPE, TaggedExample, get_tagged_examples
 from ..knowledge.modeling_strategies import get_strategy
 from ..knowledge.part_types import DrawingSpec, PartType
+
+if TYPE_CHECKING:
+    from ..infra.embedding import EmbeddingStore
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +90,16 @@ class ModelingContext:
 
 
 class ModelingStrategist:
-    """阶段 1.5：根据零件类型和特征选择建模策略（纯规则引擎，无 LLM）"""
+    """阶段 1.5：根据零件类型和特征选择建模策略（纯规则引擎，无 LLM）
+
+    Optionally accepts an :class:`EmbeddingStore` for vector-based example
+    retrieval.  When the store is provided **and** non-empty the strategist
+    attempts vector search first; on failure (or when no store is given) it
+    falls back to the original Jaccard-similarity algorithm.
+    """
+
+    def __init__(self, embedding_store: EmbeddingStore | None = None) -> None:
+        self._embedding_store = embedding_store
 
     def select(
         self,
@@ -95,12 +108,9 @@ class ModelingStrategist:
     ) -> ModelingContext:
         """Select strategy and top-k feature-matched examples.
 
-        Algorithm
-        ---------
-        1. Extract feature tags from *spec* (method, bore, feature types).
-        2. Collect all unique TaggedExamples across the full knowledge base.
-        3. Rank by Jaccard(spec_features, example.features), descending.
-        4. Return top *max_examples* as (description, code) tuples.
+        When an *embedding_store* is available, vector retrieval is attempted
+        first.  If it yields results they are used; otherwise the method falls
+        back to Jaccard-based ranking.
 
         When *max_examples* is 0 or negative, returns an empty list.
         """
@@ -113,8 +123,30 @@ class ModelingStrategist:
                 examples=[],
             )
 
-        # Deduplicate examples by identity (ROTATIONAL and ROTATIONAL_STEPPED share
-        # the same list object).
+        # Try vector retrieval first when an embedding store is available.
+        if self._embedding_store is not None and len(self._embedding_store) > 0:
+            examples = self._select_by_vector(spec, max_examples)
+            if examples:
+                return ModelingContext(
+                    drawing_spec=spec,
+                    strategy=strategy,
+                    examples=examples,
+                )
+
+        # Fallback: Jaccard similarity.
+        return self._select_by_jaccard(spec, max_examples, strategy)
+
+    # -- private: Jaccard path ------------------------------------------------
+
+    def _select_by_jaccard(
+        self,
+        spec: DrawingSpec,
+        max_examples: int,
+        strategy: str,
+    ) -> ModelingContext:
+        """Original Jaccard-similarity example selection."""
+        # Deduplicate examples by identity (ROTATIONAL and ROTATIONAL_STEPPED
+        # share the same list object).
         seen_ids: set[int] = set()
         all_examples: list[TaggedExample] = []
         for examples in EXAMPLES_BY_TYPE.values():
@@ -147,3 +179,29 @@ class ModelingStrategist:
             strategy=strategy,
             examples=[(ex.description, ex.code) for ex in top],
         )
+
+    # -- private: vector path -------------------------------------------------
+
+    def _select_by_vector(
+        self,
+        spec: DrawingSpec,
+        max_examples: int,
+    ) -> list[tuple[str, str]]:
+        """Attempt vector-based example retrieval.
+
+        Returns an empty list when no embedding model is available or when
+        the store yields no results -- callers should fall back to Jaccard.
+
+        .. note::
+
+           This is a **placeholder**: a real embedding model is needed to
+           produce query vectors.  The infrastructure (``EmbeddingStore``,
+           ``spec_to_embedding_text``) is fully functional and tested.
+        """
+        # Placeholder -- return empty to trigger Jaccard fallback.
+        # When an embedding model is integrated, this method will:
+        #   1. Call spec_to_embedding_text(spec) to get query text.
+        #   2. Embed the text via the model.
+        #   3. Call self._embedding_store.find_similar(query_vec, top_k=max_examples).
+        #   4. Map SearchResult keys back to (description, code) tuples.
+        return []
