@@ -320,8 +320,9 @@ class SmartRefiner:
                     # 估算预期孔数：特征中 hole_pattern 类型的 count 之和
                     expected_holes = 0
                     for feat in drawing_spec.features:
-                        if feat.get("type") == "hole_pattern":
-                            expected_holes += int(feat.get("count", 0))
+                        if feat.type == "hole_pattern":
+                            feat_data = feat.spec if isinstance(feat.spec, dict) else feat.spec.model_dump()
+                            expected_holes += int(feat_data.get("count", 0))
                     if drawing_spec.base_body.bore is not None:
                         expected_holes += 1
 

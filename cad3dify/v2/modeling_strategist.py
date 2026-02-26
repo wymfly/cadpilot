@@ -24,7 +24,7 @@ def _extract_features_from_spec(spec: DrawingSpec) -> set[str]:
     Tags come from three sources:
     - ``base_body.method``: ``"revolve"``, ``"extrude"``, etc.
     - ``base_body.bore``: adds ``"bore"`` when present.
-    - ``spec.features[i]["type"]``: ``"hole_pattern"``, ``"fillet"``, etc.
+    - ``spec.features[i].type``: ``"hole_pattern"``, ``"fillet"``, etc.
     """
     features: set[str] = set()
 
@@ -35,9 +35,8 @@ def _extract_features_from_spec(spec: DrawingSpec) -> set[str]:
         features.add("bore")
 
     for feat in spec.features:
-        feat_type = feat.get("type", "")
-        if feat_type:
-            features.add(feat_type)
+        if feat.type:
+            features.add(feat.type)
 
     return features
 

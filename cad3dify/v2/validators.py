@@ -159,9 +159,13 @@ def collect_spec_values(spec: DrawingSpec) -> dict[str, float]:
 
     # Features (hole patterns, etc.)
     for i, feat in enumerate(spec.features):
+        if isinstance(feat.spec, dict):
+            feat_data = feat.spec
+        else:
+            feat_data = feat.spec.model_dump()
         for key in ("diameter", "pcd", "count"):
-            if key in feat:
-                values[f"feature_{i}_{key}"] = float(feat[key])
+            if key in feat_data:
+                values[f"feature_{i}_{key}"] = float(feat_data[key])
 
     return values
 

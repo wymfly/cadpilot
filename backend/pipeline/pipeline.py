@@ -116,8 +116,9 @@ def _score_geometry(
             if not topo.error:
                 expected_holes = 0
                 for feat in spec.features:
-                    if feat.get("type") == "hole_pattern":
-                        expected_holes += int(feat.get("count", 0))
+                    if feat.type == "hole_pattern":
+                        feat_data = feat.spec if isinstance(feat.spec, dict) else feat.spec.model_dump()
+                        expected_holes += int(feat_data.get("count", 0))
                 if spec.base_body.bore is not None:
                     expected_holes += 1
                 topo_cmp = compare_topology(topo, expected_holes=expected_holes)
