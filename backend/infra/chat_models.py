@@ -15,7 +15,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
-MODEL_TYPE = Literal["gpt", "claude", "gemini", "llama", "qwen", "qwen-vl", "qwen-coder"]
+MODEL_TYPE = Literal["gpt", "claude", "gemini", "llama", "qwen", "qwen-vl", "qwen-coder", "qwen-ft-coder"]
 PROVIDER_TYPE = Literal["openai", "anthropic", "google", "vertex_ai"]
 
 
@@ -80,6 +80,12 @@ class ChatModelParameters(BaseModel):
                 provider="openai",
                 model_name="qwen-coder-plus",
                 temperature=0.3,
+                max_tokens=32000,
+            ),
+            "qwen-ft-coder": cls(
+                provider="openai",
+                model_name="qwen-ft-coder-cadquery",
+                temperature=0.2,
                 max_tokens=32000,
             ),
         }
