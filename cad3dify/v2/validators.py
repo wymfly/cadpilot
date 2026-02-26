@@ -383,28 +383,41 @@ def validate_bounding_box(
     Compare actual bounding box (xlen, ylen, zlen) with DrawingSpec.overall_dimensions.
     tolerance: relative error threshold (default 10%)
 
-    Mapping rules:
-    - total_height/height/total_length/length → Z axis
-    - max_diameter/diameter/width → X axis (for rotational parts X≈Y)
+    Axis mapping rules:
+    - total_height / height / thickness → Z axis (vertical)
+    - max_diameter / diameter / length / total_length → max(X, Y)
+      Works for both rotational parts (X≈Y≈diameter) and plates (max(X,Y)=length)
+    - width → min(X, Y)  (plate secondary planar dimension)
     """
     result = BBoxResult(actual=actual_bbox, expected=overall_dims)
     mismatches = []
 
-    # Height → Z axis
-    for key in ["total_height", "height", "total_length", "length"]:
+    # Vertical height → Z axis
+    for key in ["total_height", "height", "thickness"]:
         if key in overall_dims:
             exp = overall_dims[key]
             actual_z = actual_bbox[2]
             if exp > 0 and abs(actual_z - exp) / exp > tolerance:
                 mismatches.append(f"Z-axis: actual={actual_z:.1f} vs spec {key}={exp}")
 
-    # Diameter/Width → X axis
-    for key in ["max_diameter", "diameter", "width"]:
+    # Primary planar dimension: diameter or length → max(X, Y)
+    for key in ["max_diameter", "diameter", "length", "total_length"]:
         if key in overall_dims:
             exp = overall_dims[key]
-            actual_x = actual_bbox[0]
-            if exp > 0 and abs(actual_x - exp) / exp > tolerance:
-                mismatches.append(f"X-axis: actual={actual_x:.1f} vs spec {key}={exp}")
+            actual_planar = max(actual_bbox[0], actual_bbox[1])
+            if exp > 0 and abs(actual_planar - exp) / exp > tolerance:
+                mismatches.append(
+                    f"Planar(max): actual={actual_planar:.1f} vs spec {key}={exp}"
+                )
+
+    # Secondary planar dimension: width → min(X, Y)
+    if "width" in overall_dims:
+        exp = overall_dims["width"]
+        actual_planar_min = min(actual_bbox[0], actual_bbox[1])
+        if exp > 0 and abs(actual_planar_min - exp) / exp > tolerance:
+            mismatches.append(
+                f"Planar(min): actual={actual_planar_min:.1f} vs spec width={exp}"
+            )
 
     if mismatches:
         result.passed = False

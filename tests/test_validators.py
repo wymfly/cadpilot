@@ -244,6 +244,22 @@ class TestBoundingBox:
         result = validate_bounding_box(actual_bbox, {})
         assert result.passed is True
 
+    def test_plate_length_width_height_passes(self) -> None:
+        """Plate with length/width/height must not be incorrectly mapped to Z."""
+        dims = {"length": 200, "width": 150, "height": 10}
+        actual_bbox = (200.0, 150.0, 10.0)
+        result = validate_bounding_box(actual_bbox, dims)
+        assert result.passed is True, (
+            f"Plate bbox should pass but got: {result.detail}"
+        )
+
+    def test_plate_wrong_length_fails(self) -> None:
+        """Plate with wrong planar length is correctly detected."""
+        dims = {"length": 200, "height": 10}
+        actual_bbox = (100.0, 100.0, 10.0)  # planar max is 100, expected 200
+        result = validate_bounding_box(actual_bbox, dims)
+        assert result.passed is False
+
 
 # ---------------------------------------------------------------------------
 # STEP geometry validation
