@@ -14,12 +14,13 @@ The system SHALL pause the drawing generation pipeline after Stage 1 (DrawingAna
 
 #### Scenario: Pipeline resumes after confirmation
 - **WHEN** a user calls POST /generate/drawing/{job_id}/confirm
-- **THEN** the system calls `generate_from_drawing_spec()` (Stage 1.5-4) with the confirmed DrawingSpec
+- **THEN** the system calls `generate_from_drawing_spec()` (Stage 1.5-4) with the confirmed DrawingSpec and original image data
 - **AND** a new SSE stream is opened for the generation progress
+- **AND** the confirmed DrawingSpec is saved to the job's `drawing_spec_confirmed` field
 
 #### Scenario: User confirms DrawingSpec without changes
 - **WHEN** a user calls POST /generate/drawing/{job_id}/confirm with the original DrawingSpec and disclaimer_accepted=true
-- **THEN** the system resumes the V2 pipeline from Stage 2 (ModelingStrategist → CodeGenerator → execution)
+- **THEN** the system calls `generate_from_drawing_spec()` to resume the V2 pipeline from Stage 1.5 (ModelingStrategist → CodeGenerator → execution → SmartRefiner)
 
 #### Scenario: User edits DrawingSpec before confirming
 - **WHEN** a user modifies dimension values or feature parameters in the DrawingSpec and calls confirm

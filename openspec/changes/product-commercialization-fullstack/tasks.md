@@ -12,8 +12,8 @@
 ## 2. P0.2 图纸路径 HITL 确认流
 
 - [ ] 2.1 修改 `backend/models/job.py`：添加 `drawing_spec`（JSON）、`drawing_spec_confirmed`（JSON）字段；JobStatus 枚举添加 `AWAITING_DRAWING_CONFIRMATION = "awaiting_drawing_confirmation"` 状态
-- [ ] 2.2 拆分图纸管道（D8）：在 `backend/pipeline/pipeline.py` 中新增 `analyze_drawing()` 函数（仅执行 Stage 1：VL 读图 → DrawingSpec）和 `generate_from_drawing_spec()` 函数（执行 Stage 1.5-4：策略→代码生成→执行→精炼）。修改 `backend/api/generate.py` 的 `/generate/drawing` 路由：调用 `analyze_drawing()` → 发送 SSE `drawing_spec_ready` 事件（包含 DrawingSpec JSON）→ 将 Job 状态设为 `awaiting_drawing_confirmation` → 结束第一段 SSE 流
-- [ ] 2.3 新增 `POST /generate/drawing/{job_id}/confirm` 端点：接收 confirmed_spec + disclaimer_accepted，校验免责声明已接受，调用 `generate_from_drawing_spec()` 恢复 Stage 2-4，开启第二段 SSE 流
+- [ ] 2.2 拆分图纸管道（D8）：在 `backend/pipeline/pipeline.py` 中新增 `analyze_drawing()` 函数（仅执行 Stage 1：VL 读图 → DrawingSpec）和 `generate_from_drawing_spec()` 函数（执行 Stage 1.5-4：策略→代码生成→执行→精炼，需接收 `image_data` + `drawing_spec` + `output_filepath` 等完整上下文）。修改 `backend/api/generate.py` 的 `/generate/drawing` 路由：调用 `analyze_drawing()` → **保存 `drawing_spec` 到 Job 记录** → 发送 SSE `drawing_spec_ready` 事件（包含 DrawingSpec JSON）→ 将 Job 状态设为 `awaiting_drawing_confirmation` → 结束第一段 SSE 流
+- [ ] 2.3 新增 `POST /generate/drawing/{job_id}/confirm` 端点：接收 confirmed_spec + disclaimer_accepted，校验免责声明已接受，**保存 `drawing_spec_confirmed` 到 Job 记录**，从 Job 记录恢复 `image_data`（原始图纸路径），调用 `generate_from_drawing_spec(image_data, confirmed_spec, ...)` 恢复 Stage 1.5-4（注意：Stage 4 SmartRefiner 需要 `original_image` 做 VL 对比），开启第二段 SSE 流
 - [ ] 2.4 实现用户修正数据差异计算和**强制 JSON 文件持久化**：对比 original DrawingSpec 和 confirmed DrawingSpec，生成 field-level correction 记录，**必须**写入 `backend/data/corrections/{job_id}.json`（不接受仅内存暂存，P2 迁移到数据库）
 - [ ] 2.5 新建 `frontend/src/pages/Generate/DrawingSpecReview.tsx`：分层渲染 DrawingSpec——顶层：零件类型选择器 + AI 置信度标签；中层：overall_dimensions 可编辑数值表 + base_body 参数编辑器；底层：features 列表（可折叠，每项显示类型/参数/可删除）；底部：免责声明 checkbox + "确认并生成"按钮
 - [ ] 2.6 前端 SSE 处理：识别 `drawing_spec_ready` 事件，切换到 DrawingSpecReview 界面；confirm 后连接第二段 SSE 流恢复生成流程
