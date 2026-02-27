@@ -13,15 +13,12 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
 from backend.config import Settings
 from backend.models.organic import OrganicGenerateRequest, OrganicJobResult
 from backend.models.organic_job import (
-    OrganicJob,
     OrganicJobStatus,
-    clear_organic_jobs,
     create_organic_job,
     get_organic_job,
     update_organic_job,
@@ -237,7 +234,7 @@ async def get_provider_health(
     settings: Settings = Depends(_require_organic_enabled),
 ) -> dict[str, Any]:
     """Check health of available mesh generation providers."""
-    from backend.infra.mesh_providers import TripoProvider, HunyuanProvider
+    from backend.infra.mesh_providers import HunyuanProvider, TripoProvider
 
     output_dir = Path("outputs") / "organic"
     tripo = TripoProvider(api_key=settings.tripo3d_api_key, output_dir=output_dir)
@@ -309,7 +306,7 @@ async def _read_uploaded_image(file_id: str | None) -> tuple[bytes, str] | None:
     try:
         uuid.UUID(file_id)
     except ValueError:
-        raise HTTPException(status_code=422, detail=f"Invalid file_id: {file_id}")
+        raise HTTPException(status_code=422, detail=f"Invalid file_id: {file_id}") from None
     upload_dir = Path("outputs") / "organic" / "uploads"
     matches = list(upload_dir.glob(f"{file_id}.*"))
     if not matches:
