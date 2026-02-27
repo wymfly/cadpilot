@@ -14,6 +14,7 @@ from backend.api import (
     export,
     generate,
     health,
+    organic,
     pipeline,
     print_config,
     rag,
@@ -42,6 +43,7 @@ app.include_router(templates.router, prefix="/api")
 app.include_router(standards.router, prefix="/api")
 app.include_router(print_config.router, prefix="/api")
 app.include_router(rag.router, prefix="/api")
+app.include_router(organic.router, prefix="/api")
 
 from pathlib import Path as _Path
 from starlette.staticfiles import StaticFiles
