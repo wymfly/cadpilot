@@ -80,16 +80,20 @@ class PipelineBridge:
         self,
         model_url: str | None = None,
         step_path: str | None = None,
+        printability: dict[str, Any] | None = None,
     ) -> None:
         """生成成功，发送 ``completed`` 事件。"""
+        data: dict[str, Any] = {
+            "model_url": model_url,
+            "step_path": step_path,
+            "message": "生成完成",
+        }
+        if printability is not None:
+            data["printability"] = printability
         self._put({
             "event": "completed",
             "job_id": self.job_id,
-            "data": {
-                "model_url": model_url,
-                "step_path": step_path,
-                "message": "生成完成",
-            },
+            "data": data,
         })
 
     def fail(self, message: str) -> None:

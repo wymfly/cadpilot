@@ -359,6 +359,64 @@ class TestGenerateDrawingMode:
         failed = [e for e in events if e.get("status") == "failed"]
         assert len(failed) >= 1
 
+    def test_drawing_completed_includes_printability(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """Completed event from drawing mode should include printability field."""
+        import backend.api.generate as gen_mod
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
+        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+        monkeypatch.setattr(
+            gen_mod,
+            "_run_printability_check",
+            lambda _: {
+                "printable": True,
+                "profile": "fdm_standard",
+                "issues": [],
+                "material_estimate": {
+                    "filament_weight_g": 12.5,
+                    "filament_length_m": 4.2,
+                    "cost_estimate_cny": 1.0,
+                },
+                "time_estimate": {
+                    "total_minutes": 45.0,
+                    "layer_count": 100,
+                },
+            },
+        )
+
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("test.png", b"fakepng", "image/png")},
+        )
+        events = parse_sse_events(resp.text)
+        completed = [e for e in events if e.get("status") == "completed"]
+        assert len(completed) == 1
+        assert "printability" in completed[0]
+        assert completed[0]["printability"]["printable"] is True
+        assert "material_estimate" in completed[0]["printability"]
+        assert "time_estimate" in completed[0]["printability"]
+
+    def test_printability_failure_returns_null(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """Printability check failure should not block generation — returns None."""
+        import backend.api.generate as gen_mod
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
+        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+        monkeypatch.setattr(gen_mod, "_run_printability_check", lambda _: None)
+
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("test.png", b"fakepng", "image/png")},
+        )
+        events = parse_sse_events(resp.text)
+        completed = [e for e in events if e.get("status") == "completed"]
+        assert len(completed) == 1
+        assert completed[0].get("printability") is None
+
 
 # ===================================================================
 # POST /generate/{job_id}/confirm

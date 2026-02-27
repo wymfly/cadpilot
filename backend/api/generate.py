@@ -165,6 +165,32 @@ def _run_template_generation(
         return False
 
 
+def _run_printability_check(step_path: str) -> dict[str, Any] | None:
+    """Run printability check on a STEP file. Returns None on failure."""
+    try:
+        from backend.core.geometry_extractor import extract_geometry_from_step
+        from backend.core.printability import PrintabilityChecker
+
+        geometry_info = extract_geometry_from_step(step_path)
+        checker = PrintabilityChecker()
+        result = checker.check(geometry_info)
+        mat = checker.estimate_material(geometry_info)
+        time_est = checker.estimate_print_time(geometry_info)
+        data = result.model_dump()
+        data["material_estimate"] = {
+            "filament_weight_g": mat.filament_weight_g,
+            "filament_length_m": mat.filament_length_m,
+            "cost_estimate_cny": mat.cost_estimate_cny,
+        }
+        data["time_estimate"] = {
+            "total_minutes": time_est.total_minutes,
+            "layer_count": time_est.layer_count,
+        }
+        return data
+    except Exception:
+        return None
+
+
 def _parse_pipeline_config(config_json: str) -> PipelineConfig:
     """Parse pipeline_config JSON string into PipelineConfig."""
     try:
@@ -319,7 +345,15 @@ async def generate_drawing(
             except Exception:
                 # GLB conversion failed/timed out; still complete with STEP only
                 pass
-            bridge.complete(model_url=model_url, step_path=step_path)
+            # Run printability check (non-blocking, errors are silenced)
+            printability_data = await asyncio.to_thread(
+                _run_printability_check, step_path,
+            )
+            bridge.complete(
+                model_url=model_url,
+                step_path=step_path,
+                printability=printability_data,
+            )
         elif not pipeline_failed and not os.path.exists(step_path):
             bridge.fail("管道执行完成但未生成 STEP 文件")
 
@@ -407,6 +441,11 @@ async def confirm_params(
                 except Exception:
                     model_url = None
 
+                # Run printability check
+                printability_data = await asyncio.to_thread(
+                    _run_printability_check, step_path,
+                )
+
                 update_job(
                     job_id,
                     status=JobStatus.COMPLETED,
@@ -415,6 +454,7 @@ async def confirm_params(
                         "model_url": model_url,
                         "step_path": step_path,
                         "confirmed_params": body.confirmed_params,
+                        "printability": printability_data,
                     },
                 )
                 yield _sse("completed", {
@@ -423,6 +463,7 @@ async def confirm_params(
                     "message": "生成完成",
                     "model_url": model_url,
                     "step_path": step_path,
+                    "printability": printability_data,
                 })
             else:
                 # No template matched or execution failed — still complete
