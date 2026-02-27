@@ -55,6 +55,13 @@ class ConfirmRequest(BaseModel):
     base_body_method: str = "extrude"
 
 
+class DrawingConfirmRequest(BaseModel):
+    """Request body for drawing spec confirmation."""
+
+    confirmed_spec: dict[str, Any]
+    disclaimer_accepted: bool
+
+
 # ---------------------------------------------------------------------------
 # SSE event helpers
 # ---------------------------------------------------------------------------
@@ -365,6 +372,174 @@ async def generate_drawing(
             "reasoning": reasoning,
         })
         # Stream ends here — client must call /generate/drawing/{job_id}/confirm
+
+    return EventSourceResponse(event_stream())
+
+
+# ---------------------------------------------------------------------------
+# POST /generate/drawing/{job_id}/confirm — resume drawing pipeline
+# ---------------------------------------------------------------------------
+
+
+@router.post("/generate/drawing/{job_id}/confirm")
+async def confirm_drawing_spec(
+    job_id: str, body: DrawingConfirmRequest
+) -> EventSourceResponse:
+    """Confirm DrawingSpec and resume the drawing generation pipeline.
+
+    Flow: confirmed_spec → generate_from_drawing_spec → STEP → GLB → completed
+    """
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    if job.status != JobStatus.AWAITING_DRAWING_CONFIRMATION:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Job {job_id} is in state '{job.status.value}', "
+                f"expected 'awaiting_drawing_confirmation'"
+            ),
+        )
+    if not body.disclaimer_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="免责声明必须接受后方可继续生成",
+        )
+
+    # Save confirmed spec and transition to GENERATING
+    update_job(
+        job_id,
+        drawing_spec_confirmed=body.confirmed_spec,
+        status=JobStatus.GENERATING,
+    )
+
+    image_path = job.image_path
+    job_dir = ensure_job_dir(job_id)
+    step_path = str(get_step_path(job_id))
+    glb_path = str(job_dir / "model.glb")
+
+    bridge = PipelineBridge(job_id)
+
+    async def event_stream() -> AsyncGenerator[dict[str, str], None]:
+        yield _sse("generating", {
+            "job_id": job_id,
+            "status": JobStatus.GENERATING.value,
+            "message": "参数已确认，正在生成 3D 模型…",
+        })
+
+        # Run Stages 1.5-5 in worker thread via bridge
+        try:
+            from backend.knowledge.part_types import DrawingSpec
+
+            confirmed_spec = DrawingSpec(**body.confirmed_spec)
+        except Exception as exc:
+            update_job(job_id, status=JobStatus.FAILED, error=str(exc))
+            yield _sse("failed", {
+                "job_id": job_id,
+                "status": JobStatus.FAILED.value,
+                "message": f"参数解析失败: {exc}",
+            })
+            return
+
+        pipeline_task = asyncio.ensure_future(asyncio.to_thread(
+            _run_generate_from_spec,
+            image_filepath=image_path,
+            drawing_spec=confirmed_spec,
+            output_filepath=step_path,
+            on_progress=bridge.on_progress,
+        ))
+
+        # Stream progress events in real-time
+        while not pipeline_task.done():
+            try:
+                event = bridge.queue.get_nowait()
+            except Exception:
+                await asyncio.sleep(0.2)
+                continue
+            event_type = event.get("event", "progress")
+            data = event.get("data", {})
+            payload = {"job_id": job_id, **data, "status": event_type}
+            if event_type == "refining":
+                update_job(job_id, status=JobStatus.REFINING)
+            yield _sse(event_type, payload)
+
+        # Check pipeline result
+        pipeline_failed = False
+        try:
+            pipeline_task.result()
+        except Exception as exc:
+            pipeline_failed = True
+            update_job(job_id, status=JobStatus.FAILED, error=str(exc))
+            yield _sse("failed", {
+                "job_id": job_id,
+                "status": JobStatus.FAILED.value,
+                "message": f"管道执行失败: {exc}",
+            })
+
+        if not pipeline_failed and os.path.exists(step_path):
+            # Convert STEP → GLB for preview
+            update_job(job_id, status=JobStatus.REFINING)
+            yield _sse("refining", {
+                "job_id": job_id,
+                "status": JobStatus.REFINING.value,
+                "message": "正在转换预览格式…",
+            })
+
+            model_url: str | None = None
+            try:
+                await asyncio.wait_for(
+                    asyncio.to_thread(
+                        _convert_step_to_glb, step_path, glb_path,
+                    ),
+                    timeout=30,
+                )
+                model_url = get_model_url(job_id, fmt="glb")
+            except Exception:
+                pass
+
+            # Run printability check
+            printability_data = await asyncio.to_thread(
+                _run_printability_check, step_path,
+            )
+
+            update_job(
+                job_id,
+                status=JobStatus.COMPLETED,
+                result={
+                    "message": "生成完成",
+                    "model_url": model_url,
+                    "step_path": step_path,
+                    "confirmed_spec": body.confirmed_spec,
+                    "printability": printability_data,
+                },
+            )
+            yield _sse("completed", {
+                "job_id": job_id,
+                "status": JobStatus.COMPLETED.value,
+                "message": "生成完成",
+                "model_url": model_url,
+                "step_path": step_path,
+                "printability": printability_data,
+            })
+        elif not pipeline_failed and not os.path.exists(step_path):
+            update_job(
+                job_id,
+                status=JobStatus.FAILED,
+                error="管道执行完成但未生成 STEP 文件",
+            )
+            yield _sse("failed", {
+                "job_id": job_id,
+                "status": JobStatus.FAILED.value,
+                "message": "管道执行完成但未生成 STEP 文件",
+            })
+
+        # Drain remaining bridge events
+        while not bridge.queue.empty():
+            event = bridge.queue.get_nowait()
+            event_type = event.get("event", "progress")
+            data = event.get("data", {})
+            payload = {"job_id": job_id, **data, "status": event_type}
+            yield _sse(event_type, payload)
 
     return EventSourceResponse(event_stream())
 

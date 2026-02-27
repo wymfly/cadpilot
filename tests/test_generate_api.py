@@ -702,6 +702,230 @@ class TestDrawingModeIntegration:
 
 
 # ===================================================================
+# POST /generate/drawing/{job_id}/confirm — drawing confirm (T9)
+# ===================================================================
+
+
+class TestDrawingConfirm:
+    """Tests for POST /generate/drawing/{job_id}/confirm endpoint."""
+
+    _VALID_CONFIRMED_SPEC: dict = {
+        "part_type": "rotational",
+        "description": "Test rotational part",
+        "base_body": {"method": "revolve"},
+        "overall_dimensions": {"d": 50, "h": 30},
+    }
+
+    def _create_awaiting_drawing_job(self, job_id: str = "dc-test") -> str:
+        """Helper: create a job in AWAITING_DRAWING_CONFIRMATION state."""
+        create_job(job_id, input_type="drawing")
+        update_job(
+            job_id,
+            status=JobStatus.AWAITING_DRAWING_CONFIRMATION,
+            drawing_spec=self._VALID_CONFIRMED_SPEC,
+            image_path="/tmp/test-drawing.png",
+        )
+        return job_id
+
+    def test_drawing_confirm_resumes_generation(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """Confirm should resume pipeline and reach completed status."""
+        import backend.api.generate as gen_mod
+
+        job_id = self._create_awaiting_drawing_job()
+
+        def mock_generate(
+            image_filepath, drawing_spec, output_filepath,
+            on_progress=None, config=None,
+        ):
+            Path(output_filepath).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_filepath).write_text("fake step content")
+
+        monkeypatch.setattr(gen_mod, "_run_generate_from_spec", mock_generate)
+        monkeypatch.setattr(
+            gen_mod, "_convert_step_to_glb",
+            lambda s, g: Path(g).write_text("fake glb"),
+        )
+        monkeypatch.setattr(gen_mod, "_run_printability_check", lambda p: None)
+
+        resp = client.post(
+            f"/api/generate/drawing/{job_id}/confirm",
+            json={
+                "confirmed_spec": self._VALID_CONFIRMED_SPEC,
+                "disclaimer_accepted": True,
+            },
+        )
+        assert resp.status_code == 200
+        events = parse_sse_events(resp.text)
+        statuses = [e.get("status") for e in events]
+        assert "generating" in statuses
+        assert "completed" in statuses
+
+        # Job should be COMPLETED
+        job = get_job(job_id)
+        assert job is not None
+        assert job.status == JobStatus.COMPLETED
+        assert job.result is not None
+        assert "model_url" in job.result
+
+    def test_drawing_confirm_nonexistent_job(
+        self, client: TestClient,
+    ) -> None:
+        """Confirm on nonexistent job should return 404."""
+        resp = client.post(
+            "/api/generate/drawing/nonexistent-id/confirm",
+            json={
+                "confirmed_spec": self._VALID_CONFIRMED_SPEC,
+                "disclaimer_accepted": True,
+            },
+        )
+        assert resp.status_code == 404
+
+    def test_drawing_confirm_wrong_state(
+        self, client: TestClient,
+    ) -> None:
+        """Confirm on job not in AWAITING_DRAWING_CONFIRMATION should return 409."""
+        job_id = "dc-wrong-state"
+        create_job(job_id, input_type="drawing")
+        # Job is in CREATED state, not AWAITING_DRAWING_CONFIRMATION
+        resp = client.post(
+            f"/api/generate/drawing/{job_id}/confirm",
+            json={
+                "confirmed_spec": self._VALID_CONFIRMED_SPEC,
+                "disclaimer_accepted": True,
+            },
+        )
+        assert resp.status_code == 409
+
+    def test_drawing_confirm_disclaimer_required(
+        self, client: TestClient,
+    ) -> None:
+        """Confirm with disclaimer_accepted=False should return 400."""
+        job_id = self._create_awaiting_drawing_job()
+        resp = client.post(
+            f"/api/generate/drawing/{job_id}/confirm",
+            json={
+                "confirmed_spec": self._VALID_CONFIRMED_SPEC,
+                "disclaimer_accepted": False,
+            },
+        )
+        assert resp.status_code == 400
+
+    def test_drawing_confirm_with_printability(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """Completed event should include printability data when available."""
+        import backend.api.generate as gen_mod
+
+        job_id = self._create_awaiting_drawing_job()
+
+        def mock_generate(
+            image_filepath, drawing_spec, output_filepath,
+            on_progress=None, config=None,
+        ):
+            Path(output_filepath).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_filepath).write_text("fake step")
+
+        monkeypatch.setattr(gen_mod, "_run_generate_from_spec", mock_generate)
+        monkeypatch.setattr(
+            gen_mod, "_convert_step_to_glb",
+            lambda s, g: Path(g).write_text("fake glb"),
+        )
+        printability = {"overall_score": 85, "issues": []}
+        monkeypatch.setattr(
+            gen_mod, "_run_printability_check", lambda p: printability,
+        )
+
+        resp = client.post(
+            f"/api/generate/drawing/{job_id}/confirm",
+            json={
+                "confirmed_spec": self._VALID_CONFIRMED_SPEC,
+                "disclaimer_accepted": True,
+            },
+        )
+        events = parse_sse_events(resp.text)
+        completed = [e for e in events if e.get("status") == "completed"]
+        assert len(completed) == 1
+        assert completed[0].get("printability") == printability
+
+    def test_drawing_confirm_pipeline_failure(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """Pipeline exception should emit failed event."""
+        import backend.api.generate as gen_mod
+
+        job_id = self._create_awaiting_drawing_job()
+
+        def mock_fail(
+            image_filepath, drawing_spec, output_filepath,
+            on_progress=None, config=None,
+        ):
+            raise RuntimeError("CadQuery build failed")
+
+        monkeypatch.setattr(gen_mod, "_run_generate_from_spec", mock_fail)
+
+        resp = client.post(
+            f"/api/generate/drawing/{job_id}/confirm",
+            json={
+                "confirmed_spec": self._VALID_CONFIRMED_SPEC,
+                "disclaimer_accepted": True,
+            },
+        )
+        events = parse_sse_events(resp.text)
+        failed = [e for e in events if e.get("status") == "failed"]
+        assert len(failed) >= 1
+        assert "管道执行失败" in failed[0].get("message", "")
+
+    def test_drawing_confirm_no_step_file(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """Pipeline success but no STEP file should emit failed."""
+        import backend.api.generate as gen_mod
+
+        job_id = self._create_awaiting_drawing_job("dc-no-step")
+
+        def mock_generate(
+            image_filepath, drawing_spec, output_filepath,
+            on_progress=None, config=None,
+        ):
+            pass  # Don't create the STEP file
+
+        monkeypatch.setattr(gen_mod, "_run_generate_from_spec", mock_generate)
+
+        resp = client.post(
+            f"/api/generate/drawing/{job_id}/confirm",
+            json={
+                "confirmed_spec": self._VALID_CONFIRMED_SPEC,
+                "disclaimer_accepted": True,
+            },
+        )
+        events = parse_sse_events(resp.text)
+        failed = [e for e in events if e.get("status") == "failed"]
+        assert len(failed) >= 1
+        assert "STEP" in failed[0].get("message", "")
+
+    def test_drawing_confirm_invalid_spec(
+        self, client: TestClient,
+    ) -> None:
+        """Invalid confirmed_spec should emit failed event (not crash)."""
+        job_id = self._create_awaiting_drawing_job()
+
+        resp = client.post(
+            f"/api/generate/drawing/{job_id}/confirm",
+            json={
+                "confirmed_spec": {"invalid": "data"},
+                "disclaimer_accepted": True,
+            },
+        )
+        assert resp.status_code == 200
+        events = parse_sse_events(resp.text)
+        failed = [e for e in events if e.get("status") == "failed"]
+        assert len(failed) >= 1
+        assert "参数解析失败" in failed[0].get("message", "")
+
+
+# ===================================================================
 # Integration tests — text mode full lifecycle
 # ===================================================================
 
