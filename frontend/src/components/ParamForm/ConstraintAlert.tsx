@@ -9,7 +9,7 @@ export default function ConstraintAlert({ violations }: ConstraintAlertProps) {
   if (violations.length === 0) return null;
 
   return (
-    <Space direction="vertical" size={8} style={{ width: '100%', marginBottom: 16 }}>
+    <Space orientation="vertical" size={8} style={{ width: '100%', marginBottom: 16 }}>
       {violations.map((v, i) => (
         <Alert
           key={i}

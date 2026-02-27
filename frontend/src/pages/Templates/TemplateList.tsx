@@ -121,7 +121,7 @@ export default function TemplateList({ onSelect, onCreate }: TemplateListProps) 
                 onClick={() => onSelect(tpl.name)}
                 styles={{ body: { padding: 20 } }}
               >
-                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                   <Space>
                     <Text strong style={{ fontSize: 16 }}>
                       {tpl.display_name}

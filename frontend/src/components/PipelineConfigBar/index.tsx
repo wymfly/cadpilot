@@ -196,8 +196,16 @@ const FALLBACK_TOOLTIPS: Record<string, TooltipSpec> = {
   },
 };
 
-export default function PipelineConfigBar() {
-  const [config, setConfig] = useState<PipelineConfig>(DEFAULT_CONFIG);
+export interface PipelineConfigBarProps {
+  value?: PipelineConfig;
+  onChange?: (config: PipelineConfig) => void;
+}
+
+export { DEFAULT_CONFIG };
+
+export default function PipelineConfigBar({ value, onChange: onExternalChange }: PipelineConfigBarProps = {}) {
+  const [internalConfig, setInternalConfig] = useState<PipelineConfig>(DEFAULT_CONFIG);
+  const config = value ?? internalConfig;
   const [tooltips, setTooltips] = useState<Record<string, TooltipSpec>>(FALLBACK_TOOLTIPS);
   const [customExpanded, setCustomExpanded] = useState(false);
 
@@ -209,22 +217,28 @@ export default function PipelineConfigBar() {
       });
   }, []);
 
+  const updateConfig = useCallback((newConfig: PipelineConfig) => {
+    setInternalConfig(newConfig);
+    onExternalChange?.(newConfig);
+  }, [onExternalChange]);
+
   const handlePresetChange = useCallback((preset: PipelineConfig['preset']) => {
     if (preset === 'custom') {
-      setConfig((prev) => ({ ...prev, preset: 'custom' }));
+      const newConfig = { ...config, preset: 'custom' as const };
+      updateConfig(newConfig);
       setCustomExpanded(true);
     } else {
       const presetConfig = PRESET_CONFIGS[preset];
       if (presetConfig) {
-        setConfig({ preset, ...presetConfig });
+        updateConfig({ preset, ...presetConfig });
       }
       setCustomExpanded(false);
     }
-  }, []);
+  }, [config, updateConfig]);
 
   const handleCustomChange = useCallback((patch: Partial<PipelineConfig>) => {
-    setConfig((prev) => ({ ...prev, ...patch, preset: 'custom' as const }));
-  }, []);
+    updateConfig({ ...config, ...patch, preset: 'custom' as const });
+  }, [config, updateConfig]);
 
   return (
     <Card size="small" title="管道配置" style={{ marginBottom: 16 }}>

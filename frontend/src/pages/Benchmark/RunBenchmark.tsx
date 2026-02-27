@@ -94,7 +94,7 @@ export default function RunBenchmark() {
       <Title level={3}>运行评测</Title>
 
       <Card style={{ maxWidth: 600 }}>
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <div>
             <Text strong>选择数据集</Text>
             <Select

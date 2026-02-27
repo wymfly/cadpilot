@@ -44,12 +44,12 @@ export function createSSEConnection(
     });
   }
   if (handlers.onComplete) {
-    source.addEventListener('complete', (e: MessageEvent) => {
+    source.addEventListener('completed', (e: MessageEvent) => {
       handlers.onComplete!(JSON.parse(e.data));
     });
   }
   if (handlers.onError) {
-    source.addEventListener('error', (e: MessageEvent) => {
+    source.addEventListener('failed', (e: MessageEvent) => {
       handlers.onError!(JSON.parse(e.data));
     });
   }
@@ -59,9 +59,9 @@ export function createSSEConnection(
     const data = JSON.parse(e.data);
     if (data.event === 'progress' && handlers.onProgress) {
       handlers.onProgress(data);
-    } else if (data.event === 'complete' && handlers.onComplete) {
+    } else if (data.event === 'completed' && handlers.onComplete) {
       handlers.onComplete(data);
-    } else if (data.event === 'error' && handlers.onError) {
+    } else if (data.event === 'failed' && handlers.onError) {
       handlers.onError(data);
     }
   };

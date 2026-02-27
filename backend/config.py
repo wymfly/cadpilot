@@ -20,4 +20,11 @@ class Settings(BaseSettings):
     execution_timeout_s: int = 60
     execution_memory_mb: int = 2048
 
-    model_config = {"env_file": ".env", "env_prefix": "CAD3DIFY_"}
+    # Organic engine
+    organic_enabled: bool = True
+    tripo3d_api_key: str | None = None
+    hunyuan3d_api_key: str | None = None
+    organic_default_provider: str = "auto"  # "auto" | "tripo3d" | "hunyuan3d"
+    organic_upload_max_mb: int = 10
+
+    model_config = {"env_file": ".env", "extra": "ignore"}

@@ -227,18 +227,18 @@ export default function TemplateDetail({
         </Space>
       </Space>
 
-      <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
+      <Descriptions bordered size="small" column={{ xs: 2, sm: 3 }}>
         <Descriptions.Item label="模板名称">
           <Text code>{template.name}</Text>
         </Descriptions.Item>
         <Descriptions.Item label="零件类型">
           <Tag>{PART_TYPE_LABELS[template.part_type] ?? template.part_type}</Tag>
         </Descriptions.Item>
-        <Descriptions.Item label="描述" span={2}>
+        <Descriptions.Item label="描述">
           {template.description}
         </Descriptions.Item>
         {template.constraints.length > 0 && (
-          <Descriptions.Item label="约束条件" span={2}>
+          <Descriptions.Item label="约束条件" span={3}>
             <ul style={{ margin: 0, paddingLeft: 16 }}>
               {template.constraints.map((c, i) => (
                 <li key={i}>

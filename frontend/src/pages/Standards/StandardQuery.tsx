@@ -77,7 +77,7 @@ export default function StandardQuery() {
   };
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={16} style={{ width: '100%' }}>
       <Card>
         <Title level={5}>参数查询</Title>
         <Form layout="inline" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -156,7 +156,7 @@ export default function StandardQuery() {
           {checkValid ? (
             <Alert type="success" message="所有约束检查通过" showIcon />
           ) : (
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={8} style={{ width: '100%' }}>
               {violations.map((v, i) => (
                 <Alert
                   key={i}

@@ -16,7 +16,7 @@ from pydantic import BaseModel
 class ExportConfig(BaseModel):
     """Export configuration for format conversion."""
 
-    format: Literal["stl", "3mf", "gltf"] = "stl"
+    format: Literal["step", "stl", "3mf", "gltf"] = "stl"
     linear_deflection: float = 0.1
     angular_deflection: float = 0.5
 

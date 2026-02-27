@@ -194,7 +194,7 @@ export default function PrintConfigPanel() {
         open={modalOpen}
         onOk={handleSubmit}
         onCancel={() => setModalOpen(false)}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" size="small">
           <Form.Item

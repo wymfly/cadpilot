@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,6 +14,7 @@ from backend.api import (
     export,
     generate,
     health,
+    organic,
     pipeline,
     print_config,
     rag,
@@ -38,3 +43,11 @@ app.include_router(templates.router, prefix="/api")
 app.include_router(standards.router, prefix="/api")
 app.include_router(print_config.router, prefix="/api")
 app.include_router(rag.router, prefix="/api")
+app.include_router(organic.router, prefix="/api")
+
+from pathlib import Path as _Path
+from starlette.staticfiles import StaticFiles
+
+_outputs_dir = _Path("outputs")
+_outputs_dir.mkdir(exist_ok=True)
+app.mount("/outputs", StaticFiles(directory=str(_outputs_dir)), name="outputs")

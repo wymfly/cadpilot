@@ -8,6 +8,8 @@ import {
   ToolOutlined,
 } from '@ant-design/icons';
 import type { WorkflowPhase } from '../../types/generate.ts';
+import type { ParamDefinition } from '../../types/template.ts';
+import type { PipelineConfig } from '../../types/pipeline.ts';
 
 const { Text } = Typography;
 
@@ -17,6 +19,9 @@ export interface WorkflowState {
   message: string;
   error: string | null;
   modelUrl: string | null;
+  parsedParams: ParamDefinition[] | null;
+  stepPath: string | null;
+  templateName: string | null;
 }
 
 export interface GenerateWorkflowProps {
@@ -50,10 +55,13 @@ export function useGenerateWorkflow() {
     message: '',
     error: null,
     modelUrl: null,
+    parsedParams: null,
+    stepPath: null,
+    templateName: null,
   });
   const abortRef = useRef<AbortController | null>(null);
 
-  const startTextGenerate = useCallback(async (text: string) => {
+  const startTextGenerate = useCallback(async (text: string, pipelineConfig?: PipelineConfig) => {
     abortRef.current?.abort();
     const abort = new AbortController();
     abortRef.current = abort;
@@ -64,13 +72,16 @@ export function useGenerateWorkflow() {
       message: '正在解析意图…',
       error: null,
       modelUrl: null,
+      parsedParams: null,
+      stepPath: null,
+      templateName: null,
     });
 
     try {
       const resp = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, pipeline_config: pipelineConfig ?? {} }),
         signal: abort.signal,
       });
 
@@ -177,7 +188,7 @@ export function useGenerateWorkflow() {
     [state.jobId],
   );
 
-  const startDrawingGenerate = useCallback(async (file: File) => {
+  const startDrawingGenerate = useCallback(async (file: File, pipelineConfig?: PipelineConfig) => {
     abortRef.current?.abort();
 
     setState({
@@ -186,13 +197,17 @@ export function useGenerateWorkflow() {
       message: '正在分析图纸…',
       error: null,
       modelUrl: null,
+      parsedParams: null,
+      stepPath: null,
+      templateName: null,
     });
 
     const formData = new FormData();
     formData.append('image', file);
+    formData.append('pipeline_config', JSON.stringify(pipelineConfig ?? {}));
 
     try {
-      const resp = await fetch('/api/generate', {
+      const resp = await fetch('/api/generate/drawing', {
         method: 'POST',
         body: formData,
       });
@@ -208,7 +223,21 @@ export function useGenerateWorkflow() {
       let buffer = '';
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          if (buffer.trim()) {
+            for (const line of buffer.split('\n')) {
+              if (line.startsWith('data:')) {
+                const jsonStr = line.slice(5).trim();
+                if (!jsonStr) continue;
+                try {
+                  const evt = JSON.parse(jsonStr);
+                  handleSSEEvent(evt, setState);
+                } catch { /* skip */ }
+              }
+            }
+          }
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
 
         const lines = buffer.split('\n');
@@ -244,6 +273,9 @@ export function useGenerateWorkflow() {
       message: '',
       error: null,
       modelUrl: null,
+      parsedParams: null,
+      stepPath: null,
+      templateName: null,
     });
   }, []);
 
@@ -269,7 +301,14 @@ function handleSSEEvent(
       setState((prev) => ({ ...prev, jobId, phase: 'parsing', message }));
       break;
     case 'intent_parsed':
-      setState((prev) => ({ ...prev, jobId, phase: 'confirming', message }));
+      setState((prev) => ({
+        ...prev,
+        jobId,
+        phase: 'confirming',
+        message,
+        parsedParams: (evt.params as ParamDefinition[] | undefined) ?? null,
+        templateName: (evt.template_name as string | undefined) ?? null,
+      }));
       break;
     case 'awaiting_confirmation':
       setState((prev) => ({ ...prev, jobId, phase: 'confirming', message }));
@@ -286,6 +325,8 @@ function handleSSEEvent(
         jobId,
         phase: 'completed',
         message,
+        modelUrl: (evt.model_url as string | undefined) ?? null,
+        stepPath: (evt.step_path as string | undefined) ?? null,
       }));
       break;
     case 'failed':

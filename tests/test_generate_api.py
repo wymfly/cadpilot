@@ -13,6 +13,7 @@ Tests:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -179,6 +180,35 @@ class TestGenerateTextMode:
         assert "intent_parsed" in statuses
         assert "awaiting_confirmation" in statuses
 
+    def test_text_mode_returns_params(self, client: TestClient) -> None:
+        """intent_parsed event should contain params array."""
+        resp = client.post("/api/generate", json={"text": "做一个法兰盘"})
+        events = parse_sse_events(resp.text)
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        # params should be a list (might be empty if no template matched)
+        assert "params" in parsed[0]
+        assert isinstance(parsed[0]["params"], list)
+
+    def test_text_mode_template_match(self, client: TestClient) -> None:
+        """When text contains a known display_name, template_name should be set."""
+        resp = client.post("/api/generate", json={"text": "做一个法兰盘"})
+        events = parse_sse_events(resp.text)
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        # "法兰盘" matches the rotational_flange_disk template
+        assert parsed[0].get("template_name") == "rotational_flange_disk"
+        assert len(parsed[0]["params"]) > 0
+
+    def test_text_mode_no_match(self, client: TestClient) -> None:
+        """When text has no known keyword, template_name should be None."""
+        resp = client.post("/api/generate", json={"text": "做一个完全未知的东西"})
+        events = parse_sse_events(resp.text)
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        assert parsed[0].get("template_name") is None
+        assert parsed[0]["params"] == []
+
     def test_text_mode_job_status_persists(self, client: TestClient) -> None:
         resp = client.post(
             "/api/generate",
@@ -199,7 +229,31 @@ class TestGenerateTextMode:
 
 
 class TestGenerateDrawingMode:
-    def test_drawing_mode_returns_sse(self, client: TestClient) -> None:
+    @staticmethod
+    def _mock_pipeline_success(
+        image_filepath, output_filepath, config=None,
+        on_spec_ready=None, on_progress=None,
+    ):
+        """Mock pipeline that writes a fake STEP file."""
+        Path(output_filepath).write_text("fake step")
+        if on_spec_ready:
+            on_spec_ready({"part_type": "rotational"}, "test reasoning")
+        if on_progress:
+            on_progress("geometry", {"is_valid": True, "volume": 100})
+
+    @staticmethod
+    def _mock_convert_noop(step_path, glb_path):
+        """Mock converter that writes a fake GLB."""
+        Path(glb_path).write_text("fake glb")
+
+    def test_drawing_mode_returns_sse(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        import backend.api.generate as gen_mod
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
+        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+
         resp = client.post(
             "/api/generate/drawing",
             files={"image": ("test.png", b"fakepng", "image/png")},
@@ -207,7 +261,14 @@ class TestGenerateDrawingMode:
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
 
-    def test_drawing_mode_event_flow(self, client: TestClient) -> None:
+    def test_drawing_mode_event_flow(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        import backend.api.generate as gen_mod
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
+        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+
         resp = client.post(
             "/api/generate/drawing",
             files={"image": ("test.png", b"fakepng", "image/png")},
@@ -216,6 +277,43 @@ class TestGenerateDrawingMode:
         statuses = [e.get("status") for e in events]
         assert "created" in statuses
         assert "completed" in statuses
+
+    def test_drawing_mode_with_pipeline_returns_model_url(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """When V2 pipeline succeeds, completed event should contain model_url."""
+        import backend.api.generate as gen_mod
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
+        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("test.png", b"fakepng", "image/png")},
+        )
+        events = parse_sse_events(resp.text)
+        completed = [e for e in events if e.get("status") == "completed"]
+        assert len(completed) == 1
+        assert completed[0].get("model_url") is not None
+
+    def test_drawing_pipeline_failure(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """When pipeline fails, should get failed event."""
+        import backend.api.generate as gen_mod
+
+        def mock_fail(*args, **kwargs):
+            raise RuntimeError("LLM timeout")
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", mock_fail)
+
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("test.png", b"fakepng", "image/png")},
+        )
+        events = parse_sse_events(resp.text)
+        failed = [e for e in events if e.get("status") == "failed"]
+        assert len(failed) >= 1
 
 
 # ===================================================================
@@ -285,6 +383,32 @@ class TestConfirmParams:
             json={"confirmed_params": {}},
         )
         assert resp.status_code == 409
+
+    def test_confirm_with_template(self, client: TestClient, monkeypatch) -> None:
+        """When template matches and executes, completed should have model_url."""
+        import backend.api.generate as gen_mod
+
+        # Mock _run_template_generation to succeed and create a fake STEP file
+        def _mock_run(job, params, step_path):
+            Path(step_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(step_path).write_text("fake step")
+            return True
+
+        monkeypatch.setattr(gen_mod, "_run_template_generation", _mock_run)
+        monkeypatch.setattr(
+            gen_mod, "_convert_step_to_glb",
+            lambda s, g: Path(g).write_text("fake glb"),
+        )
+
+        job_id = self._create_awaiting_job(client)
+        resp = client.post(
+            f"/api/generate/{job_id}/confirm",
+            json={"confirmed_params": {"outer_diameter": 100}},
+        )
+        events = parse_sse_events(resp.text)
+        completed = [e for e in events if e.get("status") == "completed"]
+        assert len(completed) == 1
+        assert completed[0].get("model_url") is not None
 
     def test_confirm_empty_params(self, client: TestClient) -> None:
         job_id = self._create_awaiting_job(client)
@@ -381,3 +505,192 @@ class TestErrorCases:
         status = client.get(f"/api/generate/{job_id}").json()
         assert status["status"] == "completed"
         assert status["result"] is not None
+
+
+# ===================================================================
+# Integration tests — drawing mode full flow
+# ===================================================================
+
+
+class TestDrawingModeIntegration:
+    """Integration tests: drawing upload → mocked pipeline → full SSE flow."""
+
+    def test_full_drawing_flow_with_progress(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        """End-to-end: upload → pipeline with progress callbacks → model_url in completed."""
+        import backend.api.generate as gen_mod
+
+        def mock_pipeline(
+            image_filepath,
+            output_filepath,
+            config=None,
+            on_spec_ready=None,
+            on_progress=None,
+        ):
+            Path(output_filepath).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_filepath).write_text("mock step content")
+            if on_spec_ready:
+                on_spec_ready(
+                    {"part_type": "plate", "overall_dimensions": {"width": 200}},
+                    "detected plate",
+                )
+            if on_progress:
+                on_progress(
+                    "geometry",
+                    {"is_valid": True, "volume": 500.0, "bbox": [200, 100, 10]},
+                )
+                on_progress(
+                    "refinement_round",
+                    {"round": 1, "total": 3, "status": "refined"},
+                )
+                on_progress(
+                    "refinement_round",
+                    {"round": 2, "total": 3, "status": "PASS"},
+                )
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", mock_pipeline)
+        monkeypatch.setattr(
+            gen_mod,
+            "_convert_step_to_glb",
+            lambda s, g: Path(g).write_text("mock glb"),
+        )
+
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("drawing.png", b"\x89PNG\r\n", "image/png")},
+            data={"pipeline_config": '{"preset": "fast"}'},
+        )
+        assert resp.status_code == 200
+        events = parse_sse_events(resp.text)
+
+        # Check event flow
+        statuses = [e.get("status") for e in events]
+        assert "created" in statuses
+        assert "completed" in statuses
+
+        # Completed event should have model_url
+        completed = [e for e in events if e.get("status") == "completed"]
+        assert len(completed) == 1
+        assert completed[0].get("model_url") is not None
+        assert ".glb" in completed[0]["model_url"]
+
+    def test_drawing_with_fast_preset(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        """Verify pipeline_config preset is parsed and passed."""
+        import backend.api.generate as gen_mod
+
+        received_config = {}
+
+        def mock_pipeline(image_filepath, output_filepath, config=None, **kwargs):
+            nonlocal received_config
+            received_config = config
+            Path(output_filepath).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_filepath).write_text("mock")
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", mock_pipeline)
+        monkeypatch.setattr(
+            gen_mod,
+            "_convert_step_to_glb",
+            lambda s, g: Path(g).write_text("mock"),
+        )
+
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("test.png", b"fake", "image/png")},
+            data={"pipeline_config": '{"preset": "fast"}'},
+        )
+        assert resp.status_code == 200
+        # Config should have been parsed
+        assert received_config is not None
+
+    def test_drawing_pipeline_timeout_returns_failed(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        """Pipeline timeout should return failed event."""
+        import backend.api.generate as gen_mod
+
+        def mock_timeout(*args, **kwargs):
+            raise TimeoutError("Pipeline execution timed out after 300s")
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", mock_timeout)
+
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("test.png", b"fake", "image/png")},
+        )
+        events = parse_sse_events(resp.text)
+        failed = [e for e in events if e.get("status") == "failed"]
+        assert len(failed) >= 1
+        assert (
+            "timed out" in failed[0].get("message", "").lower()
+            or "timeout" in failed[0].get("message", "").lower()
+        )
+
+
+# ===================================================================
+# Integration tests — text mode full lifecycle
+# ===================================================================
+
+
+class TestTextModeIntegration:
+    """Integration tests: text mode → template matching → confirm → generate."""
+
+    def test_text_to_confirm_full_flow(
+        self, client: TestClient, monkeypatch
+    ) -> None:
+        """Full lifecycle: text input → intent_parsed with params → confirm → completed."""
+        import backend.api.generate as gen_mod
+
+        # Step 1: Text input
+        resp = client.post("/api/generate", json={"text": "做一个法兰盘"})
+        events = parse_sse_events(resp.text)
+        job_id = events[0]["job_id"]
+
+        # Check intent_parsed has params
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        assert "params" in parsed[0]
+
+        # Step 2: Confirm params (mock the generation)
+        def _mock_run(job, params, step_path):
+            Path(step_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(step_path).write_text("fake step")
+            return True
+
+        monkeypatch.setattr(gen_mod, "_run_template_generation", _mock_run)
+        monkeypatch.setattr(
+            gen_mod,
+            "_convert_step_to_glb",
+            lambda s, g: Path(g).write_text("fake glb"),
+        )
+
+        resp = client.post(
+            f"/api/generate/{job_id}/confirm",
+            json={"confirmed_params": {"outer_diameter": 100, "thickness": 16}},
+        )
+        events = parse_sse_events(resp.text)
+        statuses = [e.get("status") for e in events]
+        assert "generating" in statuses
+        assert "completed" in statuses
+
+        # Step 3: Verify final job status
+        status_resp = client.get(f"/api/generate/{job_id}")
+        assert status_resp.json()["status"] == "completed"
+
+    def test_text_mode_no_match_still_works(self, client: TestClient) -> None:
+        """When no template matches, should still complete the flow gracefully."""
+        resp = client.post(
+            "/api/generate", json={"text": "一个完全未知的东西xyz"}
+        )
+        events = parse_sse_events(resp.text)
+        statuses = [e.get("status") for e in events]
+        assert "created" in statuses
+        assert "intent_parsed" in statuses
+        assert "awaiting_confirmation" in statuses
+
+        # params should be empty list
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert parsed[0].get("params") == []
+        assert parsed[0].get("template_name") is None

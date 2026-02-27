@@ -47,6 +47,9 @@ _STUB_ROOTS: frozenset[str] = frozenset({
     "paddleocr",
     "pytesseract",
     # PIL / Pillow — NOT stubbed, needed for contour overlay tests
+    # Organic engine heavy deps — lazy-loaded in handlers
+    "manifold3d",
+    "pymeshlab",
 })
 
 
