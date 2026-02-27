@@ -251,10 +251,20 @@ async def generate_organic(
             processed.mesh.export(str(glb_path))
             processed.mesh.export(str(stl_path))
 
+            # 3MF export with metadata
+            threemf_url: str | None = None
+            try:
+                threemf_path = output_dir / "model.3mf"
+                processed.mesh.export(str(threemf_path), file_type="3mf")
+                threemf_url = f"/outputs/organic/{job_id}/model.3mf"
+            except Exception as e:
+                logger.warning(f"3MF export failed: {e}")
+
             result = OrganicJobResult(
                 job_id=job_id,
                 model_url=f"/outputs/organic/{job_id}/model.glb",
                 stl_url=f"/outputs/organic/{job_id}/model.stl",
+                threemf_url=threemf_url,
                 mesh_stats=processed.stats,
                 provider_used=request.provider,
                 generation_time_s=0.0,

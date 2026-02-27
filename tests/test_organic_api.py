@@ -269,6 +269,66 @@ class TestSSEStream:
         )
         assert resp.status_code == 422
 
+    async def test_completed_event_includes_threemf_url(self, client: AsyncClient) -> None:
+        """Completed SSE event should include threemf_url when 3MF export succeeds."""
+        from backend.models.organic import MeshStats
+
+        with patch("backend.core.organic_spec_builder.OrganicSpecBuilder.build") as mock_build, \
+             patch("backend.api.organic._create_provider") as mock_create_prov, \
+             patch("backend.core.mesh_post_processor.MeshPostProcessor") as mock_pp_cls:
+
+            mock_spec = MagicMock()
+            mock_spec.prompt_en = "test"
+            mock_spec.final_bounding_box = None
+            mock_spec.engineering_cuts = []
+            mock_spec.quality_mode = "draft"
+            mock_build.return_value = mock_spec
+
+            mock_provider = AsyncMock()
+            mock_provider.generate = AsyncMock(return_value=Path("/tmp/test.glb"))
+            mock_create_prov.return_value = mock_provider
+
+            # Mock post-processor step by step
+            mock_mesh = MagicMock()
+            mock_mesh.export = MagicMock()
+            mock_repair_info = MagicMock()
+            mock_repair_info.status = "success"
+            mock_repair_info.message = "OK"
+            real_stats = MeshStats(
+                vertex_count=100,
+                face_count=200,
+                is_watertight=True,
+                volume_cm3=1.0,
+                bounding_box={"x": 50, "y": 50, "z": 50},
+                has_non_manifold=False,
+            )
+
+            mock_pp = MagicMock()
+            mock_pp.load_mesh.return_value = mock_mesh
+            mock_pp.repair_mesh.return_value = (mock_mesh, mock_repair_info)
+            mock_pp.validate_mesh.return_value = real_stats
+            mock_pp_cls.return_value = mock_pp
+
+            resp = await client.post(
+                "/api/generate/organic",
+                json={"prompt": "测试3MF导出"},
+            )
+            lines = resp.text.strip().split("\n")
+            data_lines = [
+                l.strip() for l in lines if l.strip().startswith("data:")
+            ]
+            completed_events = []
+            for data_line in data_lines:
+                payload = json.loads(data_line[len("data:"):].strip())
+                if payload.get("status") == "completed":
+                    completed_events.append(payload)
+
+            assert len(completed_events) == 1
+            completed = completed_events[0]
+            assert "threemf_url" in completed
+            assert completed["threemf_url"] is not None
+            assert completed["threemf_url"].endswith(".3mf")
+
     async def test_empty_prompt_with_image_is_accepted(self, client: AsyncClient) -> None:
         """Empty prompt with a reference_image should pass validation (422 only if image not found)."""
         resp = await client.post(
