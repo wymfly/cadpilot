@@ -1,4 +1,5 @@
-import { Radio, Select, Space, Typography } from 'antd';
+import { Radio, Select, Space, Tooltip, Typography } from 'antd';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import type { QualityMode, ProviderPreference } from '../../types/organic.ts';
 
 const { Text } = Typography;
@@ -14,6 +15,17 @@ const PROVIDER_OPTIONS: { label: string; value: ProviderPreference }[] = [
   { label: 'Tripo3D', value: 'tripo3d' },
   { label: 'Hunyuan3D', value: 'hunyuan3d' },
 ];
+
+function HelpTip({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Tooltip
+      title={<div style={{ maxWidth: 300 }}><div style={{ fontWeight: 600, marginBottom: 4 }}>{title}</div>{children}</div>}
+      placement="top"
+    >
+      <QuestionCircleOutlined style={{ color: '#999', marginLeft: 4, cursor: 'help' }} />
+    </Tooltip>
+  );
+}
 
 interface QualitySelectorProps {
   qualityMode: QualityMode;
@@ -33,9 +45,29 @@ export default function QualitySelector({
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
       <div>
-        <Text strong style={{ display: 'block', marginBottom: 8 }}>
-          生成质量
-        </Text>
+        <Space size={4} align="center" style={{ marginBottom: 8 }}>
+          <Text strong>生成质量</Text>
+          <HelpTip title="生成质量">
+            <div>控制 3D 模型的精细程度，质量越高耗时越长。</div>
+            <table style={{ marginTop: 8, width: '100%', fontSize: 12, lineHeight: 1.6 }}>
+              <tbody>
+                <tr>
+                  <td style={{ color: '#91caff', paddingRight: 8, whiteSpace: 'nowrap' }}>草稿</td>
+                  <td>快速预览，约 30-60 秒。面数较少，适合快速验证创意方向</td>
+                </tr>
+                <tr>
+                  <td style={{ color: '#91caff', paddingRight: 8, whiteSpace: 'nowrap' }}>标准</td>
+                  <td>均衡模式，约 1-2 分钟。细节适中，适合大多数场景</td>
+                </tr>
+                <tr>
+                  <td style={{ color: '#91caff', paddingRight: 8, whiteSpace: 'nowrap' }}>高质量</td>
+                  <td>最高精度，约 2-5 分钟。细节丰富，适合最终成品</td>
+                </tr>
+              </tbody>
+            </table>
+            <div style={{ marginTop: 4, color: '#d9f7be' }}>默认: 标准</div>
+          </HelpTip>
+        </Space>
         <Radio.Group
           value={qualityMode}
           onChange={(e) => onQualityChange(e.target.value)}
@@ -46,9 +78,29 @@ export default function QualitySelector({
         />
       </div>
       <div>
-        <Text strong style={{ display: 'block', marginBottom: 8 }}>
-          生成引擎
-        </Text>
+        <Space size={4} align="center" style={{ marginBottom: 8 }}>
+          <Text strong>生成引擎</Text>
+          <HelpTip title="生成引擎">
+            <div>选择后端 3D 生成服务。</div>
+            <table style={{ marginTop: 8, width: '100%', fontSize: 12, lineHeight: 1.6 }}>
+              <tbody>
+                <tr>
+                  <td style={{ color: '#91caff', paddingRight: 8, whiteSpace: 'nowrap' }}>自动选择</td>
+                  <td>按可用性自动选择最佳引擎（推荐）</td>
+                </tr>
+                <tr>
+                  <td style={{ color: '#91caff', paddingRight: 8, whiteSpace: 'nowrap' }}>Tripo3D</td>
+                  <td>速度快，擅长日常物品和角色模型</td>
+                </tr>
+                <tr>
+                  <td style={{ color: '#91caff', paddingRight: 8, whiteSpace: 'nowrap' }}>Hunyuan3D</td>
+                  <td>腾讯出品，擅长复杂几何和工业造型</td>
+                </tr>
+              </tbody>
+            </table>
+            <div style={{ marginTop: 4, color: '#d9f7be' }}>默认: 自动选择</div>
+          </HelpTip>
+        </Space>
         <Select
           value={provider}
           onChange={onProviderChange}
