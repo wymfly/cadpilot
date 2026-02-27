@@ -96,6 +96,75 @@ def _convert_step_to_glb(step_path: str, glb_path: str) -> None:
         f.write(glb_bytes)
 
 
+def _match_template(
+    text: str,
+) -> tuple[Any, list[Any]]:
+    """Simple keyword matching to find a parametric template.
+
+    Returns ``(template, params)`` where *params* is
+    ``list[ParamDefinition]``.  If nothing matches, returns
+    ``(None, [])``.
+    """
+    try:
+        from backend.core.template_engine import TemplateEngine
+
+        _templates_dir = Path(__file__).parent.parent / "knowledge" / "templates"
+        engine = TemplateEngine.from_directory(_templates_dir)
+        templates = engine.list_templates()
+    except Exception:
+        return None, []
+
+    text_lower = text.lower()
+    for tpl in templates:
+        # Match by display_name (Chinese) or name (machine-readable)
+        if tpl.display_name in text or tpl.name in text_lower:
+            return tpl, tpl.params
+
+    # No match — return None with empty params
+    return None, []
+
+
+def _run_template_generation(
+    job: Any, confirmed_params: dict[str, float], step_path: str
+) -> bool:
+    """Use parametric template to generate STEP file.  Returns *True* on success."""
+    template_name: str | None = None
+    if job.result and isinstance(job.result, dict):
+        template_name = job.result.get("template_name")
+
+    if not template_name:
+        return False
+
+    try:
+        from backend.core.template_engine import TemplateEngine
+
+        _templates_dir = Path(__file__).parent.parent / "knowledge" / "templates"
+        engine = TemplateEngine.from_directory(_templates_dir)
+        template = engine.get_template(template_name)
+    except Exception:
+        return False
+
+    # Render Jinja2 template with confirmed params
+    try:
+        code = engine.render(
+            template_name,
+            confirmed_params,
+            output_filename=step_path,
+        )
+    except Exception:
+        return False
+
+    # Execute in sandbox
+    try:
+        from backend.infra.sandbox import SafeExecutor
+
+        executor = SafeExecutor(timeout_s=120)
+        result = executor.execute(code)
+        return result.success and Path(step_path).exists()
+    except Exception:
+        return False
+
+
 def _parse_pipeline_config(config_json: str) -> PipelineConfig:
     """Parse pipeline_config JSON string into PipelineConfig."""
     try:
@@ -128,12 +197,20 @@ async def generate_text(body: TextGenerateRequest) -> EventSourceResponse:
             "status": job.status.value,
         })
 
-        # Stage 1: Intent parsing
+        # Stage 1: Intent parsing — find matching parametric template
+        matched_template, params = _match_template(body.text)
+
+        # Store template reference in job for the confirm step
+        if matched_template:
+            update_job(job_id, result={"template_name": matched_template.name})
+
         update_job(job_id, status=JobStatus.INTENT_PARSED)
         yield _sse("intent_parsed", {
             "job_id": job_id,
             "status": JobStatus.INTENT_PARSED.value,
             "message": "意图解析完成，等待参数确认",
+            "template_name": matched_template.name if matched_template else None,
+            "params": [p.model_dump() for p in params],
         })
 
         # Pause — client must call POST /generate/{job_id}/confirm
@@ -270,6 +347,8 @@ async def confirm_params(
         )
 
     update_job(job_id, status=JobStatus.GENERATING)
+    job_dir = ensure_job_dir(job_id)
+    step_path = str(get_step_path(job_id))
 
     async def event_stream() -> AsyncGenerator[dict[str, str], None]:
         yield _sse("generating", {
@@ -279,28 +358,76 @@ async def confirm_params(
             "message": "参数已确认，正在生成…",
         })
 
-        # Stage: refining
-        update_job(job_id, status=JobStatus.REFINING)
-        yield _sse("refining", {
-            "job_id": job_id,
-            "status": JobStatus.REFINING.value,
-            "message": "正在优化模型…",
-        })
+        try:
+            # Try template-based generation
+            success = await asyncio.to_thread(
+                _run_template_generation, job, body.confirmed_params, step_path,
+            )
 
-        # Stage: completed
-        update_job(
-            job_id,
-            status=JobStatus.COMPLETED,
-            result={
-                "message": "生成完成",
-                "confirmed_params": body.confirmed_params,
-            },
-        )
-        yield _sse("completed", {
-            "job_id": job_id,
-            "status": JobStatus.COMPLETED.value,
-            "message": "生成完成",
-        })
+            if success and Path(step_path).exists():
+                # Convert STEP → GLB for preview
+                update_job(job_id, status=JobStatus.REFINING)
+                yield _sse("refining", {
+                    "job_id": job_id,
+                    "status": JobStatus.REFINING.value,
+                    "message": "正在转换预览格式…",
+                })
+
+                glb_path = str(job_dir / "model.glb")
+                model_url: str | None = None
+                try:
+                    _convert_step_to_glb(step_path, glb_path)
+                    model_url = get_model_url(job_id, "glb")
+                except Exception:
+                    model_url = None
+
+                update_job(
+                    job_id,
+                    status=JobStatus.COMPLETED,
+                    result={
+                        "message": "生成完成",
+                        "model_url": model_url,
+                        "step_path": step_path,
+                        "confirmed_params": body.confirmed_params,
+                    },
+                )
+                yield _sse("completed", {
+                    "job_id": job_id,
+                    "status": JobStatus.COMPLETED.value,
+                    "message": "生成完成",
+                    "model_url": model_url,
+                    "step_path": step_path,
+                })
+            else:
+                # No template matched or execution failed — still complete
+                # gracefully (no STEP, no model_url)
+                update_job(job_id, status=JobStatus.REFINING)
+                yield _sse("refining", {
+                    "job_id": job_id,
+                    "status": JobStatus.REFINING.value,
+                    "message": "正在优化模型…",
+                })
+
+                update_job(
+                    job_id,
+                    status=JobStatus.COMPLETED,
+                    result={
+                        "message": "生成完成",
+                        "confirmed_params": body.confirmed_params,
+                    },
+                )
+                yield _sse("completed", {
+                    "job_id": job_id,
+                    "status": JobStatus.COMPLETED.value,
+                    "message": "生成完成",
+                })
+        except Exception as exc:
+            update_job(job_id, status=JobStatus.FAILED, error=str(exc))
+            yield _sse("failed", {
+                "job_id": job_id,
+                "status": JobStatus.FAILED.value,
+                "message": f"生成失败: {exc}",
+            })
 
     return EventSourceResponse(event_stream())
 

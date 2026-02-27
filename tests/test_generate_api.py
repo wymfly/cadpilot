@@ -180,6 +180,35 @@ class TestGenerateTextMode:
         assert "intent_parsed" in statuses
         assert "awaiting_confirmation" in statuses
 
+    def test_text_mode_returns_params(self, client: TestClient) -> None:
+        """intent_parsed event should contain params array."""
+        resp = client.post("/api/generate", json={"text": "做一个法兰盘"})
+        events = parse_sse_events(resp.text)
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        # params should be a list (might be empty if no template matched)
+        assert "params" in parsed[0]
+        assert isinstance(parsed[0]["params"], list)
+
+    def test_text_mode_template_match(self, client: TestClient) -> None:
+        """When text contains a known display_name, template_name should be set."""
+        resp = client.post("/api/generate", json={"text": "做一个法兰盘"})
+        events = parse_sse_events(resp.text)
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        # "法兰盘" matches the rotational_flange_disk template
+        assert parsed[0].get("template_name") == "rotational_flange_disk"
+        assert len(parsed[0]["params"]) > 0
+
+    def test_text_mode_no_match(self, client: TestClient) -> None:
+        """When text has no known keyword, template_name should be None."""
+        resp = client.post("/api/generate", json={"text": "做一个完全未知的东西"})
+        events = parse_sse_events(resp.text)
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        assert parsed[0].get("template_name") is None
+        assert parsed[0]["params"] == []
+
     def test_text_mode_job_status_persists(self, client: TestClient) -> None:
         resp = client.post(
             "/api/generate",
@@ -354,6 +383,32 @@ class TestConfirmParams:
             json={"confirmed_params": {}},
         )
         assert resp.status_code == 409
+
+    def test_confirm_with_template(self, client: TestClient, monkeypatch) -> None:
+        """When template matches and executes, completed should have model_url."""
+        import backend.api.generate as gen_mod
+
+        # Mock _run_template_generation to succeed and create a fake STEP file
+        def _mock_run(job, params, step_path):
+            Path(step_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(step_path).write_text("fake step")
+            return True
+
+        monkeypatch.setattr(gen_mod, "_run_template_generation", _mock_run)
+        monkeypatch.setattr(
+            gen_mod, "_convert_step_to_glb",
+            lambda s, g: Path(g).write_text("fake glb"),
+        )
+
+        job_id = self._create_awaiting_job(client)
+        resp = client.post(
+            f"/api/generate/{job_id}/confirm",
+            json={"confirmed_params": {"outer_diameter": 100}},
+        )
+        events = parse_sse_events(resp.text)
+        completed = [e for e in events if e.get("status") == "completed"]
+        assert len(completed) == 1
+        assert completed[0].get("model_url") is not None
 
     def test_confirm_empty_params(self, client: TestClient) -> None:
         job_id = self._create_awaiting_job(client)
