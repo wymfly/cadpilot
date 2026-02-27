@@ -4,6 +4,9 @@ A Job tracks the lifecycle of a single generate request:
 CREATED → INTENT_PARSED → AWAITING_CONFIRMATION → GENERATING → REFINING → COMPLETED
                                                                           ↗
                                               VALIDATION_FAILED → (retry or abort)
+
+Drawing path adds an intermediate step:
+CREATED → AWAITING_DRAWING_CONFIRMATION → GENERATING → REFINING → COMPLETED
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ class JobStatus(str, Enum):
     CREATED = "created"
     INTENT_PARSED = "intent_parsed"
     AWAITING_CONFIRMATION = "awaiting_confirmation"
+    AWAITING_DRAWING_CONFIRMATION = "awaiting_drawing_confirmation"
     GENERATING = "generating"
     REFINING = "refining"
     COMPLETED = "completed"
@@ -40,6 +44,9 @@ class Job(BaseModel):
     intent: Optional[IntentSpec] = None
     precise_spec: Optional[PreciseSpec] = None
     recommendations: list[dict[str, Any]] = Field(default_factory=list)
+    drawing_spec: Optional[dict[str, Any]] = None
+    drawing_spec_confirmed: Optional[dict[str, Any]] = None
+    image_path: Optional[str] = None
     result: Optional[dict[str, Any]] = None
     error: Optional[str] = None
     created_at: str = Field(

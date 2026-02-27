@@ -117,12 +117,56 @@ class TestJobModel:
         for status in [
             JobStatus.INTENT_PARSED,
             JobStatus.AWAITING_CONFIRMATION,
+            JobStatus.AWAITING_DRAWING_CONFIRMATION,
             JobStatus.GENERATING,
             JobStatus.REFINING,
             JobStatus.COMPLETED,
         ]:
             update_job("t1", status=status)
             assert get_job("t1").status == status
+
+    def test_awaiting_drawing_confirmation_status(self) -> None:
+        assert (
+            JobStatus.AWAITING_DRAWING_CONFIRMATION.value
+            == "awaiting_drawing_confirmation"
+        )
+
+    def test_drawing_spec_fields(self) -> None:
+        job = create_job("d1", input_type="drawing")
+        assert job.drawing_spec is None
+        assert job.drawing_spec_confirmed is None
+        assert job.image_path is None
+
+        spec = {"part_type": "ROTATIONAL", "overall_dimensions": {"d": 50}}
+        update_job(
+            "d1",
+            status=JobStatus.AWAITING_DRAWING_CONFIRMATION,
+            drawing_spec=spec,
+            image_path="/uploads/drawing.png",
+        )
+        job = get_job("d1")
+        assert job.status == JobStatus.AWAITING_DRAWING_CONFIRMATION
+        assert job.drawing_spec == spec
+        assert job.image_path == "/uploads/drawing.png"
+
+        confirmed = {**spec, "overall_dimensions": {"d": 52}}
+        update_job("d1", drawing_spec_confirmed=confirmed)
+        job = get_job("d1")
+        assert job.drawing_spec_confirmed == confirmed
+
+    def test_drawing_job_serialization(self) -> None:
+        job = create_job("d2", input_type="drawing")
+        spec = {"part_type": "PLATE", "overall_dimensions": {"w": 100}}
+        update_job(
+            "d2",
+            drawing_spec=spec,
+            image_path="/tmp/img.jpg",
+        )
+        data = get_job("d2").model_dump()
+        assert data["drawing_spec"] == spec
+        assert data["image_path"] == "/tmp/img.jpg"
+        restored = Job.model_validate(data)
+        assert restored.drawing_spec == spec
 
 
 # ===================================================================
