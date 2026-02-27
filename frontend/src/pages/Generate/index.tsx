@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Typography, Row, Col, Button, Space } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import PipelineConfigBar from '../../components/PipelineConfigBar/index.tsx';
@@ -6,31 +6,8 @@ import Viewer3D from '../../components/Viewer3D/index.tsx';
 import ParamForm from '../../components/ParamForm/index.tsx';
 import ChatInput from './ChatInput.tsx';
 import GenerateWorkflow, { useGenerateWorkflow } from './GenerateWorkflow.tsx';
-import type { ParamDefinition } from '../../types/template.ts';
 
 const { Title, Paragraph } = Typography;
-
-/** Placeholder params for the confirmation step (will be populated by IntentParser). */
-const PLACEHOLDER_PARAMS: ParamDefinition[] = [
-  {
-    name: 'outer_diameter',
-    display_name: '外径',
-    unit: 'mm',
-    param_type: 'float',
-    range_min: 10,
-    range_max: 500,
-    default: 100,
-  },
-  {
-    name: 'thickness',
-    display_name: '厚度',
-    unit: 'mm',
-    param_type: 'float',
-    range_min: 1,
-    range_max: 200,
-    default: 20,
-  },
-];
 
 export default function Generate() {
   const {
@@ -43,10 +20,20 @@ export default function Generate() {
 
   const [paramValues, setParamValues] = useState<
     Record<string, number | string | boolean>
-  >({
-    outer_diameter: 100,
-    thickness: 20,
-  });
+  >({});
+
+  // Initialize param values from parsed params defaults
+  useEffect(() => {
+    if (workflow.parsedParams) {
+      const defaults: Record<string, number | string | boolean> = {};
+      for (const p of workflow.parsedParams) {
+        if (p.default != null) {
+          defaults[p.name] = p.default;
+        }
+      }
+      setParamValues(defaults);
+    }
+  }, [workflow.parsedParams]);
 
   const handleParamChange = useCallback(
     (name: string, value: number | string | boolean) => {
@@ -96,7 +83,7 @@ export default function Generate() {
       <Row gutter={24}>
         {/* Left panel: input + params */}
         <Col xs={24} lg={10}>
-          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space orientation="vertical" style={{ width: '100%' }} size="middle">
             {/* Chat input */}
             <ChatInput
               onSendText={startTextGenerate}
@@ -112,15 +99,21 @@ export default function Generate() {
             />
 
             {/* Parameter confirmation form (shown during confirming phase) */}
-            {workflow.phase === 'confirming' && (
+            {workflow.phase === 'confirming' && workflow.parsedParams && workflow.parsedParams.length > 0 && (
               <ParamForm
-                params={PLACEHOLDER_PARAMS}
+                params={workflow.parsedParams}
                 values={paramValues}
                 onChange={handleParamChange}
                 onConfirm={handleConfirm}
-                onReset={() =>
-                  setParamValues({ outer_diameter: 100, thickness: 20 })
-                }
+                onReset={() => {
+                  if (workflow.parsedParams) {
+                    const defaults: Record<string, number | string | boolean> = {};
+                    for (const p of workflow.parsedParams) {
+                      if (p.default != null) defaults[p.name] = p.default;
+                    }
+                    setParamValues(defaults);
+                  }
+                }}
                 title="参数确认"
               />
             )}
