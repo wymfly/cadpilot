@@ -28,7 +28,7 @@ V3 设计文档：`openspec/changes/2026-02-26-v3-text-to-printable/`
 | 数据验证 | Pydantic v2 |
 | Web UI | Streamlit 1.37.1（V2）→ React + Three.js（V3） |
 | 后端 | 无（V2 单体）→ FastAPI :8780（V3） |
-| 包管理 | Poetry |
+| 包管理 | uv（pyproject.toml + uv.lock） |
 
 ---
 
@@ -166,21 +166,63 @@ GeometryResult       # 几何校验（is_valid + volume + bbox）
 
 ---
 
-## 验证命令
+## 包管理与虚拟环境
+
+**本项目使用 uv 管理虚拟环境和依赖，禁止使用系统 Python 或 conda。**
 
 ```bash
-# 测试
-pytest tests/ -v
+# 安装依赖
+uv sync
 
-# 格式化
-black .
-isort .
+# 添加依赖
+uv add <package>
 
-# 运行 Web UI
+# 添加开发依赖
+uv add --dev <package>
+
+# 运行命令（自动使用 .venv）
+uv run <command>
+uv run pytest tests/ -v
+uv run uvicorn backend.main:app --port 8780
+```
+
+**强制规则：**
+- 所有 Python 命令必须通过 `uv run` 执行，或在 `.venv` 激活后执行
+- 禁止使用 `python`/`pip`（系统级），必须 `uv run python`/`uv pip`
+- `.venv` 由 uv 管理（Python 3.12），不要手动创建或修改
+
+---
+
+## 启动服务
+
+```bash
+# V3 前后端（推荐）
+./scripts/start-v3.sh          # 启动后端 + 前端
+./scripts/start-v3.sh backend  # 仅后端 (:8780)
+./scripts/start-v3.sh frontend # 仅前端 (:3001)
+./scripts/start-v3.sh stop     # 停止所有
+
+# V2 Streamlit（旧版）
 ./start.sh qwen
 
 # CLI 生成
-./start.sh cli sample_data/g1-3.jpg output.step
+uv run python scripts/cli.py sample_data/g1-3.jpg --output_filepath output.step
+```
+
+---
+
+## 验证命令
+
+```bash
+# 测试（必须通过 uv run）
+uv run pytest tests/ -v
+
+# 格式化
+uv run black .
+uv run isort .
+
+# TypeScript
+cd frontend && npx tsc --noEmit && npm run lint
 ```
 
 ---

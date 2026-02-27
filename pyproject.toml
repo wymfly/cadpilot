@@ -1,51 +1,64 @@
-[tool.poetry]
+[project]
 name = "cad3dify"
 version = "0.1.0"
-description = ""
-authors = ["neka-nat <nekanat.stock@gmail.com>"]
-license = "MIT"
+description = "AI-driven 2D engineering drawing → 3D CAD model generation"
+authors = [{ name = "neka-nat", email = "nekanat.stock@gmail.com" }]
+license = { text = "MIT" }
 readme = "README.md"
-packages = [
-    { include = "cad3dify" },
-    { include = "backend" },
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    # V2 existing
+    "langchain>=0.3.18",
+    "langchain-openai>=0.2.0",
+    "svglib>=1.5.1",
+    "langchain-experimental>=0.3.1",
+    "cadquery>=2.4.0",
+    "rlpycairo>=0.3.0",
+    "loguru>=0.7.2",
+    "langchainhub>=0.1.15",
+    "streamlit>=1.37.1",
+    "numpy>=1.26.4",
+    "python-dotenv>=1.0.1",
+    "langchain-anthropic>=0.3.0",
+    "matplotlib>=3.9.2",
+    "langchain-google-genai>=2.0.7",
+    "opencv-python>=4.10.0.84",
+    # V3 new
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "sse-starlette>=2.2.0",
+    "pydantic-settings>=2.7.0",
+    "trimesh>=4.5.0",
+    "python-multipart>=0.0.22",
+    "networkx>=3.4.2",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-# V2 existing
-langchain = ">=0.3.18"
-langchain-openai = "^0.2.0"
-svglib = "^1.5.1"
-langchain-experimental = "^0.3.1"
-cadquery = "^2.4.0"
-rlpycairo = "^0.3.0"
-loguru = "^0.7.2"
-langchainhub = "^0.1.15"
-streamlit = "^1.37.1"
-numpy = "1.26.4"
-langchain-google-vertexai = {version = "^2.0.1", optional = true}
-python-dotenv = "^1.0.1"
-langchain-anthropic = "^0.3.0"
-matplotlib = "^3.9.2"
-langchain-google-genai = "^2.0.7"
-opencv-python = "^4.10.0.84"
-# V3 new
-fastapi = "^0.115.0"
-uvicorn = {version = "^0.34.0", extras = ["standard"]}
-sse-starlette = "^2.2.0"
-pydantic-settings = "^2.7.0"
-trimesh = "^4.5.0"
+[project.optional-dependencies]
+vertexai = ["langchain-google-vertexai>=2.0.1"]
 
+[dependency-groups]
+dev = [
+    "black>=24.4.2",
+    "isort>=5.13.2",
+    "pytest>=8.0.0",
+    "httpx>=0.28.0",
+    "pytest-asyncio>=1.3.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-black = "^24.4.2"
-isort = "^5.13.2"
-pytest = "^8.0.0"
-httpx = "^0.28.0"
+[tool.uv]
+package = true
+# cadquery pins nlopt==2.7.1 which has no ARM Mac wheel; override to 2.10+
+override-dependencies = [
+    "nlopt>=2.10.0",
+    "numpy>=1.26.4",
+]
 
-[tool.poetry.extras]
-vertexai = ["langchain-google-vertexai"]
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cad3dify", "backend"]
