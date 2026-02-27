@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import MainLayout from './layouts/MainLayout.tsx';
+import { GenerateWorkflowProvider } from './contexts/GenerateWorkflowContext.tsx';
 import Home from './pages/Home/index.tsx';
 import Generate from './pages/Generate/index.tsx';
 import Templates from './pages/Templates/index.tsx';
@@ -15,18 +16,20 @@ export default function App() {
   return (
     <ConfigProvider locale={zhCN}>
       <BrowserRouter>
-        <Routes>
-          <Route element={<MainLayout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/generate" element={<Generate />} />
-            <Route path="/templates" element={<Templates />} />
-            <Route path="/standards" element={<Standards />} />
-            <Route path="/benchmark" element={<Benchmark />} />
-            <Route path="/benchmark/run" element={<RunBenchmark />} />
-            <Route path="/benchmark/:runId" element={<ReportDetail />} />
-            <Route path="/settings" element={<Settings />} />
-          </Route>
-        </Routes>
+        <GenerateWorkflowProvider>
+          <Routes>
+            <Route element={<MainLayout />}>
+              <Route path="/" element={<Home />} />
+              <Route path="/generate" element={<Generate />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/standards" element={<Standards />} />
+              <Route path="/benchmark" element={<Benchmark />} />
+              <Route path="/benchmark/run" element={<RunBenchmark />} />
+              <Route path="/benchmark/:runId" element={<ReportDetail />} />
+              <Route path="/settings" element={<Settings />} />
+            </Route>
+          </Routes>
+        </GenerateWorkflowProvider>
       </BrowserRouter>
     </ConfigProvider>
   );

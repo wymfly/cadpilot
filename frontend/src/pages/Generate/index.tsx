@@ -1,26 +1,26 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Typography, Row, Col, Button, Space } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import PipelineConfigBar, { DEFAULT_CONFIG } from '../../components/PipelineConfigBar/index.tsx';
+import PipelineConfigBar from '../../components/PipelineConfigBar/index.tsx';
 import Viewer3D from '../../components/Viewer3D/index.tsx';
 import ParamForm from '../../components/ParamForm/index.tsx';
 import ChatInput from './ChatInput.tsx';
 import DownloadButtons from './DownloadButtons.tsx';
-import GenerateWorkflow, { useGenerateWorkflow } from './GenerateWorkflow.tsx';
-import type { PipelineConfig } from '../../types/pipeline.ts';
+import GenerateWorkflow from './GenerateWorkflow.tsx';
+import { useGenerateWorkflowContext } from '../../contexts/GenerateWorkflowContext.tsx';
 
 const { Title, Paragraph } = Typography;
 
 export default function Generate() {
   const {
-    state: workflow,
+    workflow,
     startTextGenerate,
     startDrawingGenerate,
     confirmParams,
     reset,
-  } = useGenerateWorkflow();
-
-  const [pipelineConfig, setPipelineConfig] = useState<PipelineConfig>(DEFAULT_CONFIG);
+    pipelineConfig,
+    setPipelineConfig,
+  } = useGenerateWorkflowContext();
 
   const [paramValues, setParamValues] = useState<
     Record<string, number | string | boolean>
