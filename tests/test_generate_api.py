@@ -273,30 +273,33 @@ class TestGenerateTextMode:
 
 
 class TestGenerateDrawingMode:
-    @staticmethod
-    def _mock_pipeline_success(
-        image_filepath, output_filepath, config=None,
-        on_spec_ready=None, on_progress=None,
-    ):
-        """Mock pipeline that writes a fake STEP file."""
-        Path(output_filepath).write_text("fake step")
-        if on_spec_ready:
-            on_spec_ready({"part_type": "rotational"}, "test reasoning")
-        if on_progress:
-            on_progress("geometry", {"is_valid": True, "volume": 100})
+    """Drawing mode now follows HITL flow: analyze → pause → (confirm in T9)."""
+
+    _MOCK_SPEC_DATA = {
+        "part_type": "rotational",
+        "overall_dimensions": {"d": 50, "h": 30},
+    }
 
     @staticmethod
-    def _mock_convert_noop(step_path, glb_path):
-        """Mock converter that writes a fake GLB."""
-        Path(glb_path).write_text("fake glb")
+    def _mock_analyze_success(image_filepath):
+        """Mock analyze_drawing that returns a spec-like object."""
+        from unittest.mock import MagicMock
+
+        spec = MagicMock()
+        spec.model_dump.return_value = TestGenerateDrawingMode._MOCK_SPEC_DATA
+        return spec, "test reasoning"
+
+    @staticmethod
+    def _mock_analyze_none(image_filepath):
+        """Mock analyze_drawing that returns None (analysis failure)."""
+        return None, None
 
     def test_drawing_mode_returns_sse(
         self, client: TestClient, monkeypatch,
     ) -> None:
         import backend.api.generate as gen_mod
 
-        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
-        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+        monkeypatch.setattr(gen_mod, "_run_analyze_drawing", self._mock_analyze_success)
 
         resp = client.post(
             "/api/generate/drawing",
@@ -305,13 +308,13 @@ class TestGenerateDrawingMode:
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
 
-    def test_drawing_mode_event_flow(
+    def test_drawing_mode_event_flow_pauses(
         self, client: TestClient, monkeypatch,
     ) -> None:
+        """Drawing route should emit drawing_spec_ready and NOT complete."""
         import backend.api.generate as gen_mod
 
-        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
-        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+        monkeypatch.setattr(gen_mod, "_run_analyze_drawing", self._mock_analyze_success)
 
         resp = client.post(
             "/api/generate/drawing",
@@ -320,36 +323,59 @@ class TestGenerateDrawingMode:
         events = parse_sse_events(resp.text)
         statuses = [e.get("status") for e in events]
         assert "created" in statuses
-        assert "completed" in statuses
+        assert "awaiting_drawing_confirmation" in statuses
+        assert "completed" not in statuses  # Should NOT complete yet!
 
-    def test_drawing_mode_with_pipeline_returns_model_url(
+    def test_drawing_spec_ready_contains_spec(
         self, client: TestClient, monkeypatch,
     ) -> None:
-        """When V2 pipeline succeeds, completed event should contain model_url."""
+        """drawing_spec_ready event should contain the DrawingSpec data."""
         import backend.api.generate as gen_mod
 
-        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
-        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+        monkeypatch.setattr(gen_mod, "_run_analyze_drawing", self._mock_analyze_success)
 
         resp = client.post(
             "/api/generate/drawing",
             files={"image": ("test.png", b"fakepng", "image/png")},
         )
         events = parse_sse_events(resp.text)
-        completed = [e for e in events if e.get("status") == "completed"]
-        assert len(completed) == 1
-        assert completed[0].get("model_url") is not None
+        spec_events = [
+            e for e in events
+            if e.get("status") == "awaiting_drawing_confirmation"
+        ]
+        assert len(spec_events) == 1
+        assert "drawing_spec" in spec_events[0]
+        assert spec_events[0]["drawing_spec"]["part_type"] == "rotational"
+        assert spec_events[0]["reasoning"] == "test reasoning"
 
-    def test_drawing_pipeline_failure(
+    def test_drawing_spec_stored_in_job(
         self, client: TestClient, monkeypatch,
     ) -> None:
-        """When pipeline fails, should get failed event."""
+        """Job should have drawing_spec and image_path after analysis."""
         import backend.api.generate as gen_mod
 
-        def mock_fail(*args, **kwargs):
-            raise RuntimeError("LLM timeout")
+        monkeypatch.setattr(gen_mod, "_run_analyze_drawing", self._mock_analyze_success)
 
-        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", mock_fail)
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("test.png", b"fakepng", "image/png")},
+        )
+        events = parse_sse_events(resp.text)
+        job_id = events[0]["job_id"]
+
+        job = get_job(job_id)
+        assert job is not None
+        assert job.status == JobStatus.AWAITING_DRAWING_CONFIRMATION
+        assert job.drawing_spec == self._MOCK_SPEC_DATA
+        assert job.image_path is not None
+
+    def test_drawing_analysis_returns_none(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """When analysis returns None spec, should get failed event."""
+        import backend.api.generate as gen_mod
+
+        monkeypatch.setattr(gen_mod, "_run_analyze_drawing", self._mock_analyze_none)
 
         resp = client.post(
             "/api/generate/drawing",
@@ -359,63 +385,46 @@ class TestGenerateDrawingMode:
         failed = [e for e in events if e.get("status") == "failed"]
         assert len(failed) >= 1
 
-    def test_drawing_completed_includes_printability(
+    def test_drawing_analysis_exception(
         self, client: TestClient, monkeypatch,
     ) -> None:
-        """Completed event from drawing mode should include printability field."""
+        """When analysis raises an exception, should get failed event."""
         import backend.api.generate as gen_mod
 
-        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
-        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
-        monkeypatch.setattr(
-            gen_mod,
-            "_run_printability_check",
-            lambda _: {
-                "printable": True,
-                "profile": "fdm_standard",
-                "issues": [],
-                "material_estimate": {
-                    "filament_weight_g": 12.5,
-                    "filament_length_m": 4.2,
-                    "cost_estimate_cny": 1.0,
-                },
-                "time_estimate": {
-                    "total_minutes": 45.0,
-                    "layer_count": 100,
-                },
-            },
-        )
+        def mock_fail(image_filepath):
+            raise RuntimeError("VL model timeout")
+
+        monkeypatch.setattr(gen_mod, "_run_analyze_drawing", mock_fail)
 
         resp = client.post(
             "/api/generate/drawing",
             files={"image": ("test.png", b"fakepng", "image/png")},
         )
         events = parse_sse_events(resp.text)
-        completed = [e for e in events if e.get("status") == "completed"]
-        assert len(completed) == 1
-        assert "printability" in completed[0]
-        assert completed[0]["printability"]["printable"] is True
-        assert "material_estimate" in completed[0]["printability"]
-        assert "time_estimate" in completed[0]["printability"]
+        failed = [e for e in events if e.get("status") == "failed"]
+        assert len(failed) >= 1
+        assert "timeout" in failed[0].get("message", "").lower()
 
-    def test_printability_failure_returns_null(
+    def test_drawing_job_status_persists(
         self, client: TestClient, monkeypatch,
     ) -> None:
-        """Printability check failure should not block generation — returns None."""
+        """Job status should be queryable via GET after drawing analysis."""
         import backend.api.generate as gen_mod
 
-        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
-        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
-        monkeypatch.setattr(gen_mod, "_run_printability_check", lambda _: None)
+        monkeypatch.setattr(gen_mod, "_run_analyze_drawing", self._mock_analyze_success)
 
         resp = client.post(
             "/api/generate/drawing",
             files={"image": ("test.png", b"fakepng", "image/png")},
         )
         events = parse_sse_events(resp.text)
-        completed = [e for e in events if e.get("status") == "completed"]
-        assert len(completed) == 1
-        assert completed[0].get("printability") is None
+        job_id = events[0]["job_id"]
+
+        status_resp = client.get(f"/api/generate/{job_id}")
+        assert status_resp.status_code == 200
+        data = status_resp.json()
+        assert data["status"] == "awaiting_drawing_confirmation"
+        assert data["drawing_spec"] is not None
 
 
 # ===================================================================
@@ -615,48 +624,27 @@ class TestErrorCases:
 
 
 class TestDrawingModeIntegration:
-    """Integration tests: drawing upload → mocked pipeline → full SSE flow."""
+    """Integration tests: drawing upload → HITL analysis → pause."""
 
-    def test_full_drawing_flow_with_progress(
-        self, client: TestClient, monkeypatch
+    @staticmethod
+    def _mock_analyze(image_filepath):
+        """Mock that returns a spec-like object with model_dump."""
+        from unittest.mock import MagicMock
+
+        spec = MagicMock()
+        spec.model_dump.return_value = {
+            "part_type": "plate",
+            "overall_dimensions": {"width": 200, "height": 100, "thickness": 10},
+        }
+        return spec, "detected plate from drawing"
+
+    def test_drawing_hitl_flow(
+        self, client: TestClient, monkeypatch,
     ) -> None:
-        """End-to-end: upload → pipeline with progress callbacks → model_url in completed."""
+        """Drawing upload → analyze → drawing_spec_ready → job paused."""
         import backend.api.generate as gen_mod
 
-        def mock_pipeline(
-            image_filepath,
-            output_filepath,
-            config=None,
-            on_spec_ready=None,
-            on_progress=None,
-        ):
-            Path(output_filepath).parent.mkdir(parents=True, exist_ok=True)
-            Path(output_filepath).write_text("mock step content")
-            if on_spec_ready:
-                on_spec_ready(
-                    {"part_type": "plate", "overall_dimensions": {"width": 200}},
-                    "detected plate",
-                )
-            if on_progress:
-                on_progress(
-                    "geometry",
-                    {"is_valid": True, "volume": 500.0, "bbox": [200, 100, 10]},
-                )
-                on_progress(
-                    "refinement_round",
-                    {"round": 1, "total": 3, "status": "refined"},
-                )
-                on_progress(
-                    "refinement_round",
-                    {"round": 2, "total": 3, "status": "PASS"},
-                )
-
-        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", mock_pipeline)
-        monkeypatch.setattr(
-            gen_mod,
-            "_convert_step_to_glb",
-            lambda s, g: Path(g).write_text("mock glb"),
-        )
+        monkeypatch.setattr(gen_mod, "_run_analyze_drawing", self._mock_analyze)
 
         resp = client.post(
             "/api/generate/drawing",
@@ -666,57 +654,39 @@ class TestDrawingModeIntegration:
         assert resp.status_code == 200
         events = parse_sse_events(resp.text)
 
-        # Check event flow
+        # Check event flow: created → analyzing → drawing_spec_ready
         statuses = [e.get("status") for e in events]
         assert "created" in statuses
-        assert "completed" in statuses
+        assert "analyzing" in statuses
+        assert "awaiting_drawing_confirmation" in statuses
+        assert "completed" not in statuses
 
-        # Completed event should have model_url
-        completed = [e for e in events if e.get("status") == "completed"]
-        assert len(completed) == 1
-        assert completed[0].get("model_url") is not None
-        assert ".glb" in completed[0]["model_url"]
+        # drawing_spec_ready event has spec data
+        spec_events = [
+            e for e in events
+            if e.get("status") == "awaiting_drawing_confirmation"
+        ]
+        assert len(spec_events) == 1
+        assert spec_events[0]["drawing_spec"]["part_type"] == "plate"
+        assert spec_events[0]["reasoning"] == "detected plate from drawing"
 
-    def test_drawing_with_fast_preset(
-        self, client: TestClient, monkeypatch
+        # Job is paused
+        job_id = events[0]["job_id"]
+        job = get_job(job_id)
+        assert job.status == JobStatus.AWAITING_DRAWING_CONFIRMATION
+        assert job.drawing_spec is not None
+        assert job.image_path is not None
+
+    def test_drawing_analysis_timeout_returns_failed(
+        self, client: TestClient, monkeypatch,
     ) -> None:
-        """Verify pipeline_config preset is parsed and passed."""
+        """Analysis timeout should return failed event."""
         import backend.api.generate as gen_mod
 
-        received_config = {}
+        def mock_timeout(image_filepath):
+            raise TimeoutError("VL model timed out after 300s")
 
-        def mock_pipeline(image_filepath, output_filepath, config=None, **kwargs):
-            nonlocal received_config
-            received_config = config
-            Path(output_filepath).parent.mkdir(parents=True, exist_ok=True)
-            Path(output_filepath).write_text("mock")
-
-        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", mock_pipeline)
-        monkeypatch.setattr(
-            gen_mod,
-            "_convert_step_to_glb",
-            lambda s, g: Path(g).write_text("mock"),
-        )
-
-        resp = client.post(
-            "/api/generate/drawing",
-            files={"image": ("test.png", b"fake", "image/png")},
-            data={"pipeline_config": '{"preset": "fast"}'},
-        )
-        assert resp.status_code == 200
-        # Config should have been parsed
-        assert received_config is not None
-
-    def test_drawing_pipeline_timeout_returns_failed(
-        self, client: TestClient, monkeypatch
-    ) -> None:
-        """Pipeline timeout should return failed event."""
-        import backend.api.generate as gen_mod
-
-        def mock_timeout(*args, **kwargs):
-            raise TimeoutError("Pipeline execution timed out after 300s")
-
-        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", mock_timeout)
+        monkeypatch.setattr(gen_mod, "_run_analyze_drawing", mock_timeout)
 
         resp = client.post(
             "/api/generate/drawing",

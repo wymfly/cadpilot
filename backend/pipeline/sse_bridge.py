@@ -17,6 +17,7 @@ _STAGE_TO_EVENT: dict[str, str] = {
     "candidate": "generating",
     "refinement_round": "refining",
     "cross_section": "refining",
+    "drawing_spec_ready": "drawing_spec_ready",
 }
 
 

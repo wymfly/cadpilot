@@ -129,38 +129,21 @@ def _score_geometry(
     return compiled, volume_ok, bbox_ok, topology_ok
 
 
-def generate_step_v2(
+# ======================================================================
+# HITL Pipeline Split (D8): analyze_drawing + generate_from_drawing_spec
+# ======================================================================
+
+
+def analyze_drawing(
     image_filepath: str,
-    output_filepath: str,
-    num_refinements: int | None = None,
-    on_spec_ready: Callable | None = None,
-    on_progress: Callable | None = None,
-    config: PipelineConfig | None = None,
-):
-    """V2 增强管道：VL 读图 → 策略选择 → Coder 写码 → 智能改进
+) -> tuple[DrawingSpec | None, str | None]:
+    """Stage 1 only: VL drawing analysis → DrawingSpec for HITL review.
 
-    Args:
-        image_filepath: 输入图片路径
-        output_filepath: 输出 STEP 文件路径
-        num_refinements: 改进轮数，显式传入时优先于 config；None 则使用 config 值
-        on_spec_ready: DrawingSpec 就绪回调 on_spec_ready(spec, reasoning=None)
-        on_progress: 进度回调 on_progress(stage: str, data: dict)
-            stage="geometry": data={"is_valid", "volume", "bbox", "error"}
-            stage="refinement_round": data={"round", "total", "status"}
-            stage="candidate": data={"index", "total", "score"}
-        config: 管道配置，None 则使用 balanced 预设
+    First half of the HITL pipeline split (D8).
+    Returns (spec, reasoning) where spec is None if analysis failed.
     """
-    if config is None:
-        config = PRESETS["balanced"]
-
-    # 显式传入 num_refinements 优先，否则使用 config 预设值
-    effective_refinements = num_refinements if num_refinements is not None else config.max_refinements
-
     image_data = ImageData.load_from_file(image_filepath)
 
-    # ================================================================
-    # 阶段 1: VL 分析图纸
-    # ================================================================
     logger.info("[V2] Stage 1: Analyzing drawing with VL model...")
     analyzer = DrawingAnalyzerChain()
     analyzer_result = analyzer.invoke(image_data)
@@ -168,18 +151,35 @@ def generate_step_v2(
     reasoning = analyzer_result.get("reasoning")
 
     if spec is None:
-        logger.error("[V2] Drawing analysis failed, falling back to v1 pipeline")
-        return generate_step_from_2d_cad_image(
-            image_filepath, output_filepath, num_refinements, model_type="qwen"
-        )
+        logger.error("[V2] Drawing analysis failed")
+        return None, None
 
     logger.info(f"[V2] Drawing spec: {spec.part_type}, dims={spec.overall_dimensions}")
+    return spec, reasoning
 
-    if on_spec_ready:
-        try:
-            on_spec_ready(spec, reasoning)
-        except TypeError:
-            on_spec_ready(spec)  # backward compat: old callers accept only (spec,)
+
+def generate_from_drawing_spec(
+    image_filepath: str,
+    drawing_spec: DrawingSpec,
+    output_filepath: str,
+    num_refinements: int | None = None,
+    on_progress: Callable | None = None,
+    config: PipelineConfig | None = None,
+) -> None:
+    """Stages 1.5-5: strategy → code gen → execute → refine → post-checks.
+
+    Second half of the HITL pipeline split (D8).
+    Requires original image_filepath for Stage 4 SmartRefiner VL comparison.
+    Uses the (possibly user-modified) drawing_spec.
+    """
+    if config is None:
+        config = PRESETS["balanced"]
+
+    effective_refinements = (
+        num_refinements if num_refinements is not None else config.max_refinements
+    )
+    spec = drawing_spec
+    image_data = ImageData.load_from_file(image_filepath)
 
     # ================================================================
     # 阶段 1.5: 选择建模策略
@@ -537,3 +537,54 @@ def generate_step_v2(
             logger.warning(f"[V2] Cross-section analysis failed: {e}")
 
     logger.info(f"[V2] Pipeline complete. Output: {output_filepath}")
+
+
+# ======================================================================
+# Backward-compatible V2 pipeline (calls analyze + generate)
+# ======================================================================
+
+
+def generate_step_v2(
+    image_filepath: str,
+    output_filepath: str,
+    num_refinements: int | None = None,
+    on_spec_ready: Callable | None = None,
+    on_progress: Callable | None = None,
+    config: PipelineConfig | None = None,
+):
+    """V2 pipeline: analyze + generate (backward compatible).
+
+    Combines analyze_drawing() and generate_from_drawing_spec() for
+    non-HITL usage. For HITL flow, call them separately.
+
+    Args:
+        image_filepath: 输入图片路径
+        output_filepath: 输出 STEP 文件路径
+        num_refinements: 改进轮数，显式传入时优先于 config；None 则使用 config 值
+        on_spec_ready: DrawingSpec 就绪回调 on_spec_ready(spec, reasoning=None)
+        on_progress: 进度回调 on_progress(stage: str, data: dict)
+        config: 管道配置，None 则使用 balanced 预设
+    """
+    spec, reasoning = analyze_drawing(image_filepath)
+
+    if spec is None:
+        logger.error("[V2] Drawing analysis failed, falling back to v1 pipeline")
+        num_ref = num_refinements if num_refinements is not None else 3
+        return generate_step_from_2d_cad_image(
+            image_filepath, output_filepath, num_ref, model_type="qwen"
+        )
+
+    if on_spec_ready:
+        try:
+            on_spec_ready(spec, reasoning)
+        except TypeError:
+            on_spec_ready(spec)  # backward compat: old callers accept only (spec,)
+
+    generate_from_drawing_spec(
+        image_filepath=image_filepath,
+        drawing_spec=spec,
+        output_filepath=output_filepath,
+        num_refinements=num_refinements,
+        on_progress=on_progress,
+        config=config,
+    )
