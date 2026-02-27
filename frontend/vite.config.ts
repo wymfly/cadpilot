@@ -10,6 +10,10 @@ export default defineConfig({
         target: 'http://localhost:8780',
         changeOrigin: true,
       },
+      '/outputs': {
+        target: 'http://localhost:8780',
+        changeOrigin: true,
+      },
     },
   },
   build: {
