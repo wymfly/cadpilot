@@ -127,7 +127,7 @@ class MeshPostProcessor:
             ms.meshing_repair_non_manifold_edges()
             ms.meshing_repair_non_manifold_vertices()
             ms.meshing_close_holes()
-            ms.meshing_re_orient_faces_coherentely()
+            ms.meshing_re_orient_faces_coherently()
             result = ms.current_mesh()
             verts = np.asarray(result.vertex_matrix())
             faces_arr = np.asarray(result.face_matrix())
