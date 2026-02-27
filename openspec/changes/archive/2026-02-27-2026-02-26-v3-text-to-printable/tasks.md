@@ -11,7 +11,7 @@
 > **预计工作量:** 2-3 周
 
 ### Task 1.1: 项目目录结构重构
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [architecture]
 - **范围:** 整体目录结构
 - **AC:**
@@ -28,7 +28,7 @@
   - `python -c "from cad3dify.pipeline import Pipeline"` 成功
 
 ### Task 1.2: FastAPI 后端骨架 + PipelineConfig
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/api/`, `backend/main.py`, `backend/config.py`, `backend/models/pipeline_config.py`
 - **依赖:** Task 1.1
@@ -55,7 +55,7 @@
   - 传入 `preset: "fast"` 时跳过非必要步骤
 
 ### Task 1.3: React 前端骨架 + 管道配置组件
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [frontend]
 - **范围:** `frontend/`
 - **AC:**
@@ -79,7 +79,7 @@
   - Tooltip hover 显示完整说明
 
 ### Task 1.4: STL/3MF 格式导出
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/format_exporter.py`, `backend/api/export.py`
 - **AC:**
@@ -96,7 +96,7 @@
   - STL 文件在 3D 打印切片软件中可打开
 
 ### Task 1.5: 体积估算验证器
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/validators.py`
 - **AC:**
@@ -109,7 +109,7 @@
   - 单元测试：已知参数的旋转体体积估算误差 < 5%
 
 ### Task 1.6: Token 用量监控
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/infra/token_tracker.py`, `backend/pipeline/pipeline.py`
 - **AC:**
@@ -122,7 +122,7 @@
   - 运行一次管道后 `pipeline_stats.json` 内容完整
 
 ### Task 1.7: 评测基准框架 + 失败分类
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [test]
 - **范围:** `backend/benchmark/`
 - **依赖:** Task 1.5, Task 1.6
@@ -148,7 +148,7 @@
   - `POST /api/benchmark/run` 可通过 API 触发评测
 
 ### Task 1.10: 评测基准前端页面
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [frontend]
 - **范围:** `frontend/src/pages/Benchmark/`
 - **依赖:** Task 1.7, Task 1.3
@@ -162,7 +162,7 @@
   - 完整评测运行流程可走通（触发→进度→报告查看）
 
 ### Task 1.8: 代码执行安全沙箱
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [security]
 - **范围:** `backend/infra/sandbox.py`, `backend/infra/agents.py`
 - **AC:**
@@ -181,7 +181,7 @@
   - 文件隔离测试：执行代码无法读取项目目录
 
 ### Task 1.9: 3D 预览组件
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [frontend]
 - **范围:** `frontend/src/components/Viewer3D/`
 - **依赖:** Task 1.3, Task 1.4
@@ -206,7 +206,7 @@
 > **依赖:** Phase 1
 
 ### Task 2.1: Best-of-N 多路生成 + 代码预检
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/code_generator.py`, `backend/pipeline/pipeline.py`
 - **依赖:** Task 1.2（PipelineConfig 模型）
@@ -229,7 +229,7 @@
   - AST 检查拦截已知的坏代码模式（缺 export、未定义变量）
 
 ### Task 2.2: 多视角渲染
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/infra/render.py`, `backend/core/smart_refiner.py`
 - **AC:**
@@ -244,7 +244,7 @@
   - benchmark 对比：多视角 vs 单视角的几何匹配率
 
 ### Task 2.3: 回滚机制
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/pipeline/pipeline.py`
 - **AC:**
@@ -258,7 +258,7 @@
   - 构造退化 case（人工或 mock），验证回滚触发
 
 ### Task 2.4: 拓扑验证
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/validators.py`
 - **AC:**
@@ -271,7 +271,7 @@
   - 单元测试：已知零件的拓扑统计结果正确
 
 ### Task 2.5: 结构化 VL 反馈
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/smart_refiner.py`
 - **AC:**
@@ -285,7 +285,7 @@
   - VL 输出格式符合 JSON schema
 
 ### Task 2.6: 截面分析验证
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/validators.py`
 - **AC:**
@@ -298,7 +298,7 @@
   - 单元测试：阶梯轴截面分析结果与预期一致
 
 ### Task 2.7: benchmark 对比报告
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [test]
 - **范围:** `backend/benchmark/`
 - **依赖:** Task 2.1, 2.2, 2.3, 2.4
@@ -320,7 +320,7 @@
 > **依赖:** Phase 2
 
 ### Task 3.1: features 结构化模型
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/models/drawing_spec.py`, `backend/knowledge/`
 - **AC:**
@@ -336,7 +336,7 @@
   - 知识库示例的 features 可正确序列化/反序列化
 
 ### Task 3.2: ParametricTemplate 数据模型
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/models/template.py`
 - **AC:**
@@ -351,7 +351,7 @@
   - YAML ↔ Pydantic 模型序列化/反序列化正确
 
 ### Task 3.3: ParametricTemplateEngine 核心
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/template_engine.py`
 - **依赖:** Task 3.2
@@ -366,7 +366,7 @@
   - 单元测试：法兰模板 + 参数 → 有效 CadQuery 代码 → 有效 STEP
 
 ### Task 3.4: 首批参数化模板（7 类型 × 2-3 变体）
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/knowledge/templates/`
 - **依赖:** Task 3.3
@@ -388,7 +388,7 @@
   - 尺寸精度 < 1%
 
 ### Task 3.5: 模板管理 API
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/api/templates.py`
 - **依赖:** Task 3.3
@@ -406,7 +406,7 @@
   - API 集成测试覆盖 CRUD + validate + preview
 
 ### Task 3.6: 知识库管理前端
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [frontend]
 - **范围:** `frontend/src/pages/Templates/`
 - **依赖:** Task 3.5, Task 1.9
@@ -422,7 +422,7 @@
   - 完整 CRUD 操作流程可走通
 
 ### Task 3.7: 向量检索替代 Jaccard
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/modeling_strategist.py`, `backend/infra/rag.py`
 - **AC:**
@@ -437,7 +437,7 @@
   - 检索结果质量优于纯 Jaccard（人工评估 10 case）
 
 ### Task 3.8: 知识库扩充（短期 fallback）
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/knowledge/examples/`
 - **说明:** TaggedExample 是模板未覆盖零件的 LLM 自由生成 fallback 素材。Phase 5 的 170K RAG 数据集会逐步取代此角色，届时 TaggedExample 仅保留为最高质量的"金标准"示例子集。
@@ -464,7 +464,7 @@
 > **依赖:** Phase 3
 
 ### Task 4.1: IntentSpec 数据模型
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/models/intent.py`
 - **AC:**
@@ -477,7 +477,7 @@
   - 序列化/反序列化测试
 
 ### Task 4.2: IntentParser 实现
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [agent]
 - **范围:** `backend/core/intent_parser.py`
 - **依赖:** Task 4.1, Task 3.2（ParamDefinition 用于缺失参数识别）
@@ -495,7 +495,7 @@
   - 输出 100% 符合 IntentSpec JSON schema（无格式解析失败）
 
 ### Task 4.3: 工程标准知识库
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/engineering_standards.py`, `backend/knowledge/standards/`
 - **AC:**
@@ -514,7 +514,7 @@
   - 约束检查测试：PCD < 外径 检测到
 
 ### Task 4.4: 工程标准 API + 前端
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [frontend]
 - **范围:** `backend/api/standards.py`, `frontend/src/pages/Standards/`
 - **依赖:** Task 4.3
@@ -531,7 +531,7 @@
   - 端到端：输入"M10 螺栓" → 返回通孔直径推荐
 
 ### Task 4.5: 参数确认 UI（表单 + 滑块）
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [frontend]
 - **范围:** `frontend/src/components/ParamForm/`, `frontend/src/components/ParamSlider/`
 - **依赖:** Task 1.9, Task 4.3
@@ -549,7 +549,7 @@
   - 法兰盘参数表单：调整外径 → 滑块联动 → 3D 预览更新
 
 ### Task 4.6: 生成工作台集成
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [frontend] [backend]
 - **范围:** `frontend/src/pages/Generate/`, `backend/api/generate.py`
 - **依赖:** Task 4.2, Task 4.5, Task 1.9
@@ -566,7 +566,7 @@
   - 端到端：输入"法兰盘 外径100" → 参数确认 → 3D 预览 → 下载 STL
 
 ### Task 4.7: 可打印性检查
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/printability.py`
 - **AC:**
@@ -584,7 +584,7 @@
   - 大悬挑模型 → 检测到 overhang issue
 
 ### Task 4.8: 可打印性报告 UI
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [frontend]
 - **范围:** `frontend/src/components/PrintReport/`
 - **依赖:** Task 4.7
@@ -600,7 +600,7 @@
   - 完整的可打印性报告渲染
 
 ### Task 4.9: 打印配置管理
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [frontend] [backend]
 - **范围:** `frontend/src/pages/Settings/`, `backend/api/settings.py`
 - **AC:**
@@ -621,7 +621,7 @@
 > **依赖:** Phase 4
 
 ### Task 5.1: Text-to-CadQuery 数据集获取与处理
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/infra/rag.py`, 数据处理脚本
 - **AC:**
@@ -637,7 +637,7 @@
   - 检索质量人工评估（10 query，每个 top-5 相关性评分）
 
 ### Task 5.2: RAG 增强代码生成
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/code_generator.py`
 - **依赖:** Task 5.1
@@ -652,7 +652,7 @@
   - benchmark: RAG 模式代码首次正确率提升 ≥ 20%
 
 ### Task 5.3: OCR 辅助 + 两阶段分析
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/drawing_analyzer.py`
 - **AC:**
@@ -670,7 +670,7 @@
   - 两阶段分析减少"大局对、细节错"的 case 数
 
 ### Task 5.4: 多模型投票 + Self-consistency
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/core/drawing_analyzer.py`
 - **AC:**
@@ -686,7 +686,7 @@
   - self-consistency N=3 vs N=1 的参数稳定性对比
 
 ### Task 5.5: 参考图片理解
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [agent]
 - **范围:** `backend/core/intent_parser.py`
 - **依赖:** Task 4.2
@@ -701,7 +701,7 @@
   - 参考图片 + "外径改为 150" → 正确修改参数
 
 ### Task 5.6: 成本优化
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/pipeline/pipeline.py`, `backend/infra/chat_models.py`
 - **AC:**
@@ -722,7 +722,7 @@
 > **依赖:** Phase 5
 
 ### Task 6.1: 微调数据管道
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [agent]
 - **范围:** 新建 `scripts/training/`
 - **AC:**
@@ -737,7 +737,7 @@
   - 转换后的数据集中有效代码比例 ≥ 85%
 
 ### Task 6.2: SFT + GRPO 微调
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [agent]
 - **范围:** `scripts/training/`
 - **依赖:** Task 6.1
@@ -753,7 +753,7 @@
   - benchmark: 微调模型 vs 通用模型的精度对比
 
 ### Task 6.3: 渐开线齿轮参数化
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/knowledge/templates/gear_involute.yaml`
 - **AC:**
@@ -769,7 +769,7 @@
   - 3D 打印后可实际啮合
 
 ### Task 6.4: 复杂零件模板（sweep/loft）
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/knowledge/templates/`
 - **AC:**
@@ -782,7 +782,7 @@
   - 模板生成的 STEP 文件几何正确
 
 ### Task 6.5: 高级可打印性优化
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend] [frontend]
 - **范围:** `backend/core/printability.py`, 前端优化建议 UI
 - **AC:**
@@ -798,7 +798,7 @@
   - 打印方向推荐合理性人工评估
 
 ### Task 6.6: 轮廓叠加比对
-- **状态:** 🔲 待开始
+- **状态:** ✅ 已完成
 - **标签:** [backend]
 - **范围:** `backend/infra/render.py`, `backend/core/smart_refiner.py`
 - **依赖:** Task 2.2（多视角渲染基础）
