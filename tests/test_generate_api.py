@@ -13,6 +13,7 @@ Tests:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -199,7 +200,31 @@ class TestGenerateTextMode:
 
 
 class TestGenerateDrawingMode:
-    def test_drawing_mode_returns_sse(self, client: TestClient) -> None:
+    @staticmethod
+    def _mock_pipeline_success(
+        image_filepath, output_filepath, config=None,
+        on_spec_ready=None, on_progress=None,
+    ):
+        """Mock pipeline that writes a fake STEP file."""
+        Path(output_filepath).write_text("fake step")
+        if on_spec_ready:
+            on_spec_ready({"part_type": "rotational"}, "test reasoning")
+        if on_progress:
+            on_progress("geometry", {"is_valid": True, "volume": 100})
+
+    @staticmethod
+    def _mock_convert_noop(step_path, glb_path):
+        """Mock converter that writes a fake GLB."""
+        Path(glb_path).write_text("fake glb")
+
+    def test_drawing_mode_returns_sse(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        import backend.api.generate as gen_mod
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
+        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+
         resp = client.post(
             "/api/generate/drawing",
             files={"image": ("test.png", b"fakepng", "image/png")},
@@ -207,7 +232,14 @@ class TestGenerateDrawingMode:
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
 
-    def test_drawing_mode_event_flow(self, client: TestClient) -> None:
+    def test_drawing_mode_event_flow(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        import backend.api.generate as gen_mod
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
+        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+
         resp = client.post(
             "/api/generate/drawing",
             files={"image": ("test.png", b"fakepng", "image/png")},
@@ -216,6 +248,43 @@ class TestGenerateDrawingMode:
         statuses = [e.get("status") for e in events]
         assert "created" in statuses
         assert "completed" in statuses
+
+    def test_drawing_mode_with_pipeline_returns_model_url(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """When V2 pipeline succeeds, completed event should contain model_url."""
+        import backend.api.generate as gen_mod
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", self._mock_pipeline_success)
+        monkeypatch.setattr(gen_mod, "_convert_step_to_glb", self._mock_convert_noop)
+
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("test.png", b"fakepng", "image/png")},
+        )
+        events = parse_sse_events(resp.text)
+        completed = [e for e in events if e.get("status") == "completed"]
+        assert len(completed) == 1
+        assert completed[0].get("model_url") is not None
+
+    def test_drawing_pipeline_failure(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """When pipeline fails, should get failed event."""
+        import backend.api.generate as gen_mod
+
+        def mock_fail(*args, **kwargs):
+            raise RuntimeError("LLM timeout")
+
+        monkeypatch.setattr(gen_mod, "_run_v2_pipeline", mock_fail)
+
+        resp = client.post(
+            "/api/generate/drawing",
+            files={"image": ("test.png", b"fakepng", "image/png")},
+        )
+        events = parse_sse_events(resp.text)
+        failed = [e for e in events if e.get("status") == "failed"]
+        assert len(failed) >= 1
 
 
 # ===================================================================
