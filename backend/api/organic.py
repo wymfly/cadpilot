@@ -113,9 +113,8 @@ async def generate_organic(
             yield _sse_event(job_id, "generating", "Generating 3D mesh...", 0.2)
 
             provider = _create_provider(request.provider, settings)
-            reference_image_bytes = await _read_uploaded_image(
-                request.reference_image
-            )
+            upload_result = await _read_uploaded_image(request.reference_image)
+            reference_image_bytes = upload_result[0] if upload_result else None
             raw_mesh_path = await provider.generate(
                 spec,
                 reference_image=reference_image_bytes,
@@ -292,17 +291,28 @@ async def get_organic_job_status(
 # ---------------------------------------------------------------------------
 
 
-async def _read_uploaded_image(file_id: str | None) -> bytes | None:
-    """Read previously uploaded image bytes by file_id, or None."""
+async def _read_uploaded_image(file_id: str | None) -> tuple[bytes, str] | None:
+    """Read previously uploaded image bytes by file_id.
+
+    Returns (bytes, extension) or None if file_id is empty.
+    Raises HTTPException if file_id is invalid or file not found.
+    """
     if not file_id:
         return None
+    # Validate file_id is a UUID to prevent path traversal
+    try:
+        uuid.UUID(file_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"Invalid file_id: {file_id}")
     upload_dir = Path("outputs") / "organic" / "uploads"
-    # Find the file (any extension) matching the file_id
     matches = list(upload_dir.glob(f"{file_id}.*"))
     if not matches:
-        logger.warning("Uploaded image {} not found", file_id)
-        return None
-    return matches[0].read_bytes()
+        raise HTTPException(
+            status_code=404,
+            detail=f"Uploaded image {file_id} not found. Please re-upload.",
+        )
+    ext = matches[0].suffix.lstrip(".")  # e.g. "png", "jpg", "webp"
+    return matches[0].read_bytes(), ext
 
 
 # ---------------------------------------------------------------------------

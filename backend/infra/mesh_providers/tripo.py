@@ -48,10 +48,11 @@ class TripoProvider(MeshProvider):
         if reference_image is not None:
             import base64
 
+            img_type = _detect_image_type(reference_image)
             payload: dict[str, object] = {
                 "type": "image_to_model",
                 "file": {
-                    "type": "png",
+                    "type": img_type,
                     "data": base64.b64encode(reference_image).decode(),
                 },
             }
@@ -122,3 +123,14 @@ class TripoProvider(MeshProvider):
             return resp.status_code == 200 and resp.json().get("code") == 0
         except Exception:
             return False
+
+
+def _detect_image_type(data: bytes) -> str:
+    """Detect image format from magic bytes. Returns 'png', 'jpeg', or 'webp'."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:2] == b"\xff\xd8":
+        return "jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return "png"  # fallback
