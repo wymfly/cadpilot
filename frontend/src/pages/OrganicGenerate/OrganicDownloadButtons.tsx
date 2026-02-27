@@ -2,22 +2,28 @@ import { Button, Space } from 'antd';
 import { DownloadOutlined } from '@ant-design/icons';
 
 interface OrganicDownloadButtonsProps {
+  modelUrl: string | null;
   stlUrl: string | null;
   threemfUrl: string | null;
 }
 
-export default function OrganicDownloadButtons({ stlUrl, threemfUrl }: OrganicDownloadButtonsProps) {
-  if (!stlUrl && !threemfUrl) return null;
+export default function OrganicDownloadButtons({ modelUrl, stlUrl, threemfUrl }: OrganicDownloadButtonsProps) {
+  if (!modelUrl && !stlUrl && !threemfUrl) return null;
 
   return (
-    <Space>
+    <Space style={{ marginTop: 12 }}>
+      {modelUrl && (
+        <Button icon={<DownloadOutlined />} href={modelUrl} download="model.glb">
+          GLB
+        </Button>
+      )}
       {stlUrl && (
-        <Button icon={<DownloadOutlined />} href={stlUrl} download>
+        <Button icon={<DownloadOutlined />} href={stlUrl} download="model.stl">
           STL
         </Button>
       )}
       {threemfUrl && (
-        <Button icon={<DownloadOutlined />} href={threemfUrl} download>
+        <Button icon={<DownloadOutlined />} href={threemfUrl} download="model.3mf">
           3MF
         </Button>
       )}

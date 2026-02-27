@@ -151,12 +151,16 @@ async def generate_organic(
             # Stage 4: Export & finalize
             output_dir = Path("outputs") / "organic" / job_id
             output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = output_dir / "model.glb"
-            processed.mesh.export(str(output_path))
+
+            glb_path = output_dir / "model.glb"
+            stl_path = output_dir / "model.stl"
+            processed.mesh.export(str(glb_path))
+            processed.mesh.export(str(stl_path))
 
             result = OrganicJobResult(
                 job_id=job_id,
                 model_url=f"/outputs/organic/{job_id}/model.glb",
+                stl_url=f"/outputs/organic/{job_id}/model.stl",
                 mesh_stats=processed.stats,
                 provider_used=request.provider,
                 generation_time_s=0.0,

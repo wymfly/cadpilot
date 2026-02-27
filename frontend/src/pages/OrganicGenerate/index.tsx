@@ -123,7 +123,11 @@ export default function OrganicGenerate() {
           {workflow.meshStats && <MeshStatsCard stats={workflow.meshStats} />}
 
           {workflow.phase === 'completed' && (
-            <OrganicDownloadButtons stlUrl={workflow.stlUrl} threemfUrl={workflow.threemfUrl} />
+            <OrganicDownloadButtons
+              modelUrl={workflow.modelUrl}
+              stlUrl={workflow.stlUrl}
+              threemfUrl={workflow.threemfUrl}
+            />
           )}
         </Col>
       </Row>
