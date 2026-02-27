@@ -26,7 +26,11 @@ class OrganicSpecBuilder:
 
     async def build(self, request: OrganicGenerateRequest) -> OrganicSpec:
         """Build an OrganicSpec from a user request."""
-        llm_result = await self._call_llm(request.prompt)
+        prompt = request.prompt.strip()
+        if prompt:
+            llm_result = await self._call_llm(prompt)
+        else:
+            llm_result = self._fallback("Generate from reference image")
 
         suggested_bbox = llm_result.get("suggested_bounding_box")
         if suggested_bbox is not None:

@@ -56,8 +56,11 @@ class OrganicConstraints(BaseModel):
 
 
 class OrganicGenerateRequest(BaseModel):
-    """Request body for organic generation endpoint."""
-    prompt: str = Field(..., min_length=1, max_length=2000)
+    """Request body for organic generation endpoint.
+
+    At least one of prompt or reference_image must be provided.
+    """
+    prompt: str = Field(default="", max_length=2000)
     reference_image: str | None = None
     constraints: OrganicConstraints = Field(default_factory=OrganicConstraints)
     quality_mode: Literal["draft", "standard", "high"] = "standard"

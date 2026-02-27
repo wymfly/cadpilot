@@ -87,7 +87,12 @@ async def generate_organic(
     request: OrganicGenerateRequest,
     settings: Settings = Depends(_require_organic_enabled),
 ) -> EventSourceResponse:
-    """Generate organic 3D model from text prompt via SSE stream."""
+    """Generate organic 3D model from text and/or image via SSE stream."""
+    if not request.prompt.strip() and not request.reference_image:
+        raise HTTPException(
+            status_code=422,
+            detail="At least one of prompt or reference_image must be provided.",
+        )
     job_id = str(uuid.uuid4())
     create_organic_job(
         job_id=job_id,

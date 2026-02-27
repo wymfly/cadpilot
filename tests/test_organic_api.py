@@ -260,3 +260,20 @@ class TestSSEStream:
                 assert "status" in payload
                 assert "message" in payload
                 assert "progress" in payload
+
+    async def test_empty_prompt_without_image_returns_422(self, client: AsyncClient) -> None:
+        """Empty prompt and no reference_image should be rejected."""
+        resp = await client.post(
+            "/api/generate/organic",
+            json={"prompt": ""},
+        )
+        assert resp.status_code == 422
+
+    async def test_empty_prompt_with_image_is_accepted(self, client: AsyncClient) -> None:
+        """Empty prompt with a reference_image should pass validation (422 only if image not found)."""
+        resp = await client.post(
+            "/api/generate/organic",
+            json={"prompt": "", "reference_image": "00000000-0000-0000-0000-000000000000"},
+        )
+        # Should NOT be 422 for "prompt required" — it may fail later (image not found) but passes input validation
+        assert resp.status_code != 422 or "prompt" not in resp.text.lower()

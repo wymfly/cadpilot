@@ -141,26 +141,67 @@ async function consumeSSE(
   }
 }
 
+export interface StartGenerateOptions {
+  prompt: string;
+  imageFile?: File | null;
+  constraints: OrganicConstraints;
+  qualityMode: string;
+  provider: string;
+}
+
 export function useOrganicWorkflow() {
   const [state, setState] = useState<OrganicWorkflowState>(INITIAL_STATE);
   const abortRef = useRef<AbortController | null>(null);
 
-  const startGenerate = useCallback(async (request: OrganicGenerateRequest) => {
+  const startGenerate = useCallback(async (opts: StartGenerateOptions) => {
     abortRef.current?.abort();
     const abort = new AbortController();
     abortRef.current = abort;
 
+    const hasImage = opts.imageFile != null;
+
     setState({
       ...INITIAL_STATE,
       phase: 'analyzing',
-      message: '正在分析创意描述…',
+      message: hasImage ? '正在上传参考图片…' : '正在分析创意描述…',
     });
 
     try {
+      let fileId: string | undefined;
+
+      // Upload image first if provided
+      if (hasImage) {
+        const formData = new FormData();
+        formData.append('file', opts.imageFile!);
+
+        const uploadResp = await fetch('/api/generate/organic/upload', {
+          method: 'POST',
+          body: formData,
+          signal: abort.signal,
+        });
+
+        if (!uploadResp.ok) {
+          const err = await uploadResp.json().catch(() => ({ detail: `HTTP ${uploadResp.status}` }));
+          throw new Error(err.detail || `上传失败: HTTP ${uploadResp.status}`);
+        }
+
+        fileId = (await uploadResp.json()).file_id;
+        setState((prev) => ({ ...prev, message: '正在分析输入…' }));
+      }
+
+      // Start generation with prompt + optional reference_image
+      const body: Record<string, unknown> = {
+        prompt: opts.prompt || 'Generate from reference image',
+        constraints: opts.constraints,
+        quality_mode: opts.qualityMode,
+        provider: opts.provider,
+      };
+      if (fileId) body.reference_image = fileId;
+
       const resp = await fetch('/api/generate/organic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
+        body: JSON.stringify(body),
         signal: abort.signal,
       });
 
@@ -176,72 +217,12 @@ export function useOrganicWorkflow() {
     }
   }, []);
 
-  const startImageGenerate = useCallback(
-    async (file: File, constraints: OrganicConstraints, qualityMode: string, provider: string) => {
-      abortRef.current?.abort();
-      const abort = new AbortController();
-      abortRef.current = abort;
-
-      setState({
-        ...INITIAL_STATE,
-        phase: 'analyzing',
-        message: '正在上传参考图片…',
-      });
-
-      try {
-        // Step 1: Upload image to get file_id
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const uploadResp = await fetch('/api/generate/organic/upload', {
-          method: 'POST',
-          body: formData,
-          signal: abort.signal,
-        });
-
-        if (!uploadResp.ok) {
-          const err = await uploadResp.json().catch(() => ({ detail: `HTTP ${uploadResp.status}` }));
-          throw new Error(err.detail || `上传失败: HTTP ${uploadResp.status}`);
-        }
-
-        const { file_id } = await uploadResp.json();
-
-        setState((prev) => ({ ...prev, message: '正在分析参考图片…' }));
-
-        // Step 2: Start generation with reference_image
-        const resp = await fetch('/api/generate/organic', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: file.name.replace(/\.[^.]+$/, '') || 'Generate from reference image',
-            reference_image: file_id,
-            constraints,
-            quality_mode: qualityMode,
-            provider,
-          }),
-          signal: abort.signal,
-        });
-
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        await consumeSSE(resp, setState);
-      } catch (err: unknown) {
-        if ((err as Error).name === 'AbortError') return;
-        setState((prev) => ({
-          ...prev,
-          phase: 'failed',
-          error: (err as Error).message || '图片生成失败',
-        }));
-      }
-    },
-    [],
-  );
-
   const reset = useCallback(() => {
     abortRef.current?.abort();
     setState(INITIAL_STATE);
   }, []);
 
-  return { state, startGenerate, startImageGenerate, reset };
+  return { state, startGenerate, reset };
 }
 
 interface OrganicWorkflowProgressProps {

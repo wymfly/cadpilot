@@ -16,7 +16,6 @@ export default function OrganicGenerate() {
   const {
     workflow,
     startGenerate,
-    startImageGenerate,
     reset,
     constraints,
     setConstraints,
@@ -32,16 +31,14 @@ export default function OrganicGenerate() {
   const isRunning = workflow.phase !== 'idle' && workflow.phase !== 'completed' && workflow.phase !== 'failed';
 
   const handleGenerate = async () => {
-    if (imageFile) {
-      await startImageGenerate(imageFile, constraints, qualityMode, provider);
-    } else if (prompt.trim()) {
-      await startGenerate({
-        prompt: prompt.trim(),
-        constraints,
-        quality_mode: qualityMode,
-        provider,
-      });
-    }
+    if (!prompt.trim() && !imageFile) return;
+    await startGenerate({
+      prompt: prompt.trim(),
+      imageFile,
+      constraints,
+      qualityMode,
+      provider,
+    });
   };
 
   const handleReset = () => {
@@ -62,6 +59,7 @@ export default function OrganicGenerate() {
             <OrganicInput
               prompt={prompt}
               onPromptChange={setPrompt}
+              imageFile={imageFile}
               onImageChange={setImageFile}
               disabled={isRunning}
             />

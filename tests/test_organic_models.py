@@ -64,10 +64,12 @@ def test_organic_generate_request_validation():
     assert req.provider == "auto"
 
 
-def test_organic_generate_request_rejects_empty_prompt():
+def test_organic_generate_request_allows_empty_prompt():
+    """Empty prompt is valid at model level — API layer validates prompt+image combo."""
     from backend.models.organic import OrganicGenerateRequest
-    with pytest.raises(ValidationError):
-        OrganicGenerateRequest(prompt="")
+    req = OrganicGenerateRequest(prompt="", reference_image="some-uuid")
+    assert req.prompt == ""
+    assert req.reference_image == "some-uuid"
 
 
 def test_mesh_stats_serialization():

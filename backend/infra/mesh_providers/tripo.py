@@ -56,6 +56,8 @@ class TripoProvider(MeshProvider):
                     "data": base64.b64encode(reference_image).decode(),
                 },
             }
+            if spec.prompt_en:
+                payload["prompt"] = spec.prompt_en
         else:
             payload: dict[str, object] = {
                 "type": "text_to_model",

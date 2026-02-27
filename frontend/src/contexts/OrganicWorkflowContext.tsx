@@ -1,8 +1,10 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { useOrganicWorkflow } from '../pages/OrganicGenerate/OrganicWorkflow.tsx';
+import {
+  useOrganicWorkflow,
+  type StartGenerateOptions,
+} from '../pages/OrganicGenerate/OrganicWorkflow.tsx';
 import type {
   OrganicWorkflowState,
-  OrganicGenerateRequest,
   OrganicConstraints,
   QualityMode,
   ProviderPreference,
@@ -10,13 +12,7 @@ import type {
 
 interface OrganicWorkflowContextValue {
   workflow: OrganicWorkflowState;
-  startGenerate: (request: OrganicGenerateRequest) => Promise<void>;
-  startImageGenerate: (
-    file: File,
-    constraints: OrganicConstraints,
-    qualityMode: string,
-    provider: string,
-  ) => Promise<void>;
+  startGenerate: (opts: StartGenerateOptions) => Promise<void>;
   reset: () => void;
   constraints: OrganicConstraints;
   setConstraints: (c: OrganicConstraints) => void;
@@ -34,7 +30,7 @@ const DEFAULT_CONSTRAINTS: OrganicConstraints = {
 };
 
 export function OrganicWorkflowProvider({ children }: { children: ReactNode }) {
-  const { state, startGenerate, startImageGenerate, reset } = useOrganicWorkflow();
+  const { state, startGenerate, reset } = useOrganicWorkflow();
   const [constraints, setConstraints] = useState<OrganicConstraints>(DEFAULT_CONSTRAINTS);
   const [qualityMode, setQualityMode] = useState<QualityMode>('standard');
   const [provider, setProvider] = useState<ProviderPreference>('auto');
@@ -44,7 +40,6 @@ export function OrganicWorkflowProvider({ children }: { children: ReactNode }) {
       value={{
         workflow: state,
         startGenerate,
-        startImageGenerate,
         reset,
         constraints,
         setConstraints,

@@ -53,6 +53,8 @@ class HunyuanProvider(MeshProvider):
                 "Action": "SubmitImageTo3DTask",
                 "ImageBase64": base64.b64encode(reference_image).decode(),
             }
+            if spec.prompt_en:
+                payload["Prompt"] = spec.prompt_en
         else:
             payload: dict[str, object] = {
                 "Action": "SubmitTextTo3DTask",
