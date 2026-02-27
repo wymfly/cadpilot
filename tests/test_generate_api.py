@@ -990,3 +990,92 @@ class TestTextModeIntegration:
         parsed = [e for e in events if e.get("status") == "intent_parsed"]
         assert parsed[0].get("params") == []
         assert parsed[0].get("template_name") is None
+
+
+# ===================================================================
+# IntentParser integration (T16)
+# ===================================================================
+
+
+class TestIntentParserIntegration:
+    """Tests for IntentParser integration in text generate route."""
+
+    def test_intent_parser_high_confidence_routes_to_template(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """High-confidence IntentParser result routes to template by part_type."""
+        import backend.api.generate as gen_mod
+        from backend.knowledge.part_types import PartType
+        from backend.models.intent import IntentSpec
+
+        async def mock_parse(text):
+            return IntentSpec(
+                part_category="法兰",
+                part_type=PartType.ROTATIONAL,
+                known_params={"outer_diameter": 100},
+                missing_params=["thickness"],
+                confidence=0.9,
+                raw_text=text,
+            )
+
+        monkeypatch.setattr(gen_mod, "_parse_intent", mock_parse)
+
+        resp = client.post("/api/generate", json={"text": "做一个外径100的法兰"})
+        events = parse_sse_events(resp.text)
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        # Should find a rotational template via part_type matching
+        assert parsed[0].get("template_name") is not None
+        assert len(parsed[0]["params"]) > 0
+        # Intent data should be present
+        assert parsed[0].get("intent") is not None
+        assert parsed[0]["intent"]["confidence"] == 0.9
+        assert parsed[0]["intent"]["part_type"] == "rotational"
+
+    def test_intent_parser_low_confidence_falls_back(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """Low-confidence IntentParser falls back to keyword matching."""
+        import backend.api.generate as gen_mod
+        from backend.models.intent import IntentSpec
+
+        async def mock_parse(text):
+            return IntentSpec(
+                confidence=0.3,
+                raw_text=text,
+            )
+
+        monkeypatch.setattr(gen_mod, "_parse_intent", mock_parse)
+
+        # "法兰盘" matches keyword in _match_template
+        resp = client.post("/api/generate", json={"text": "做一个法兰盘"})
+        events = parse_sse_events(resp.text)
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        # Should still find template via keyword fallback
+        assert parsed[0].get("template_name") == "rotational_flange_disk"
+        assert len(parsed[0]["params"]) > 0
+        # Intent data present but low confidence
+        assert parsed[0].get("intent") is not None
+        assert parsed[0]["intent"]["confidence"] == 0.3
+
+    def test_intent_parser_failure_degrades_to_keyword_matching(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """IntentParser exception degrades gracefully to keyword matching."""
+        import backend.api.generate as gen_mod
+
+        async def mock_parse_fail(text):
+            raise RuntimeError("LLM API unavailable")
+
+        monkeypatch.setattr(gen_mod, "_parse_intent", mock_parse_fail)
+
+        resp = client.post("/api/generate", json={"text": "做一个法兰盘"})
+        events = parse_sse_events(resp.text)
+        parsed = [e for e in events if e.get("status") == "intent_parsed"]
+        assert len(parsed) >= 1
+        # Should still work via keyword matching fallback
+        assert parsed[0].get("template_name") == "rotational_flange_disk"
+        assert len(parsed[0]["params"]) > 0
+        # No intent data when parser failed
+        assert parsed[0].get("intent") is None

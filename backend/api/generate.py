@@ -224,6 +224,23 @@ def _run_printability_check(step_path: str) -> dict[str, Any] | None:
         return None
 
 
+async def _parse_intent(text: str) -> Any:
+    """Parse user text via IntentParser (LLM-driven). Module-level for mockability."""
+    from backend.core.intent_parser import IntentParser
+    from backend.infra.chat_models import ChatModelParameters
+
+    chat_model = ChatModelParameters.from_model_name(
+        "qwen-coder-plus",
+    ).create_chat_model()
+
+    async def _llm_callable(prompt: str, schema: type) -> Any:
+        response = await chat_model.ainvoke(prompt)
+        return schema.model_validate_json(response.content)
+
+    parser = IntentParser(llm_callable=_llm_callable)
+    return await parser.parse(text)
+
+
 def _parse_pipeline_config(config_json: str) -> PipelineConfig:
     """Parse pipeline_config JSON string into PipelineConfig."""
     try:
@@ -258,12 +275,44 @@ async def generate_text(body: TextGenerateRequest) -> EventSourceResponse:
             "status": job.status.value,
         })
 
-        # Stage 1: Intent parsing — find matching parametric template
-        matched_template, params = _match_template(body.text)
+        # Stage 1: Intent parsing
+        matched_template: Any = None
+        params: list[Any] = []
+        intent_data: dict[str, Any] | None = None
 
-        # Store template reference in job for the confirm step
+        # Try IntentParser first (LLM-driven)
+        try:
+            intent = await _parse_intent(body.text)
+            intent_data = intent.model_dump(mode="json")
+            if intent.confidence > 0.7 and intent.part_type:
+                try:
+                    from backend.core.template_engine import TemplateEngine
+
+                    _tpl_dir = (
+                        Path(__file__).parent.parent / "knowledge" / "templates"
+                    )
+                    engine = TemplateEngine.from_directory(_tpl_dir)
+                    matches = engine.find_matches(intent.part_type.value)
+                    if matches:
+                        matched_template = matches[0]
+                        params = matches[0].params
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Fallback: keyword matching if IntentParser didn't find a template
+        if matched_template is None:
+            matched_template, params = _match_template(body.text)
+
+        # Store template reference and intent in job for the confirm step
+        result_data: dict[str, Any] = {}
         if matched_template:
-            update_job(job_id, result={"template_name": matched_template.name})
+            result_data["template_name"] = matched_template.name
+        if intent_data:
+            result_data["intent"] = intent_data
+        if result_data:
+            update_job(job_id, result=result_data)
 
         update_job(job_id, status=JobStatus.INTENT_PARSED)
         yield _sse("intent_parsed", {
@@ -272,6 +321,7 @@ async def generate_text(body: TextGenerateRequest) -> EventSourceResponse:
             "message": "意图解析完成，等待参数确认",
             "template_name": matched_template.name if matched_template else None,
             "params": [p.model_dump() for p in params],
+            "intent": intent_data,
         })
 
         # Pause — client must call POST /generate/{job_id}/confirm
