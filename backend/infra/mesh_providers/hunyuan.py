@@ -45,7 +45,8 @@ class HunyuanProvider(MeshProvider):
             raise RuntimeError("Hunyuan3D API key not configured")
 
         # Step 1: Submit generation task
-        if reference_image is not None:
+        is_image_task = reference_image is not None
+        if is_image_task:
             import base64
 
             payload: dict[str, object] = {
@@ -69,6 +70,7 @@ class HunyuanProvider(MeshProvider):
             on_progress("Task created, generating mesh...", 0.1)
 
         # Step 2: Poll for completion
+        poll_action = "QueryImageTo3DTask" if is_image_task else "QueryTextTo3DTask"
         start = time.monotonic()
         while True:
             elapsed = time.monotonic() - start
@@ -78,7 +80,7 @@ class HunyuanProvider(MeshProvider):
                 )
 
             poll_resp = await self._client.get(
-                "/", params={"Action": "QueryTextTo3DTask", "TaskId": task_id}
+                "/", params={"Action": poll_action, "TaskId": task_id}
             )
             poll_data = poll_resp.json()
             status = poll_data.get("Response", {}).get("Status", "UNKNOWN")

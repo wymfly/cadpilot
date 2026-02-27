@@ -30,6 +30,12 @@ from backend.models.organic_job import (
 router = APIRouter()
 
 _ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
+_MIME_TO_EXT = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
+
+
+def _ext_from_mime(content_type: str | None) -> str:
+    """Derive file extension from MIME type. Falls back to '.png'."""
+    return _MIME_TO_EXT.get(content_type or "", ".png")
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +220,7 @@ async def generate_organic_upload(
     upload_dir = Path("outputs") / "organic" / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_id = str(uuid.uuid4())
-    ext = Path(file.filename or "image.png").suffix
+    ext = Path(file.filename or "image.png").suffix or _ext_from_mime(file.content_type)
     save_path = upload_dir / f"{file_id}{ext}"
     save_path.write_bytes(content)
 
