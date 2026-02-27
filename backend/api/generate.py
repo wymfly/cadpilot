@@ -406,6 +406,19 @@ async def confirm_drawing_spec(
             detail="免责声明必须接受后方可继续生成",
         )
 
+    # Track user corrections (data flywheel)
+    if job.drawing_spec and body.confirmed_spec:
+        from backend.core.correction_tracker import (
+            compute_corrections,
+            persist_corrections,
+        )
+
+        corrections = compute_corrections(
+            job.drawing_spec, body.confirmed_spec, job_id,
+        )
+        if corrections:
+            persist_corrections(job_id, corrections)
+
     # Save confirmed spec and transition to GENERATING
     update_job(
         job_id,
