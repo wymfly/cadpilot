@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
 from backend.config import Settings
@@ -112,8 +113,12 @@ async def generate_organic(
             yield _sse_event(job_id, "generating", "Generating 3D mesh...", 0.2)
 
             provider = _create_provider(request.provider, settings)
+            reference_image_bytes = await _read_uploaded_image(
+                request.reference_image
+            )
             raw_mesh_path = await provider.generate(
                 spec,
+                reference_image=reference_image_bytes,
                 on_progress=lambda msg, p: None,
             )
             update_organic_job(job_id, progress=0.6)
@@ -156,12 +161,16 @@ async def generate_organic(
                 progress=1.0,
                 result=result,
             )
+            result_data = result.model_dump()
             yield _sse_event(
                 job_id,
                 "completed",
                 "Generation complete",
                 1.0,
-                result=result.model_dump(),
+                model_url=result_data.get("model_url"),
+                stl_url=result_data.get("stl_url"),
+                threemf_url=result_data.get("threemf_url"),
+                mesh_stats=result_data.get("mesh_stats"),
             )
 
         except Exception as e:
@@ -238,11 +247,11 @@ async def get_provider_health(
         "providers": {
             "tripo3d": {
                 "available": tripo_ok,
-                "configured": settings.tripo3d_api_key is not None,
+                "configured": bool(settings.tripo3d_api_key),
             },
             "hunyuan3d": {
                 "available": hunyuan_ok,
-                "configured": settings.hunyuan3d_api_key is not None,
+                "configured": bool(settings.hunyuan3d_api_key),
             },
         },
         "default_provider": settings.organic_default_provider,
@@ -276,6 +285,24 @@ async def get_organic_job_status(
     if job.error:
         response["error"] = job.error
     return response
+
+
+# ---------------------------------------------------------------------------
+# Image upload helper
+# ---------------------------------------------------------------------------
+
+
+async def _read_uploaded_image(file_id: str | None) -> bytes | None:
+    """Read previously uploaded image bytes by file_id, or None."""
+    if not file_id:
+        return None
+    upload_dir = Path("outputs") / "organic" / "uploads"
+    # Find the file (any extension) matching the file_id
+    matches = list(upload_dir.glob(f"{file_id}.*"))
+    if not matches:
+        logger.warning("Uploaded image {} not found", file_id)
+        return None
+    return matches[0].read_bytes()
 
 
 # ---------------------------------------------------------------------------

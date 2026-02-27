@@ -45,10 +45,18 @@ class HunyuanProvider(MeshProvider):
             raise RuntimeError("Hunyuan3D API key not configured")
 
         # Step 1: Submit generation task
-        payload: dict[str, object] = {
-            "Action": "SubmitTextTo3DTask",
-            "Prompt": spec.prompt_en,
-        }
+        if reference_image is not None:
+            import base64
+
+            payload: dict[str, object] = {
+                "Action": "SubmitImageTo3DTask",
+                "ImageBase64": base64.b64encode(reference_image).decode(),
+            }
+        else:
+            payload: dict[str, object] = {
+                "Action": "SubmitTextTo3DTask",
+                "Prompt": spec.prompt_en,
+            }
 
         resp = await self._client.post("/", json=payload)
         resp_data = resp.json()

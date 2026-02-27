@@ -45,10 +45,21 @@ class TripoProvider(MeshProvider):
             raise RuntimeError("Tripo3D API key not configured")
 
         # Step 1: Create task
-        payload: dict[str, object] = {
-            "type": "text_to_model",
-            "prompt": spec.prompt_en,
-        }
+        if reference_image is not None:
+            import base64
+
+            payload: dict[str, object] = {
+                "type": "image_to_model",
+                "file": {
+                    "type": "png",
+                    "data": base64.b64encode(reference_image).decode(),
+                },
+            }
+        else:
+            payload: dict[str, object] = {
+                "type": "text_to_model",
+                "prompt": spec.prompt_en,
+            }
         if spec.negative_prompt:
             payload["negative_prompt"] = spec.negative_prompt
 
