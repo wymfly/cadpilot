@@ -40,6 +40,16 @@ export interface MeshStats {
   boolean_cuts_applied: number;
 }
 
+export type PostProcessStepId = 'load' | 'repair' | 'scale' | 'boolean' | 'validate';
+export type PostProcessStepStatus = 'pending' | 'running' | 'success' | 'degraded' | 'skipped' | 'failed';
+
+export interface PostProcessStepInfo {
+  step: PostProcessStepId;
+  label: string;
+  status: PostProcessStepStatus;
+  message?: string;
+}
+
 export interface OrganicWorkflowState {
   phase: OrganicPhase;
   jobId: string | null;
@@ -51,6 +61,8 @@ export interface OrganicWorkflowState {
   threemfUrl: string | null;
   meshStats: MeshStats | null;
   postProcessStep: string | null;
+  postProcessSteps: PostProcessStepInfo[];
+  warnings: string[];
 }
 
 export interface OrganicGenerateRequest {

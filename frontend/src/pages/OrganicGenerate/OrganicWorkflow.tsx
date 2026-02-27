@@ -5,13 +5,17 @@ import {
   RocketOutlined,
   ToolOutlined,
   CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  MinusCircleOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
 import type {
   OrganicWorkflowState,
   OrganicPhase,
-  OrganicGenerateRequest,
   OrganicConstraints,
   MeshStats,
+  PostProcessStepInfo,
+  PostProcessStepStatus,
 } from '../../types/organic.ts';
 
 const { Text } = Typography;
@@ -33,6 +37,14 @@ const STEP_ITEMS = [
   { title: '完成', icon: <CheckCircleOutlined /> },
 ];
 
+const DEFAULT_POST_PROCESS_STEPS: PostProcessStepInfo[] = [
+  { step: 'load', label: '网格加载', status: 'pending' },
+  { step: 'repair', label: '网格修复', status: 'pending' },
+  { step: 'scale', label: '网格缩放', status: 'pending' },
+  { step: 'boolean', label: '布尔切割', status: 'pending' },
+  { step: 'validate', label: '质量验证', status: 'pending' },
+];
+
 const INITIAL_STATE: OrganicWorkflowState = {
   phase: 'idle',
   jobId: null,
@@ -44,6 +56,8 @@ const INITIAL_STATE: OrganicWorkflowState = {
   threemfUrl: null,
   meshStats: null,
   postProcessStep: null,
+  postProcessSteps: DEFAULT_POST_PROCESS_STEPS.map((s) => ({ ...s })),
+  warnings: [],
 };
 
 function handleSSEEvent(
@@ -65,16 +79,24 @@ function handleSSEEvent(
     case 'generating':
       setState((prev) => ({ ...prev, jobId, phase: 'generating', message, progress }));
       break;
-    case 'post_processing':
+    case 'post_processing': {
+      const step = (evt.step as string) ?? null;
+      const stepStatus = (evt.step_status as PostProcessStepStatus) ?? null;
       setState((prev) => ({
         ...prev,
         jobId,
         phase: 'post_processing',
         message,
         progress,
-        postProcessStep: (evt.step as string) ?? null,
+        postProcessStep: step,
+        postProcessSteps: step && stepStatus
+          ? prev.postProcessSteps.map((s) =>
+              s.step === step ? { ...s, status: stepStatus, message } : s
+            )
+          : prev.postProcessSteps,
       }));
       break;
+    }
     case 'completed':
       setState((prev) => ({
         ...prev,
@@ -86,6 +108,7 @@ function handleSSEEvent(
         stlUrl: (evt.stl_url as string) ?? null,
         threemfUrl: (evt.threemf_url as string) ?? null,
         meshStats: (evt.mesh_stats as MeshStats) ?? null,
+        warnings: (evt.warnings as string[]) ?? [],
       }));
       break;
     case 'failed':
@@ -162,6 +185,7 @@ export function useOrganicWorkflow() {
 
     setState({
       ...INITIAL_STATE,
+      postProcessSteps: DEFAULT_POST_PROCESS_STEPS.map((s) => ({ ...s })),
       phase: 'analyzing',
       message: hasImage ? '正在上传参考图片…' : '正在分析创意描述…',
     });
@@ -225,6 +249,75 @@ export function useOrganicWorkflow() {
   return { state, startGenerate, reset };
 }
 
+// ---------------------------------------------------------------------------
+// Post-processing sub-step status icon
+// ---------------------------------------------------------------------------
+
+const STEP_STATUS_CONFIG: Record<PostProcessStepStatus, {
+  icon: React.ReactNode;
+  color: string;
+}> = {
+  pending: { icon: <MinusCircleOutlined />, color: '#d9d9d9' },
+  running: { icon: <Spin size="small" />, color: '#1677ff' },
+  success: { icon: <CheckCircleOutlined />, color: '#52c41a' },
+  degraded: { icon: <ExclamationCircleOutlined />, color: '#faad14' },
+  skipped: { icon: <MinusCircleOutlined />, color: '#d9d9d9' },
+  failed: { icon: <CloseCircleOutlined />, color: '#ff4d4f' },
+};
+
+function PostProcessSubSteps({ steps }: { steps: PostProcessStepInfo[] }) {
+  const hasAnyActivity = steps.some((s) => s.status !== 'pending');
+  if (!hasAnyActivity) return null;
+
+  return (
+    <div style={{ marginTop: 12, padding: '8px 12px', background: '#fafafa', borderRadius: 6 }}>
+      <Text type="secondary" style={{ fontSize: 12, marginBottom: 6, display: 'block' }}>
+        后处理详情
+      </Text>
+      {steps.map((s) => {
+        const config = STEP_STATUS_CONFIG[s.status];
+        return (
+          <div
+            key={s.step}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '3px 0',
+              color: s.status === 'pending' ? '#bfbfbf' : undefined,
+            }}
+          >
+            <span style={{ color: config.color, fontSize: 14, display: 'flex', alignItems: 'center' }}>
+              {config.icon}
+            </span>
+            <Text
+              style={{
+                fontSize: 13,
+                color: s.status === 'pending' ? '#bfbfbf' : undefined,
+              }}
+            >
+              {s.label}
+            </Text>
+            {s.status === 'degraded' && s.message && (
+              <Text type="warning" style={{ fontSize: 12 }}>({s.message})</Text>
+            )}
+            {s.status === 'skipped' && s.message && (
+              <Text type="secondary" style={{ fontSize: 12 }}>({s.message})</Text>
+            )}
+            {s.status === 'failed' && s.message && (
+              <Text type="danger" style={{ fontSize: 12 }}>({s.message})</Text>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main progress component
+// ---------------------------------------------------------------------------
+
 interface OrganicWorkflowProgressProps {
   state: OrganicWorkflowState;
 }
@@ -261,13 +354,15 @@ export default function OrganicWorkflowProgress({ state }: OrganicWorkflowProgre
         />
       )}
 
-      {state.message && (
+      {state.message && state.phase !== 'completed' && state.phase !== 'failed' && (
         <div style={{ marginTop: 8, textAlign: 'center' }}>
-          {state.phase !== 'completed' && state.phase !== 'failed' && (
-            <Spin size="small" style={{ marginRight: 8 }} />
-          )}
+          <Spin size="small" style={{ marginRight: 8 }} />
           <Text type="secondary">{state.message}</Text>
         </div>
+      )}
+
+      {(state.phase === 'post_processing' || state.phase === 'completed') && (
+        <PostProcessSubSteps steps={state.postProcessSteps} />
       )}
 
       {state.phase === 'failed' && state.error && (
@@ -275,12 +370,29 @@ export default function OrganicWorkflowProgress({ state }: OrganicWorkflowProgre
       )}
 
       {state.phase === 'completed' && (
-        <Result
-          status="success"
-          title="生成完成"
-          subTitle={state.message}
-          style={{ padding: '16px 0' }}
-        />
+        <>
+          <Result
+            status="success"
+            title="生成完成"
+            subTitle={state.message}
+            style={{ padding: '16px 0' }}
+          />
+          {state.warnings.length > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              message="处理过程中的注意事项"
+              description={
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  {state.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              }
+              style={{ marginTop: 0 }}
+            />
+          )}
+        </>
       )}
     </Card>
   );

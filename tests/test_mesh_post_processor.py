@@ -146,8 +146,8 @@ class TestMeshPostProcessor:
         )
         processor = MeshPostProcessor()
 
-        # Mock manifold3d to fail
-        with patch("backend.core.mesh_post_processor._apply_boolean_cuts") as mock_bool:
+        # Mock apply_boolean_cuts to fail
+        with patch.object(MeshPostProcessor, "apply_boolean_cuts") as mock_bool:
             mock_bool.side_effect = RuntimeError("Boolean op failed")
             result = await processor.process(mesh_path, spec)
 
@@ -155,6 +155,45 @@ class TestMeshPostProcessor:
         assert result.mesh is not None
         assert result.stats.boolean_cuts_applied == 0
         assert len(result.warnings) > 0
+
+    async def test_repair_returns_repair_info(self, tmp_path: Path) -> None:
+        from backend.core.mesh_post_processor import MeshPostProcessor, RepairInfo
+
+        mesh = trimesh.creation.box(extents=(10, 10, 10))
+        processor = MeshPostProcessor()
+        repaired, info = processor.repair_mesh(mesh)
+
+        assert isinstance(info, RepairInfo)
+        assert info.status in ("success", "degraded")
+        assert len(info.message) > 0
+        assert repaired is not None
+
+    async def test_load_mesh_public(self, tmp_path: Path) -> None:
+        from backend.core.mesh_post_processor import MeshPostProcessor
+
+        mesh_path = _save_cube_mesh(tmp_path / "cube.glb")
+        mesh = MeshPostProcessor.load_mesh(mesh_path)
+        assert len(mesh.vertices) > 0
+        assert len(mesh.faces) > 0
+
+    async def test_validate_mesh_public(self) -> None:
+        from backend.core.mesh_post_processor import MeshPostProcessor
+
+        mesh = trimesh.creation.box(extents=(20, 20, 20))
+        stats = MeshPostProcessor.validate_mesh(mesh, 0)
+        assert stats.vertex_count == len(mesh.vertices)
+        assert stats.face_count == len(mesh.faces)
+        assert stats.boolean_cuts_applied == 0
+
+    async def test_scale_mesh_public(self) -> None:
+        from backend.core.mesh_post_processor import MeshPostProcessor
+
+        mesh = trimesh.creation.box(extents=(100, 100, 100))
+        scaled = MeshPostProcessor.scale_mesh(mesh, (50, 50, 40))
+        bbox = scaled.bounding_box.extents
+        assert bbox[0] <= 50.1
+        assert bbox[1] <= 50.1
+        assert bbox[2] <= 40.1
 
     async def test_progress_callback(self, tmp_path: Path) -> None:
         from backend.core.mesh_post_processor import MeshPostProcessor

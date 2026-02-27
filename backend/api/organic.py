@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
 from backend.config import Settings
@@ -131,21 +132,114 @@ async def generate_organic(
             update_organic_job(job_id, progress=0.6)
             yield _sse_event(job_id, "generating", "Mesh generated", 0.6)
 
-            # Stage 3: Post-process
+            # Stage 3: Post-process (step-by-step with SSE events)
             update_organic_job(
                 job_id, status=OrganicJobStatus.POST_PROCESSING, progress=0.65
             )
             yield _sse_event(
-                job_id, "post_processing", "Post-processing mesh...", 0.65
+                job_id, "post_processing", "开始后处理...", 0.65,
+                step="load", step_status="running",
             )
 
             from backend.core.mesh_post_processor import MeshPostProcessor
 
             processor = MeshPostProcessor()
-            processed = await processor.process(raw_mesh_path, spec)
+            pp_warnings: list[str] = []
+
+            # Step 3a: Load mesh
+            mesh = processor.load_mesh(raw_mesh_path)
+            yield _sse_event(
+                job_id, "post_processing", "网格加载完成", 0.68,
+                step="load", step_status="success",
+            )
+
+            # Step 3b: Repair mesh
+            yield _sse_event(
+                job_id, "post_processing", "正在修复网格...", 0.68,
+                step="repair", step_status="running",
+            )
+            mesh, repair_info = processor.repair_mesh(mesh)
+            if repair_info.status == "degraded":
+                pp_warnings.append(repair_info.message)
+            yield _sse_event(
+                job_id, "post_processing", repair_info.message, 0.73,
+                step="repair", step_status=repair_info.status,
+            )
+
+            # Step 3c: Scale mesh
+            if spec.final_bounding_box:
+                yield _sse_event(
+                    job_id, "post_processing", "正在缩放网格...", 0.73,
+                    step="scale", step_status="running",
+                )
+                mesh = processor.scale_mesh(mesh, spec.final_bounding_box)
+                yield _sse_event(
+                    job_id, "post_processing", "缩放完成", 0.78,
+                    step="scale", step_status="success",
+                )
+            else:
+                yield _sse_event(
+                    job_id, "post_processing", "无需缩放", 0.78,
+                    step="scale", step_status="skipped",
+                )
+
+            # Step 3d: Boolean cuts
+            boolean_cuts_applied = 0
+            if spec.quality_mode != "draft" and spec.engineering_cuts:
+                yield _sse_event(
+                    job_id, "post_processing", "正在应用布尔切割...", 0.78,
+                    step="boolean", step_status="running",
+                )
+                try:
+                    mesh, boolean_cuts_applied, cut_warnings = (
+                        processor.apply_boolean_cuts(mesh, spec.engineering_cuts)
+                    )
+                    pp_warnings.extend(cut_warnings)
+                    total = len(spec.engineering_cuts)
+                    if cut_warnings:
+                        msg = f"应用了 {boolean_cuts_applied}/{total} 个切割"
+                        yield _sse_event(
+                            job_id, "post_processing", msg, 0.85,
+                            step="boolean", step_status="degraded",
+                        )
+                    else:
+                        msg = f"应用了 {boolean_cuts_applied} 个切割"
+                        yield _sse_event(
+                            job_id, "post_processing", msg, 0.85,
+                            step="boolean", step_status="success",
+                        )
+                except Exception as e:
+                    msg = f"布尔切割失败: {e}"
+                    logger.warning(msg)
+                    pp_warnings.append(msg)
+                    yield _sse_event(
+                        job_id, "post_processing", msg, 0.85,
+                        step="boolean", step_status="failed",
+                    )
+            else:
+                reason = "草稿模式跳过" if spec.quality_mode == "draft" else "无切割定义"
+                yield _sse_event(
+                    job_id, "post_processing", reason, 0.85,
+                    step="boolean", step_status="skipped",
+                )
+
+            # Step 3e: Validate
+            yield _sse_event(
+                job_id, "post_processing", "正在验证质量...", 0.85,
+                step="validate", step_status="running",
+            )
+            stats = processor.validate_mesh(mesh, boolean_cuts_applied)
             update_organic_job(job_id, progress=0.9)
             yield _sse_event(
-                job_id, "post_processing", "Post-processing complete", 0.9
+                job_id, "post_processing", "质量验证完成", 0.9,
+                step="validate", step_status="success",
+            )
+
+            # Build processed result for export
+            from backend.core.mesh_post_processor import ProcessedMeshResult
+
+            processed = ProcessedMeshResult(
+                mesh=mesh, stats=stats, warnings=pp_warnings,
             )
 
             # Stage 4: Export & finalize
@@ -182,6 +276,7 @@ async def generate_organic(
                 stl_url=result_data.get("stl_url"),
                 threemf_url=result_data.get("threemf_url"),
                 mesh_stats=result_data.get("mesh_stats"),
+                warnings=processed.warnings,
             )
 
         except Exception as e:
