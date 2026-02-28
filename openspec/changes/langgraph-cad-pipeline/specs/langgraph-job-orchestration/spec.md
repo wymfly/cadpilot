@@ -24,6 +24,13 @@ The system SHALL implement a single `CadJobStateGraph` using LangGraph `StateGra
 - **THEN** the Graph routes to `generate_step_text_node` for text input or `generate_step_drawing_node` for drawing input
 - **AND** both paths converge at `convert_preview_node` → `check_printability_node` → `finalize_node`
 
+#### Scenario: Organic post-confirm exits Graph for legacy processing
+- **WHEN** `confirm_with_user_node` resumes for an organic input type
+- **THEN** `route_after_confirm` returns `"organic_external"`
+- **AND** the Graph routes to `finalize_node` which marks the Job in DB as `confirmed` (not `completed`)
+- **AND** the actual organic generation is delegated to the legacy `/api/generate/organic` endpoint (outside the Graph)
+- **AND** a `job.organic_delegated` SSE event is dispatched before the Graph run ends
+
 #### Scenario: Shared postprocess nodes execute once
 - **WHEN** either `generate_step_text_node` or `generate_step_drawing_node` completes
 - **THEN** `convert_step_to_preview()` runs exactly once to produce the GLB file
@@ -53,16 +60,17 @@ The system SHALL use `AsyncSqliteSaver` connected to the existing `backend/data/
 
 The system SHALL propagate node failures as structured state updates, yielding a `job.failed` SSE event and marking the DB Job status as FAILED.
 
-#### Scenario: Node exception captured as state
+#### Scenario: Node exception captured as state with typed failure_reason
 - **WHEN** any Graph node raises an unhandled exception
-- **THEN** the node returns `{"status": "failed", "error": str(exc)}` to the Graph state
-- **AND** the `finalize_node` detects `status=failed` and emits a `job.failed` SSE event
+- **THEN** the node calls `map_exception_to_failure_reason(exc)` to classify the error
+- **AND** returns `{"status": "failed", "error": str(exc), "failure_reason": "<type>"}` to the Graph state
+- **AND** the `finalize_node` detects `status=failed`, emits a `job.failed` SSE event with `failure_reason` field in payload
 - **AND** the DB job record is updated to `status=FAILED` with the error message
 
 #### Scenario: LLM timeout causes failed state
 - **WHEN** `asyncio.wait_for` raises `TimeoutError` inside `analyze_intent_node`
-- **THEN** the node returns `{"status": "failed", "error": "意图解析超时（60s）"}`
-- **AND** the stream emits `job.failed` promptly after the timeout
+- **THEN** the node returns `{"status": "failed", "error": "意图解析超时（60s）", "failure_reason": "timeout"}`
+- **AND** the stream emits `job.failed` promptly after the timeout with `failure_reason: "timeout"` in payload
 
 ### Requirement: API layer delegates to Graph astream_events
 

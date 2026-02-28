@@ -8,7 +8,7 @@
 ## 2. CadJobState 与 Graph 状态定义
 
 - [ ] 2.1 创建 `backend/graph/__init__.py`（空文件）
-- [ ] 2.2 创建 `backend/graph/state.py`：定义 `CadJobState` TypedDict（字段：job_id, input_type, input_text, image_path, intent, matched_template, drawing_spec, confirmed_params, confirmed_spec, disclaimer_accepted, step_path, model_url, printability, status, error）
+- [ ] 2.2 创建 `backend/graph/state.py`：定义 `CadJobState` TypedDict（字段：job_id, input_type, input_text, image_path, intent, matched_template, drawing_spec, confirmed_params, confirmed_spec, disclaimer_accepted, step_path, model_url, printability, status, error, failure_reason）
 - [ ] 2.3 在 `state.py` 中定义 `STATE_TO_ORM_MAPPING` 字典，映射 CadJobState 字段 → ORM Job 字段（`confirmed_spec` → `drawing_spec_confirmed`，`printability` → `printability_result`，`step_path` → `output_step_path`）
 
 ## 3. 能力函数重命名（pipeline 层）

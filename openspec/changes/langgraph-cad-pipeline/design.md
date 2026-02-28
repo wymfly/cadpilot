@@ -61,16 +61,21 @@
 
 ### D3：LLM 超时策略（选 LCEL + asyncio.wait_for 双层）
 
-**决定**：每个 LLM 节点用 LCEL `.with_retry(stop_after_attempt=3, wait_exponential_jitter=True)` + `.with_fallbacks([fallback_chain])` + 外层 `asyncio.wait_for(timeout=60)` 包裹。
+**决定**：每个 LLM 节点用 LCEL `.with_retry(stop_after_attempt=3, wait_exponential_jitter=True)` + 外层 `asyncio.wait_for(timeout=60)` 包裹。文本意图链额外配置 `.with_fallbacks([fallback_chain])`；Vision 链（Qwen-VL-Max）仅 retry 不配 fallback（无等价便宜 VL 模型）。
 
 **理由**：
 - LCEL retry 处理临时错误（rate limit、网络抖动）；`wait_for` 处理总预算超限
 - `wait_exponential_jitter` 避免同时重试造成 API burst
-- fallback chain 指向更快/更便宜的模型（如 `gpt-4o-mini`），保障降级可用
+- 文本意图链 fallback 指向更快/更便宜的模型（如 `gpt-4o-mini`），保障降级可用
+- Vision 链无便宜替代品，fallback 无意义，仅依赖 retry + timeout
 
 ```python
-chain = (prompt | primary_llm.with_retry(stop_after_attempt=3) | parser
-         ).with_fallbacks([prompt | fallback_llm | parser])
+# 文本意图链（有 fallback）
+intent_chain = (prompt | primary_llm.with_retry(stop_after_attempt=3) | parser
+                ).with_fallbacks([prompt | fallback_llm | parser])
+
+# Vision 链（仅 retry，无 fallback）
+vision_chain = prompt | vl_llm.with_retry(stop_after_attempt=3) | parser
 
 result = await asyncio.wait_for(chain.ainvoke(input), timeout=60.0)
 ```
