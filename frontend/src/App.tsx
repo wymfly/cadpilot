@@ -13,6 +13,8 @@ import RunBenchmark from './pages/Benchmark/RunBenchmark.tsx';
 import ReportDetail from './pages/Benchmark/ReportDetail.tsx';
 import Standards from './pages/Standards/index.tsx';
 import Settings from './pages/Settings/index.tsx';
+import HistoryPage from './pages/History/HistoryPage.tsx';
+import JobDetailPage from './pages/History/JobDetailPage.tsx';
 
 export default function App() {
   return (
@@ -30,6 +32,8 @@ export default function App() {
                 <Route path="/benchmark" element={<Benchmark />} />
                 <Route path="/benchmark/run" element={<RunBenchmark />} />
                 <Route path="/benchmark/:runId" element={<ReportDetail />} />
+                <Route path="/history" element={<HistoryPage />} />
+                <Route path="/history/:jobId" element={<JobDetailPage />} />
                 <Route path="/settings" element={<Settings />} />
               </Route>
             </Routes>

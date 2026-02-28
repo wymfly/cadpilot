@@ -7,9 +7,10 @@ import {
   RocketOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
-import type { WorkflowPhase } from '../../types/generate.ts';
+import type { WorkflowPhase, DrawingSpec } from '../../types/generate.ts';
 import type { ParamDefinition } from '../../types/template.ts';
 import type { PipelineConfig } from '../../types/pipeline.ts';
+import type { PrintabilityResult } from '../../types/printability.ts';
 
 const { Text } = Typography;
 
@@ -22,6 +23,8 @@ export interface WorkflowState {
   parsedParams: ParamDefinition[] | null;
   stepPath: string | null;
   templateName: string | null;
+  printability: PrintabilityResult | null;
+  drawingSpec: DrawingSpec | null;
 }
 
 export interface GenerateWorkflowProps {
@@ -33,6 +36,7 @@ const PHASE_STEP_MAP: Record<WorkflowPhase, number> = {
   idle: -1,
   parsing: 0,
   confirming: 1,
+  drawing_review: 1,
   generating: 2,
   refining: 3,
   completed: 4,
@@ -47,6 +51,46 @@ const STEP_ITEMS = [
   { title: '完成', icon: <CheckCircleOutlined /> },
 ];
 
+/** Consume an SSE response stream, dispatching parsed events to the handler. */
+async function consumeSSE(
+  resp: Response,
+  onEvent: (evt: Record<string, unknown>) => void,
+) {
+  const reader = resp.body?.getReader();
+  const decoder = new TextDecoder();
+  if (!reader) throw new Error('No response body');
+
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      // Flush remaining buffer
+      if (buffer.trim()) {
+        for (const line of buffer.split('\n')) {
+          if (line.startsWith('data:')) {
+            const jsonStr = line.slice(5).trim();
+            if (!jsonStr) continue;
+            try { onEvent(JSON.parse(jsonStr)); } catch { /* skip */ }
+          }
+        }
+      }
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data:')) {
+        const jsonStr = line.slice(5).trim();
+        if (!jsonStr) continue;
+        try { onEvent(JSON.parse(jsonStr)); } catch { /* skip */ }
+      }
+    }
+  }
+}
+
 /** Hook: manage generate workflow via SSE. */
 export function useGenerateWorkflow() {
   const [state, setState] = useState<WorkflowState>({
@@ -58,6 +102,8 @@ export function useGenerateWorkflow() {
     parsedParams: null,
     stepPath: null,
     templateName: null,
+    printability: null,
+    drawingSpec: null,
   });
   const abortRef = useRef<AbortController | null>(null);
 
@@ -75,6 +121,8 @@ export function useGenerateWorkflow() {
       parsedParams: null,
       stepPath: null,
       templateName: null,
+      printability: null,
+      drawingSpec: null,
     });
 
     try {
@@ -89,32 +137,7 @@ export function useGenerateWorkflow() {
         throw new Error(`HTTP ${resp.status}`);
       }
 
-      const reader = resp.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) throw new Error('No response body');
-
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            const jsonStr = line.slice(5).trim();
-            if (!jsonStr) continue;
-            try {
-              const evt = JSON.parse(jsonStr);
-              handleSSEEvent(evt, setState);
-            } catch {
-              // skip malformed JSON
-            }
-          }
-        }
-      }
+      await consumeSSE(resp, (evt) => handleSSEEvent(evt, setState));
     } catch (err: unknown) {
       if ((err as Error).name === 'AbortError') return;
       setState((prev) => ({
@@ -150,32 +173,7 @@ export function useGenerateWorkflow() {
           throw new Error(`HTTP ${resp.status}`);
         }
 
-        const reader = resp.body?.getReader();
-        const decoder = new TextDecoder();
-        if (!reader) throw new Error('No response body');
-
-        let buffer = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('data:')) {
-              const jsonStr = line.slice(5).trim();
-              if (!jsonStr) continue;
-              try {
-                const evt = JSON.parse(jsonStr);
-                handleSSEEvent(evt, setState);
-              } catch {
-                // skip malformed JSON
-              }
-            }
-          }
-        }
+        await consumeSSE(resp, (evt) => handleSSEEvent(evt, setState));
       } catch (err: unknown) {
         if ((err as Error).name === 'AbortError') return;
         setState((prev) => ({
@@ -200,6 +198,8 @@ export function useGenerateWorkflow() {
       parsedParams: null,
       stepPath: null,
       templateName: null,
+      printability: null,
+      drawingSpec: null,
     });
 
     const formData = new FormData();
@@ -216,46 +216,7 @@ export function useGenerateWorkflow() {
         throw new Error(`HTTP ${resp.status}`);
       }
 
-      const reader = resp.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) throw new Error('No response body');
-
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          if (buffer.trim()) {
-            for (const line of buffer.split('\n')) {
-              if (line.startsWith('data:')) {
-                const jsonStr = line.slice(5).trim();
-                if (!jsonStr) continue;
-                try {
-                  const evt = JSON.parse(jsonStr);
-                  handleSSEEvent(evt, setState);
-                } catch { /* skip */ }
-              }
-            }
-          }
-          break;
-        }
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            const jsonStr = line.slice(5).trim();
-            if (!jsonStr) continue;
-            try {
-              const evt = JSON.parse(jsonStr);
-              handleSSEEvent(evt, setState);
-            } catch {
-              // skip malformed JSON
-            }
-          }
-        }
-      }
+      await consumeSSE(resp, (evt) => handleSSEEvent(evt, setState));
     } catch (err: unknown) {
       setState((prev) => ({
         ...prev,
@@ -264,6 +225,47 @@ export function useGenerateWorkflow() {
       }));
     }
   }, []);
+
+  const confirmDrawingSpec = useCallback(
+    async (confirmedSpec: DrawingSpec, disclaimerAccepted: boolean) => {
+      if (!state.jobId) return;
+
+      const abort = new AbortController();
+      abortRef.current = abort;
+
+      setState((prev) => ({
+        ...prev,
+        phase: 'generating',
+        message: '图纸参数已确认，正在生成模型…',
+      }));
+
+      try {
+        const resp = await fetch(`/api/generate/drawing/${state.jobId}/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            confirmed_spec: confirmedSpec,
+            disclaimer_accepted: disclaimerAccepted,
+          }),
+          signal: abort.signal,
+        });
+
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+
+        await consumeSSE(resp, (evt) => handleSSEEvent(evt, setState));
+      } catch (err: unknown) {
+        if ((err as Error).name === 'AbortError') return;
+        setState((prev) => ({
+          ...prev,
+          phase: 'failed',
+          error: (err as Error).message || '图纸确认失败',
+        }));
+      }
+    },
+    [state.jobId],
+  );
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
@@ -276,6 +278,8 @@ export function useGenerateWorkflow() {
       parsedParams: null,
       stepPath: null,
       templateName: null,
+      printability: null,
+      drawingSpec: null,
     });
   }, []);
 
@@ -284,6 +288,7 @@ export function useGenerateWorkflow() {
     startTextGenerate,
     startDrawingGenerate,
     confirmParams,
+    confirmDrawingSpec,
     reset,
   };
 }
@@ -319,6 +324,16 @@ function handleSSEEvent(
     case 'refining':
       setState((prev) => ({ ...prev, jobId, phase: 'refining', message }));
       break;
+    case 'drawing_spec_ready':
+    case 'awaiting_drawing_confirmation':
+      setState((prev) => ({
+        ...prev,
+        jobId,
+        phase: 'drawing_review',
+        message: message || 'AI 图纸分析完成，请确认参数',
+        drawingSpec: (evt.drawing_spec as DrawingSpec | undefined) ?? null,
+      }));
+      break;
     case 'completed':
       setState((prev) => ({
         ...prev,
@@ -327,6 +342,7 @@ function handleSSEEvent(
         message,
         modelUrl: (evt.model_url as string | undefined) ?? null,
         stepPath: (evt.step_path as string | undefined) ?? null,
+        printability: (evt.printability as PrintabilityResult | undefined) ?? null,
       }));
       break;
     case 'failed':

@@ -17,12 +17,25 @@ export interface PrintIssue {
   suggestion: string;
 }
 
+export interface MaterialEstimate {
+  filament_weight_g: number;
+  filament_length_m: number;
+  cost_estimate_cny: number;
+}
+
+export interface TimeEstimate {
+  total_minutes: number;
+  layer_count: number;
+}
+
 export interface PrintabilityResult {
   printable: boolean;
   profile: string;
   issues: PrintIssue[];
   material_volume_cm3?: number;
   bounding_box?: { x: number; y: number; z: number };
+  material_estimate?: MaterialEstimate | null;
+  time_estimate?: TimeEstimate | null;
 }
 
 export type ProfileKey = 'fdm_standard' | 'sla_standard' | 'sls_standard';

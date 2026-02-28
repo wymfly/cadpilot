@@ -4,6 +4,8 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   PrinterOutlined,
+  DollarOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import ProfileSelector from './ProfileSelector.tsx';
 import IssueList from './IssueList.tsx';
@@ -93,6 +95,63 @@ export default function PrintReport({
           </Col>
         )}
       </Row>
+
+      {/* Material estimate */}
+      {currentResult.material_estimate && (
+        <Row gutter={16} style={{ marginBottom: 12 }}>
+          <Col span={8}>
+            <Statistic
+              title="耗材重量"
+              value={currentResult.material_estimate.filament_weight_g}
+              precision={1}
+              suffix="g"
+              prefix={<DollarOutlined />}
+              valueStyle={{ fontSize: 16 }}
+            />
+          </Col>
+          <Col span={8}>
+            <Statistic
+              title="耗材长度"
+              value={currentResult.material_estimate.filament_length_m}
+              precision={2}
+              suffix="m"
+              valueStyle={{ fontSize: 16 }}
+            />
+          </Col>
+          <Col span={8}>
+            <Statistic
+              title="预估费用"
+              value={currentResult.material_estimate.cost_estimate_cny}
+              precision={2}
+              prefix="¥"
+              valueStyle={{ fontSize: 16 }}
+            />
+          </Col>
+        </Row>
+      )}
+
+      {/* Time estimate */}
+      {currentResult.time_estimate && (
+        <Row gutter={16} style={{ marginBottom: 12 }}>
+          <Col span={12}>
+            <Statistic
+              title="预估打印时间"
+              value={currentResult.time_estimate.total_minutes}
+              suffix="分钟"
+              prefix={<ClockCircleOutlined />}
+              valueStyle={{ fontSize: 16 }}
+            />
+          </Col>
+          <Col span={12}>
+            <Statistic
+              title="层数"
+              value={currentResult.time_estimate.layer_count}
+              suffix="层"
+              valueStyle={{ fontSize: 16 }}
+            />
+          </Col>
+        </Row>
+      )}
 
       {(errorCount > 0 || warnCount > 0) && (
         <Descriptions size="small" column={3} style={{ marginBottom: 8 }}>

@@ -58,6 +58,7 @@ const INITIAL_STATE: OrganicWorkflowState = {
   postProcessStep: null,
   postProcessSteps: DEFAULT_POST_PROCESS_STEPS.map((s) => ({ ...s })),
   warnings: [],
+  printability: null,
 };
 
 function handleSSEEvent(
@@ -109,6 +110,7 @@ function handleSSEEvent(
         threemfUrl: (evt.threemf_url as string) ?? null,
         meshStats: (evt.mesh_stats as MeshStats) ?? null,
         warnings: (evt.warnings as string[]) ?? [],
+        printability: (evt.printability as OrganicWorkflowState['printability']) ?? null,
       }));
       break;
     case 'failed':

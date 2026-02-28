@@ -1,3 +1,5 @@
+import type { PrintabilityResult } from './printability.ts';
+
 export type OrganicJobStatus =
   | 'created'
   | 'analyzing'
@@ -63,6 +65,7 @@ export interface OrganicWorkflowState {
   postProcessStep: string | null;
   postProcessSteps: PostProcessStepInfo[];
   warnings: string[];
+  printability: PrintabilityResult | null;
 }
 
 export interface OrganicGenerateRequest {

@@ -8,6 +8,7 @@ import {
   BarChartOutlined,
   SettingOutlined,
   BulbOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
@@ -27,6 +28,7 @@ const menuItems = [
     ],
   },
   { key: '/generate/organic', icon: <BulbOutlined />, label: '创意雕塑' },
+  { key: '/history', icon: <HistoryOutlined />, label: '零件库' },
   { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];
 
@@ -34,6 +36,7 @@ const getSelectedKey = (pathname: string): string => {
   if (pathname.startsWith('/benchmark')) return '/benchmark';
   if (pathname.startsWith('/generate/organic')) return '/generate/organic';
   if (pathname.startsWith('/generate')) return '/generate';
+  if (pathname.startsWith('/history')) return '/history';
   return pathname;
 };
 

@@ -193,4 +193,75 @@ export async function deletePrintProfile(name: string): Promise<void> {
   await api.delete(`/print-profiles/${name}`);
 }
 
+// History API
+export interface JobSummary {
+  job_id: string;
+  status: string;
+  input_type: 'text' | 'drawing';
+  input_text: string;
+  created_at: string;
+  result?: Record<string, unknown> | null;
+}
+
+export interface PaginatedJobsResponse {
+  items: JobSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function listJobs(params?: {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  input_type?: string;
+}): Promise<PaginatedJobsResponse> {
+  const { data } = await api.get<PaginatedJobsResponse>('/jobs', { params });
+  return data;
+}
+
+export interface JobDetail {
+  job_id: string;
+  status: string;
+  input_type: 'text' | 'drawing';
+  input_text: string;
+  intent: Record<string, unknown> | null;
+  precise_spec: Record<string, unknown> | null;
+  drawing_spec: Record<string, unknown> | null;
+  result: {
+    model_url?: string;
+    step_path?: string;
+  } | null;
+  printability_result: PrintabilityResult | null;
+  error: string | null;
+  created_at: string;
+}
+
+export async function getJobDetail(jobId: string): Promise<JobDetail> {
+  const { data } = await api.get<JobDetail>(`/jobs/${jobId}`);
+  return data;
+}
+
+export async function deleteJob(jobId: string): Promise<void> {
+  await api.delete(`/jobs/${jobId}`);
+}
+
+export async function regenerateJob(jobId: string): Promise<{ job_id: string; cloned_from: string; status: string }> {
+  const { data } = await api.post<{ job_id: string; cloned_from: string; status: string }>(`/jobs/${jobId}/regenerate`);
+  return data;
+}
+
+// Preview API
+export async function previewParametric(
+  templateName: string,
+  params: Record<string, number>,
+  signal?: AbortSignal,
+): Promise<{ glb_url: string }> {
+  const { data } = await api.post<{ glb_url: string }>('/preview/parametric', {
+    template_name: templateName,
+    params,
+  }, { signal });
+  return data;
+}
+
 export default api;

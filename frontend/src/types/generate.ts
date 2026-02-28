@@ -4,6 +4,7 @@ export type JobStatus =
   | 'created'
   | 'intent_parsed'
   | 'awaiting_confirmation'
+  | 'awaiting_drawing_confirmation'
   | 'generating'
   | 'refining'
   | 'completed'
@@ -62,11 +63,32 @@ export interface SSEEvent {
   };
 }
 
+/** DrawingSpec extracted by AI from engineering drawings. */
+export interface DrawingSpecBaseBody {
+  method: 'revolve' | 'extrude' | 'loft' | 'sweep' | 'shell';
+  [key: string]: unknown;
+}
+
+export interface DrawingSpecFeature {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface DrawingSpec {
+  part_type: string;
+  overall_dimensions: Record<string, number>;
+  base_body: DrawingSpecBaseBody;
+  features: DrawingSpecFeature[];
+  notes: string[];
+  confidence?: number;
+}
+
 /** Workflow UI state (superset of JobStatus for frontend-specific states). */
 export type WorkflowPhase =
   | 'idle'
   | 'parsing'
   | 'confirming'
+  | 'drawing_review'
   | 'generating'
   | 'refining'
   | 'completed'

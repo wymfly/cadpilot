@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Typography, Row, Col, Button, Space } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import PipelineConfigBar from '../../components/PipelineConfigBar/index.tsx';
@@ -7,7 +7,10 @@ import ParamForm from '../../components/ParamForm/index.tsx';
 import ChatInput from './ChatInput.tsx';
 import DownloadButtons from './DownloadButtons.tsx';
 import GenerateWorkflow from './GenerateWorkflow.tsx';
+import DrawingSpecReview from './DrawingSpecReview.tsx';
+import PrintReport from '../../components/PrintReport/index.tsx';
 import { useGenerateWorkflowContext } from '../../contexts/GenerateWorkflowContext.tsx';
+import { useParametricPreview } from '../../hooks/useParametricPreview.ts';
 
 const { Title, Paragraph } = Typography;
 
@@ -17,6 +20,7 @@ export default function Generate() {
     startTextGenerate,
     startDrawingGenerate,
     confirmParams,
+    confirmDrawingSpec,
     reset,
     pipelineConfig,
     setPipelineConfig,
@@ -55,6 +59,25 @@ export default function Generate() {
     }
     confirmParams(numericParams);
   }, [paramValues, confirmParams]);
+
+  // Extract numeric params for preview
+  const numericParams = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const [k, v] of Object.entries(paramValues)) {
+      if (typeof v === 'number') result[k] = v;
+    }
+    return result;
+  }, [paramValues]);
+
+  // Debounced parametric preview during confirming phase
+  const { previewUrl } = useParametricPreview({
+    templateName: workflow.templateName,
+    params: numericParams,
+    enabled: workflow.phase === 'confirming' && !!workflow.templateName,
+  });
+
+  // Use preview URL during confirming, otherwise use workflow model URL
+  const viewerModelUrl = previewUrl ?? workflow.modelUrl;
 
   const isInputDisabled =
     workflow.phase !== 'idle' && workflow.phase !== 'completed' && workflow.phase !== 'failed';
@@ -102,9 +125,23 @@ export default function Generate() {
               onPhaseChange={() => {}}
             />
 
+            {/* Drawing spec review (shown during drawing_review phase) */}
+            {workflow.phase === 'drawing_review' && workflow.drawingSpec && (
+              <DrawingSpecReview
+                drawingSpec={workflow.drawingSpec}
+                onConfirm={confirmDrawingSpec}
+                onCancel={reset}
+              />
+            )}
+
             {/* Download buttons (shown when generation is complete) */}
             {workflow.phase === 'completed' && workflow.jobId && (
               <DownloadButtons jobId={workflow.jobId} />
+            )}
+
+            {/* Printability report (shown when completed with printability data) */}
+            {workflow.phase === 'completed' && workflow.printability && (
+              <PrintReport results={workflow.printability} />
             )}
 
             {/* Parameter confirmation form (shown during confirming phase) */}
@@ -135,7 +172,7 @@ export default function Generate() {
         {/* Right panel: 3D preview */}
         <Col xs={24} lg={14}>
           <div style={{ height: 600 }}>
-            <Viewer3D modelUrl={workflow.modelUrl} />
+            <Viewer3D modelUrl={viewerModelUrl} />
           </div>
         </Col>
       </Row>

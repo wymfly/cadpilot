@@ -9,6 +9,7 @@ import QualitySelector from './QualitySelector.tsx';
 import OrganicWorkflowProgress from './OrganicWorkflow.tsx';
 import MeshStatsCard from './MeshStatsCard.tsx';
 import OrganicDownloadButtons from './OrganicDownloadButtons.tsx';
+import PrintReport from '../../components/PrintReport/index.tsx';
 
 const { Title } = Typography;
 
@@ -121,6 +122,12 @@ export default function OrganicGenerate() {
           </Card>
 
           {workflow.meshStats && <MeshStatsCard stats={workflow.meshStats} />}
+
+          {workflow.printability && (
+            <div style={{ marginBottom: 16 }}>
+              <PrintReport results={workflow.printability} />
+            </div>
+          )}
 
           {workflow.phase === 'completed' && (
             <OrganicDownloadButtons
