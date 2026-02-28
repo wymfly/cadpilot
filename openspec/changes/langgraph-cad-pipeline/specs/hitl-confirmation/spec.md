@@ -13,7 +13,7 @@ The system SHALL pause the drawing generation pipeline after Stage 1 (DrawingAna
 
 #### Scenario: Pipeline resumes after confirmation via Command
 - **WHEN** a user calls POST /api/v1/jobs/{job_id}/confirm with confirmed params
-- **THEN** the endpoint calls `cad_graph.astream_events(Command(resume=body.model_dump()), config=config)`
+- **THEN** the endpoint calls `cad_graph.astream_events(Command(resume=body.model_dump()), config=config, version="v2")`
 - **AND** the Graph resumes from the `confirm_with_user_node` checkpoint
 - **AND** a new SSE stream is returned for the generation progress
 - **AND** the confirmed params are stored in `CadJobState.confirmed_spec`

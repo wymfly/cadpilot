@@ -20,7 +20,7 @@ The system SHALL wrap every LLM call in a LCEL chain with `.with_retry(stop_afte
 - **WHEN** both primary and fallback LLM chains fail
 - **THEN** the LCEL chain raises an exception
 - **AND** the enclosing `asyncio.wait_for` block catches it as a node error
-- **AND** the node returns `{"status": "failed", "error": str(exc)}`
+- **AND** the node returns `{"status": "failed", "error": str(exc), "failure_reason": "generation_error"}`
 
 ### Requirement: asyncio.wait_for enforces absolute timeout per node
 
@@ -33,13 +33,13 @@ The system SHALL wrap each LLM node's LCEL chain invocation in `asyncio.wait_for
 #### Scenario: LLM node times out after 60 seconds
 - **WHEN** `analyze_intent_node` has not completed after 60 seconds
 - **THEN** `asyncio.TimeoutError` is raised inside the node
-- **AND** the node catches it and returns `{"status": "failed", "error": "意图解析超时（60s）"}`
+- **AND** the node catches it and returns `{"status": "failed", "error": "意图解析超时（60s）", "failure_reason": "timeout"}`
 - **AND** the stream emits `job.failed` event promptly (not hung)
 
 #### Scenario: Vision analysis node has independent timeout
 - **WHEN** `analyze_vision_node` is processing a drawing image via Qwen-VL-Max
 - **THEN** a separate 60-second budget applies, independent of any prior node timeouts
-- **AND** timeout in this node produces `{"status": "failed", "error": "图纸分析超时（60s）"}`
+- **AND** timeout in this node produces `{"status": "failed", "error": "图纸分析超时（60s）", "failure_reason": "timeout"}`
 
 ### Requirement: Typed failure reasons surface in SSE payload
 
