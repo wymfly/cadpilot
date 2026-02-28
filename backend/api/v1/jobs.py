@@ -230,6 +230,7 @@ async def confirm_job(job_id: str, body: ConfirmRequest) -> dict[str, str]:
     """确认 AI 分析结果，恢复管道执行。
 
     支持 awaiting_confirmation（文本模式）和 awaiting_drawing_confirmation（图纸模式）。
+    自动收集用户修正数据（原始 spec vs 确认 spec 的 diff）。
     """
     job = await get_job(job_id)
     if job is None:
@@ -245,6 +246,24 @@ async def confirm_job(job_id: str, body: ConfirmRequest) -> dict[str, str]:
             current=job.status.value,
             expected="awaiting_confirmation",
         )
+
+    # 收集用户修正（仅图纸模式，有原始 spec 时）
+    if body.confirmed_spec and job.drawing_spec:
+        try:
+            import asyncio
+
+            from backend.core.correction_tracker import (
+                compute_corrections,
+                persist_corrections,
+            )
+
+            corrections = compute_corrections(
+                job.drawing_spec, body.confirmed_spec, job_id,
+            )
+            if corrections:
+                await asyncio.to_thread(persist_corrections, job_id, corrections)
+        except Exception:
+            pass  # 修正收集失败不阻塞主流程
 
     # 保存确认数据
     update_kwargs: dict[str, Any] = {"status": JobStatus.GENERATING}

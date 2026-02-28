@@ -77,6 +77,19 @@ class PipelineBridge:
     # 终端事件
     # ------------------------------------------------------------------
 
+    def printability_checked(
+        self, result: dict[str, Any] | None = None,
+    ) -> None:
+        """可打印性检查完成，发送 ``printability_checked`` 事件。"""
+        self._put({
+            "event": "printability_checked",
+            "job_id": self.job_id,
+            "data": {
+                "message": "可打印性检查完成",
+                "printability": result,
+            },
+        })
+
     def complete(
         self,
         model_url: str | None = None,
