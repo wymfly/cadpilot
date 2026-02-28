@@ -71,8 +71,12 @@ def persist_corrections(job_id: str, corrections: list[dict[str, Any]]) -> Path:
 
 
 def load_corrections(job_id: str) -> list[dict[str, Any]] | None:
-    """Load corrections from JSON file. Returns None if not found."""
+    """Load corrections from JSON file. Returns None if not found or corrupted."""
     path = CORRECTIONS_DIR / f"{job_id}.json"
     if not path.exists():
         return None
-    return json.loads(path.read_text())
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning("Corrupt corrections file for job %s: %s", job_id, exc)
+        return None

@@ -14,8 +14,10 @@ class JobModel(Base):
     __tablename__ = "jobs"
 
     job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # Valid: created, intent_parsed, awaiting_confirmation,
+    # awaiting_drawing_confirmation, generating, refining, completed, failed
     status: Mapped[str] = mapped_column(String(32), default="created")
-    input_type: Mapped[str] = mapped_column(String(16), default="text")
+    input_type: Mapped[str] = mapped_column(String(16), default="text")  # text | drawing
     input_text: Mapped[str] = mapped_column(Text, default="")
     intent: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     precise_spec: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -40,10 +42,11 @@ class OrganicJobModel(Base):
     __tablename__ = "organic_jobs"
 
     job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # Valid: created, analyzing, generating, post_processing, completed, failed
     status: Mapped[str] = mapped_column(String(32), default="created")
     prompt: Mapped[str] = mapped_column(Text, default="")
-    provider: Mapped[str] = mapped_column(String(32), default="auto")
-    quality_mode: Mapped[str] = mapped_column(String(16), default="standard")
+    provider: Mapped[str] = mapped_column(String(32), default="auto")  # auto | tripo3d | hunyuan3d
+    quality_mode: Mapped[str] = mapped_column(String(16), default="standard")  # draft | standard | high
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     message: Mapped[str] = mapped_column(Text, default="")
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -61,6 +64,8 @@ class UserCorrectionModel(Base):
     __tablename__ = "user_corrections"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # No ForeignKey: corrections may reference jobs in the in-memory store
+    # (drawing flow) that are not persisted to the jobs table.
     job_id: Mapped[str] = mapped_column(String(64), index=True)
     field_path: Mapped[str] = mapped_column(String(256))
     original_value: Mapped[str] = mapped_column(Text)

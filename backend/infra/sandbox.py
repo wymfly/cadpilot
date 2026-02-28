@@ -1,8 +1,7 @@
 """Safe code executor — AST pre-check + subprocess isolation.
 
 Blocks dangerous patterns (os.system, subprocess, eval, exec, __import__)
-at the AST level, then runs approved code in a subprocess with timeout
-and memory constraints.
+at the AST level, then runs approved code in a subprocess with timeout.
 """
 
 from __future__ import annotations

@@ -45,6 +45,7 @@ class PreviewResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 _preview_cache: dict[str, str] = {}
+_PREVIEW_CACHE_MAX_SIZE = 100
 
 
 def invalidate_preview_cache(template_name: str | None = None) -> int:
@@ -106,28 +107,33 @@ def _render_preview(template_name: str, params: dict[str, float]) -> str:
     step_path = str(preview_dir / "preview.step")
     glb_path = str(preview_dir / "preview.glb")
 
-    # Render CadQuery code from template
-    code = engine.render(template_name, params, output_filename=step_path)
+    try:
+        # Render CadQuery code from template
+        code = engine.render(template_name, params, output_filename=step_path)
 
-    # Execute in sandbox
-    executor = SafeExecutor(timeout_s=5)
-    result = executor.execute(code)
+        # Execute in sandbox
+        executor = SafeExecutor(timeout_s=5)
+        result = executor.execute(code)
 
-    if not result.success:
-        raise RuntimeError(f"CadQuery execution failed: {result.stderr}")
-    if not Path(step_path).exists():
-        raise RuntimeError("CadQuery did not produce a STEP file")
+        if not result.success:
+            raise RuntimeError(f"CadQuery execution failed: {result.stderr}")
+        if not Path(step_path).exists():
+            raise RuntimeError("CadQuery did not produce a STEP file")
 
-    # Convert STEP → GLB with draft quality (higher deflection = fewer faces)
-    exporter = FormatExporter()
-    draft_config = ExportConfig(
-        format="gltf",
-        linear_deflection=0.3,   # ~70% fewer faces than default 0.1
-        angular_deflection=1.0,
-    )
-    exporter.export(step_path, glb_path, draft_config)
+        # Convert STEP → GLB with draft quality (higher deflection = fewer faces)
+        exporter = FormatExporter()
+        draft_config = ExportConfig(
+            format="gltf",
+            linear_deflection=0.3,   # ~70% fewer faces than default 0.1
+            angular_deflection=1.0,
+        )
+        exporter.export(step_path, glb_path, draft_config)
 
-    return glb_path
+        return glb_path
+    except Exception:
+        # Clean up temp directory on failure to prevent leaks
+        shutil.rmtree(preview_dir, ignore_errors=True)
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +193,11 @@ async def preview_parametric(body: PreviewRequest) -> PreviewResponse:
         shutil.rmtree(preview_dir, ignore_errors=True)
 
     glb_url = get_model_url(preview_job_id, "glb")
+
+    # Evict oldest entries if cache exceeds max size
+    if len(_preview_cache) >= _PREVIEW_CACHE_MAX_SIZE:
+        oldest_key = next(iter(_preview_cache))
+        del _preview_cache[oldest_key]
     _preview_cache[cache_key] = glb_url
 
     return PreviewResponse(glb_url=glb_url)

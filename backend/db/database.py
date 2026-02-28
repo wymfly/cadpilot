@@ -33,7 +33,11 @@ async_session = async_sessionmaker(
 
 
 async def init_db() -> None:
-    """Create all tables. Called on startup."""
+    """Create all tables if they don't exist (checkfirst=True by default).
+
+    Used for development and testing. When Alembic migrations are adopted,
+    replace this with ``alembic upgrade head`` in the startup sequence.
+    """
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

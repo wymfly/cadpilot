@@ -188,11 +188,13 @@ export function useGenerateWorkflow() {
 
   const startDrawingGenerate = useCallback(async (file: File, pipelineConfig?: PipelineConfig) => {
     abortRef.current?.abort();
+    const abort = new AbortController();
+    abortRef.current = abort;
 
     setState({
-      phase: 'generating',
+      phase: 'parsing',
       jobId: null,
-      message: '正在分析图纸…',
+      message: '正在上传图纸…',
       error: null,
       modelUrl: null,
       parsedParams: null,
@@ -210,6 +212,7 @@ export function useGenerateWorkflow() {
       const resp = await fetch('/api/generate/drawing', {
         method: 'POST',
         body: formData,
+        signal: abort.signal,
       });
 
       if (!resp.ok) {
@@ -218,6 +221,7 @@ export function useGenerateWorkflow() {
 
       await consumeSSE(resp, (evt) => handleSSEEvent(evt, setState));
     } catch (err: unknown) {
+      if ((err as Error).name === 'AbortError') return;
       setState((prev) => ({
         ...prev,
         phase: 'failed',

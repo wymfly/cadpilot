@@ -928,6 +928,126 @@ class TestDrawingConfirm:
         assert len(failed) >= 1
         assert "参数解析失败" in failed[0].get("message", "")
 
+    async def test_drawing_confirm_tracks_corrections(
+        self, client: TestClient, monkeypatch,
+    ) -> None:
+        """Corrections are persisted when user modifies drawing spec."""
+        import backend.api.generate as gen_mod
+
+        # Create job with original spec
+        original_spec = {
+            "part_type": "rotational",
+            "description": "Original",
+            "base_body": {"method": "revolve"},
+            "overall_dimensions": {"d": 50, "h": 30},
+        }
+        job_id = "dc-corrections"
+        await create_job(job_id, input_type="drawing")
+        await update_job(
+            job_id,
+            status=JobStatus.AWAITING_DRAWING_CONFIRMATION,
+            drawing_spec=original_spec,
+            image_path="/tmp/test.png",
+        )
+
+        # User-modified spec (changed dimensions)
+        confirmed_spec = {
+            "part_type": "rotational",
+            "description": "Original",
+            "base_body": {"method": "revolve"},
+            "overall_dimensions": {"d": 55, "h": 30},
+        }
+
+        def mock_generate(
+            image_filepath, drawing_spec, output_filepath,
+            on_progress=None, config=None,
+        ):
+            Path(output_filepath).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_filepath).write_text("fake step")
+
+        monkeypatch.setattr(gen_mod, "_run_generate_from_spec", mock_generate)
+        monkeypatch.setattr(
+            gen_mod, "_convert_step_to_glb",
+            lambda s, g: Path(g).write_text("fake glb"),
+        )
+        monkeypatch.setattr(gen_mod, "_run_printability_check", lambda p: None)
+
+        resp = client.post(
+            f"/api/generate/drawing/{job_id}/confirm",
+            json={
+                "confirmed_spec": confirmed_spec,
+                "disclaimer_accepted": True,
+            },
+        )
+        events = parse_sse_events(resp.text)
+        completed = [e for e in events if e.get("status") == "completed"]
+        assert len(completed) == 1
+
+        # Verify corrections were persisted
+        from backend.core.correction_tracker import CORRECTIONS_DIR, load_corrections
+
+        corrections = load_corrections(job_id)
+        assert corrections is not None
+        assert len(corrections) == 1
+        assert corrections[0]["field_path"] == "overall_dimensions.d"
+        assert corrections[0]["original_value"] == "50"
+        assert corrections[0]["corrected_value"] == "55"
+
+        # Cleanup
+        corr_file = CORRECTIONS_DIR / f"{job_id}.json"
+        corr_file.unlink(missing_ok=True)
+
+
+# ===================================================================
+# _parse_pipeline_config input variants (T2)
+# ===================================================================
+
+
+class TestParsePipelineConfig:
+    """Tests for _parse_pipeline_config edge cases."""
+
+    def test_valid_preset(self) -> None:
+        from backend.api.generate import _parse_pipeline_config
+
+        config = _parse_pipeline_config('{"preset": "fast"}')
+        assert config is not None
+
+    def test_invalid_json(self) -> None:
+        from backend.api.generate import _parse_pipeline_config
+
+        config = _parse_pipeline_config("not json at all")
+        # Should fall back to balanced preset
+        assert config is not None
+
+    def test_empty_string(self) -> None:
+        from backend.api.generate import _parse_pipeline_config
+
+        config = _parse_pipeline_config("")
+        assert config is not None
+
+    def test_non_dict_json(self) -> None:
+        from backend.api.generate import _parse_pipeline_config
+
+        config = _parse_pipeline_config("[1, 2, 3]")
+        # Non-dict should fall back to balanced
+        assert config is not None
+
+    def test_empty_dict(self) -> None:
+        from backend.api.generate import _parse_pipeline_config
+
+        config = _parse_pipeline_config("{}")
+        assert config is not None
+
+    def test_unknown_preset(self) -> None:
+        from pydantic import ValidationError
+
+        from backend.api.generate import _parse_pipeline_config
+
+        # Unknown preset falls through to PipelineConfig(**raw) which raises
+        # ValidationError because preset is Literal["fast","balanced","precise","custom"]
+        with pytest.raises(ValidationError):
+            _parse_pipeline_config('{"preset": "nonexistent"}')
+
 
 # ===================================================================
 # Integration tests — text mode full lifecycle

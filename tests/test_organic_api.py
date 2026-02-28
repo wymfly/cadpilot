@@ -172,9 +172,11 @@ class TestProviderHealth:
 class TestSSEStream:
     async def test_generate_returns_sse_stream(self, client: AsyncClient) -> None:
         """Test that POST /generate/organic returns an SSE event stream."""
+        from backend.models.organic import MeshStats
+
         with patch("backend.core.organic_spec_builder.OrganicSpecBuilder.build") as mock_build, \
              patch("backend.api.organic._create_provider") as mock_create_prov, \
-             patch("backend.core.mesh_post_processor.MeshPostProcessor.process") as mock_process:
+             patch("backend.core.mesh_post_processor.MeshPostProcessor") as mock_pp_cls:
 
             # Mock spec builder
             mock_spec = MagicMock()
@@ -189,25 +191,24 @@ class TestSSEStream:
             mock_provider.generate = AsyncMock(return_value=Path("/tmp/test.glb"))
             mock_create_prov.return_value = mock_provider
 
-            # Mock post-processor
+            # Mock post-processor step methods
             mock_mesh = MagicMock()
             mock_mesh.export = MagicMock()
-            mock_stats = MagicMock()
-            mock_stats.model_dump.return_value = {
-                "vertex_count": 100,
-                "face_count": 200,
-                "is_watertight": True,
-                "volume_cm3": 1.0,
-                "bounding_box": {"x": 50, "y": 50, "z": 50},
-                "has_non_manifold": False,
-                "repairs_applied": [],
-                "boolean_cuts_applied": 0,
-            }
-            mock_result = MagicMock()
-            mock_result.mesh = mock_mesh
-            mock_result.stats = mock_stats
-            mock_result.warnings = []
-            mock_process.return_value = mock_result
+            mock_repair_info = MagicMock()
+            mock_repair_info.status = "success"
+            mock_repair_info.message = "OK"
+            real_stats = MeshStats(
+                vertex_count=100, face_count=200, is_watertight=True,
+                volume_cm3=1.0, bounding_box={"x": 50, "y": 50, "z": 50},
+                has_non_manifold=False,
+            )
+
+            mock_pp = MagicMock()
+            mock_pp.load_mesh.return_value = mock_mesh
+            mock_pp.repair_mesh.return_value = (mock_mesh, mock_repair_info)
+            mock_pp.scale_mesh.return_value = mock_mesh
+            mock_pp.validate_mesh.return_value = real_stats
+            mock_pp_cls.return_value = mock_pp
 
             resp = await client.post(
                 "/api/generate/organic",
@@ -219,9 +220,11 @@ class TestSSEStream:
 
     async def test_sse_events_contain_envelope_fields(self, client: AsyncClient) -> None:
         """Verify SSE events have job_id, status, message, progress."""
+        from backend.models.organic import MeshStats
+
         with patch("backend.core.organic_spec_builder.OrganicSpecBuilder.build") as mock_build, \
              patch("backend.api.organic._create_provider") as mock_create_prov, \
-             patch("backend.core.mesh_post_processor.MeshPostProcessor.process") as mock_process:
+             patch("backend.core.mesh_post_processor.MeshPostProcessor") as mock_pp_cls:
 
             mock_spec = MagicMock()
             mock_spec.prompt_en = "test"
@@ -236,19 +239,20 @@ class TestSSEStream:
 
             mock_mesh = MagicMock()
             mock_mesh.export = MagicMock()
-            mock_stats = MagicMock()
-            mock_stats.model_dump.return_value = {
-                "vertex_count": 100, "face_count": 200,
-                "is_watertight": True, "volume_cm3": 1.0,
-                "bounding_box": {"x": 50, "y": 50, "z": 50},
-                "has_non_manifold": False, "repairs_applied": [],
-                "boolean_cuts_applied": 0,
-            }
-            mock_result = MagicMock()
-            mock_result.mesh = mock_mesh
-            mock_result.stats = mock_stats
-            mock_result.warnings = []
-            mock_process.return_value = mock_result
+            mock_repair_info = MagicMock()
+            mock_repair_info.status = "success"
+            mock_repair_info.message = "OK"
+            real_stats = MeshStats(
+                vertex_count=100, face_count=200, is_watertight=True,
+                volume_cm3=1.0, bounding_box={"x": 50, "y": 50, "z": 50},
+                has_non_manifold=False,
+            )
+
+            mock_pp = MagicMock()
+            mock_pp.load_mesh.return_value = mock_mesh
+            mock_pp.repair_mesh.return_value = (mock_mesh, mock_repair_info)
+            mock_pp.validate_mesh.return_value = real_stats
+            mock_pp_cls.return_value = mock_pp
 
             resp = await client.post(
                 "/api/generate/organic",
@@ -485,3 +489,39 @@ class TestSSEStream:
         )
         # Should NOT be 422 for "prompt required" — it may fail later (image not found) but passes input validation
         assert resp.status_code != 422 or "prompt" not in resp.text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Path traversal protection tests (T4)
+# ---------------------------------------------------------------------------
+
+class TestPathTraversal:
+    async def test_read_uploaded_image_rejects_path_traversal(self, client: AsyncClient) -> None:
+        """file_id with path traversal characters should be rejected via SSE error."""
+        resp = await client.post(
+            "/api/generate/organic",
+            json={"prompt": "test", "reference_image": "../../../etc/passwd"},
+        )
+        # Endpoint returns 200 SSE stream; validation error appears as failed event
+        assert resp.status_code == 200
+        data_lines = [l for l in resp.text.split("\n") if l.startswith("data:")]
+        assert any("failed" in l for l in data_lines), "Expected a failed SSE event"
+
+    async def test_read_uploaded_image_rejects_non_uuid(self, client: AsyncClient) -> None:
+        """Non-UUID file_id should be rejected via SSE error event."""
+        resp = await client.post(
+            "/api/generate/organic",
+            json={"prompt": "test", "reference_image": "not-a-uuid"},
+        )
+        assert resp.status_code == 200
+        data_lines = [l for l in resp.text.split("\n") if l.startswith("data:")]
+        assert any("failed" in l for l in data_lines), "Expected a failed SSE event"
+
+    async def test_read_uploaded_image_accepts_valid_uuid(self, client: AsyncClient) -> None:
+        """Valid UUID file_id that doesn't exist should get 404, not crash."""
+        resp = await client.post(
+            "/api/generate/organic",
+            json={"prompt": "test", "reference_image": "11111111-1111-1111-1111-111111111111"},
+        )
+        # Should be 404 (not found) or SSE with failed event — not 422 or 500
+        assert resp.status_code in (200, 404)

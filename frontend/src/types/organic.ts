@@ -15,6 +15,13 @@ export type ProviderPreference = 'auto' | 'tripo3d' | 'hunyuan3d';
 export type CutType = 'flat_bottom' | 'hole' | 'slot';
 export type CutDirection = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
 
+/**
+ * Engineering cut specification.
+ * Required fields by type:
+ * - flat_bottom: depth, direction, offset (optional: position)
+ * - hole: diameter, depth (optional: position)
+ * - slot: width, length, depth, direction (optional: position)
+ */
 export interface EngineeringCut {
   type: CutType;
   diameter?: number;

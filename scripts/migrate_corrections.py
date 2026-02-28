@@ -1,8 +1,10 @@
 """One-time migration: JSON file corrections → SQLite.
 
 Reads backend/data/corrections/*.json and inserts into the
-user_corrections table. Safe to run multiple times — duplicates
-are skipped based on (job_id, field_path, timestamp).
+user_corrections table.
+
+WARNING: This script does NOT deduplicate. Running it multiple times
+will create duplicate rows. Ensure it is only run once per dataset.
 
 Usage:
     uv run python -m scripts.migrate_corrections

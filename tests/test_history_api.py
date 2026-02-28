@@ -167,6 +167,56 @@ class TestJobDetail:
         assert len(data["corrections"]) == 1
         assert data["corrections"][0]["field_path"] == "part_type"
 
+    async def test_detail_falls_back_to_json_corrections(
+        self, client: AsyncClient,
+    ) -> None:
+        """When DB has no corrections, fall back to JSON file if it exists."""
+        import json
+        from backend.core.correction_tracker import CORRECTIONS_DIR
+        from backend.db.database import async_session
+
+        async with async_session() as session:
+            await _create_test_job(session, "detail-json-fb")
+
+        # Create a JSON corrections file (simulating pre-migration data)
+        CORRECTIONS_DIR.mkdir(parents=True, exist_ok=True)
+        corr_file = CORRECTIONS_DIR / "detail-json-fb.json"
+        corr_file.write_text(json.dumps([
+            {"job_id": "detail-json-fb", "field_path": "d", "original_value": "50", "corrected_value": "55"},
+        ]))
+
+        try:
+            resp = await client.get("/api/jobs/detail-json-fb")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data["corrections"]) == 1
+            assert data["corrections"][0]["field_path"] == "d"
+        finally:
+            corr_file.unlink(missing_ok=True)
+
+    async def test_detail_json_fallback_handles_corrupt_file(
+        self, client: AsyncClient,
+    ) -> None:
+        """Corrupt JSON corrections file should not crash the detail endpoint."""
+        from backend.core.correction_tracker import CORRECTIONS_DIR
+        from backend.db.database import async_session
+
+        async with async_session() as session:
+            await _create_test_job(session, "detail-corrupt")
+
+        CORRECTIONS_DIR.mkdir(parents=True, exist_ok=True)
+        corr_file = CORRECTIONS_DIR / "detail-corrupt.json"
+        corr_file.write_text("{broken json!!!")
+
+        try:
+            resp = await client.get("/api/jobs/detail-corrupt")
+            assert resp.status_code == 200
+            data = resp.json()
+            # Should return empty corrections, not crash
+            assert data["corrections"] == []
+        finally:
+            corr_file.unlink(missing_ok=True)
+
 
 # ---------------------------------------------------------------------------
 # Regenerate

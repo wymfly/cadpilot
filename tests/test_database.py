@@ -10,9 +10,14 @@ from backend.db.database import Base, async_session, engine, init_db
 
 
 class _TestModel(Base):
-    """Ephemeral model used only in tests."""
+    """Ephemeral model used only in tests.
+
+    Uses extend_existing=True to prevent errors when this module
+    is imported multiple times (e.g., across test collection).
+    """
 
     __tablename__ = "test_table"
+    __table_args__ = {"extend_existing": True}
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
 

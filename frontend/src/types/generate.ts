@@ -11,6 +11,10 @@ export type JobStatus =
   | 'failed'
   | 'validation_failed';
 
+/**
+ * Job model for generate workflow SSE events.
+ * See also: api.ts JobDetail for the history API variant.
+ */
 export interface Job {
   job_id: string;
   status: JobStatus;

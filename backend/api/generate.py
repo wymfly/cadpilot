@@ -1,9 +1,10 @@
 """SSE-based generate endpoint with Job session protocol (Phase 4 Task 4.6).
 
 Supports two modes:
-1. **text** mode: POST /generate/text → IntentParser → pause for confirmation → generate
-2. **drawing** mode: POST /generate/drawing → V2 Pipeline → direct generate
+1. **text** mode: POST /generate → IntentParser → pause for confirmation → generate
+2. **drawing** mode: POST /generate/drawing → VL analysis → pause for confirmation → generate
 
+Both modes use HITL (Human-in-the-Loop) confirmation before generation.
 Job lifecycle events are streamed as SSE to the client.
 """
 
@@ -463,18 +464,21 @@ async def confirm_drawing_spec(
             detail="免责声明必须接受后方可继续生成",
         )
 
-    # Track user corrections (data flywheel)
+    # Track user corrections (data flywheel) — non-critical, must not block generation
     if job.drawing_spec and body.confirmed_spec:
-        from backend.core.correction_tracker import (
-            compute_corrections,
-            persist_corrections,
-        )
+        try:
+            from backend.core.correction_tracker import (
+                compute_corrections,
+                persist_corrections,
+            )
 
-        corrections = compute_corrections(
-            job.drawing_spec, body.confirmed_spec, job_id,
-        )
-        if corrections:
-            await asyncio.to_thread(persist_corrections, job_id, corrections)
+            corrections = compute_corrections(
+                job.drawing_spec, body.confirmed_spec, job_id,
+            )
+            if corrections:
+                await asyncio.to_thread(persist_corrections, job_id, corrections)
+        except Exception as exc:
+            logger.warning("Failed to persist corrections for job %s: %s", job_id, exc)
 
     # Save confirmed spec and transition to GENERATING
     await update_job(

@@ -1,10 +1,12 @@
 """Geometry information extractor for printability analysis.
 
 Provides two paths:
-- STEP files: CadQuery/OCP geometric queries (precise B-Rep)
-- Mesh files: trimesh analysis (approximate)
+- STEP files: CadQuery/OCP bounding box + volume extraction
+- Mesh files: trimesh bounding box + volume + overhang estimation
 
 Both return a standardized geometry_info dict consumed by PrintabilityChecker.
+Note: min_wall_thickness and min_hole_diameter are not yet implemented
+and always return None.
 """
 from __future__ import annotations
 
