@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import uuid
 from pathlib import Path
 from typing import Any, AsyncGenerator
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -144,7 +147,8 @@ def _match_template(
         _templates_dir = Path(__file__).parent.parent / "knowledge" / "templates"
         engine = TemplateEngine.from_directory(_templates_dir)
         templates = engine.list_templates()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Template engine initialization failed: %s", exc)
         return None, []
 
     text_lower = text.lower()
@@ -174,7 +178,8 @@ def _run_template_generation(
         _templates_dir = Path(__file__).parent.parent / "knowledge" / "templates"
         engine = TemplateEngine.from_directory(_templates_dir)
         template = engine.get_template(template_name)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Template load failed for '%s': %s", template_name, exc)
         return False
 
     # Render Jinja2 template with confirmed params
@@ -184,7 +189,8 @@ def _run_template_generation(
             confirmed_params,
             output_filename=step_path,
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning("Template render failed for '%s': %s", template_name, exc)
         return False
 
     # Execute in sandbox
@@ -194,7 +200,8 @@ def _run_template_generation(
         executor = SafeExecutor(timeout_s=120)
         result = executor.execute(code)
         return result.success and Path(step_path).exists()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Sandbox execution failed for '%s': %s", template_name, exc)
         return False
 
 
@@ -220,7 +227,8 @@ def _run_printability_check(step_path: str) -> dict[str, Any] | None:
             "layer_count": time_est.layer_count,
         }
         return data
-    except Exception:
+    except Exception as exc:
+        logger.warning("Printability check failed for %s: %s", step_path, exc)
         return None
 
 
@@ -296,10 +304,10 @@ async def generate_text(body: TextGenerateRequest) -> EventSourceResponse:
                     if matches:
                         matched_template = matches[0]
                         params = matches[0].params
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as exc:
+                    logger.warning("Template matching failed for job %s: %s", job_id, exc)
+        except Exception as exc:
+            logger.warning("IntentParser failed for job %s, falling back to keyword matching: %s", job_id, exc)
 
         # Fallback: keyword matching if IntentParser didn't find a template
         if matched_template is None:
@@ -360,8 +368,7 @@ async def generate_drawing(
     ext = Path(image.filename or "input.png").suffix or ".png"
     image_path = str(job_dir / f"input{ext}")
     content = await image.read()
-    with open(image_path, "wb") as f:
-        f.write(content)
+    await asyncio.to_thread(Path(image_path).write_bytes, content)
 
     # Store image_path and config in job for later use by confirm endpoint
     await update_job(job_id, image_path=image_path)
@@ -467,7 +474,7 @@ async def confirm_drawing_spec(
             job.drawing_spec, body.confirmed_spec, job_id,
         )
         if corrections:
-            persist_corrections(job_id, corrections)
+            await asyncio.to_thread(persist_corrections, job_id, corrections)
 
     # Save confirmed spec and transition to GENERATING
     await update_job(
@@ -513,10 +520,11 @@ async def confirm_drawing_spec(
         ))
 
         # Stream progress events in real-time
+        import queue as _queue_mod
         while not pipeline_task.done():
             try:
                 event = bridge.queue.get_nowait()
-            except Exception:
+            except _queue_mod.Empty:
                 await asyncio.sleep(0.2)
                 continue
             event_type = event.get("event", "progress")
@@ -557,8 +565,8 @@ async def confirm_drawing_spec(
                     timeout=30,
                 )
                 model_url = get_model_url(job_id, fmt="glb")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("STEP→GLB conversion failed for job %s: %s", job_id, exc)
 
             # Run printability check
             printability_data = await asyncio.to_thread(
@@ -661,7 +669,8 @@ async def confirm_params(
                 try:
                     await asyncio.to_thread(_convert_step_to_glb, step_path, glb_path)
                     model_url = get_model_url(job_id, "glb")
-                except Exception:
+                except Exception as exc:
+                    logger.warning("STEP→GLB conversion failed for job %s: %s", job_id, exc)
                     model_url = None
 
                 # Run printability check

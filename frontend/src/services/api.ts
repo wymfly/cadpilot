@@ -37,26 +37,35 @@ export function createSSEConnection(
 ): EventSource {
   const source = new EventSource(url);
 
+  const safeParse = (raw: string): unknown => {
+    try { return JSON.parse(raw); }
+    catch (err) { console.warn('Failed to parse SSE data:', raw, err); return null; }
+  };
+
   // Named event listeners (for backend events with `event: xxx` field)
   if (handlers.onProgress) {
     source.addEventListener('progress', (e: MessageEvent) => {
-      handlers.onProgress!(JSON.parse(e.data));
+      const data = safeParse(e.data);
+      if (data) handlers.onProgress!(data);
     });
   }
   if (handlers.onComplete) {
     source.addEventListener('completed', (e: MessageEvent) => {
-      handlers.onComplete!(JSON.parse(e.data));
+      const data = safeParse(e.data);
+      if (data) handlers.onComplete!(data);
     });
   }
   if (handlers.onError) {
     source.addEventListener('failed', (e: MessageEvent) => {
-      handlers.onError!(JSON.parse(e.data));
+      const data = safeParse(e.data);
+      if (data) handlers.onError!(data);
     });
   }
 
   // Fallback: generic messages without event type
   source.onmessage = (e: MessageEvent) => {
-    const data = JSON.parse(e.data);
+    const data = safeParse(e.data) as Record<string, unknown> | null;
+    if (!data) return;
     if (data.event === 'progress' && handlers.onProgress) {
       handlers.onProgress(data);
     } else if (data.event === 'completed' && handlers.onComplete) {

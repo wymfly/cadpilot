@@ -143,7 +143,7 @@ async function consumeSSE(
             if (!jsonStr) continue;
             try {
               handleSSEEvent(JSON.parse(jsonStr), setState);
-            } catch { /* skip */ }
+            } catch (e) { console.warn('Failed to parse SSE event:', jsonStr, e); }
           }
         }
       }

@@ -70,7 +70,7 @@ async function consumeSSE(
           if (line.startsWith('data:')) {
             const jsonStr = line.slice(5).trim();
             if (!jsonStr) continue;
-            try { onEvent(JSON.parse(jsonStr)); } catch { /* skip */ }
+            try { onEvent(JSON.parse(jsonStr)); } catch (e) { console.warn('Failed to parse SSE event:', jsonStr, e); }
           }
         }
       }

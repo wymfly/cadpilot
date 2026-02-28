@@ -302,6 +302,7 @@ async def generate_organic(
                 status=OrganicJobStatus.COMPLETED,
                 progress=1.0,
                 result=result,
+                printability_result=printability_data,
             )
             result_data = result.model_dump()
             yield _sse_event(
@@ -357,11 +358,15 @@ async def generate_organic_upload(
 
     # Save to temp location
     upload_dir = Path("outputs") / "organic" / "uploads"
-    upload_dir.mkdir(parents=True, exist_ok=True)
     file_id = str(uuid.uuid4())
     ext = Path(file.filename or "image.png").suffix or _ext_from_mime(file.content_type)
     save_path = upload_dir / f"{file_id}{ext}"
-    save_path.write_bytes(content)
+
+    def _write_upload() -> None:
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        save_path.write_bytes(content)
+
+    await asyncio.to_thread(_write_upload)
 
     return {"file_id": file_id, "filename": file.filename or "", "size": len(content)}
 
@@ -457,7 +462,8 @@ async def _read_uploaded_image(file_id: str | None) -> tuple[bytes, str] | None:
             detail=f"Uploaded image {file_id} not found. Please re-upload.",
         )
     ext = matches[0].suffix.lstrip(".")  # e.g. "png", "jpg", "webp"
-    return matches[0].read_bytes(), ext
+    image_bytes = await asyncio.to_thread(matches[0].read_bytes)
+    return image_bytes, ext
 
 
 # ---------------------------------------------------------------------------
