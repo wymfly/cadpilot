@@ -205,11 +205,18 @@ async def get_job_endpoint(job_id: str) -> JobDetailResponse:
 
 @router.delete("/{job_id}")
 async def delete_job_endpoint(job_id: str) -> dict[str, str]:
-    """软删除 Job（标记为 failed + 设置 error）。"""
+    """软删除 Job（设置 deleted_at 时间戳）。"""
     job = await get_job(job_id)
     if job is None:
         raise JobNotFoundError(job_id)
-    await update_job(job_id, status=JobStatus.FAILED, error="deleted by user")
+
+    from backend.db.database import async_session
+    from backend.db.repository import soft_delete_job
+
+    async with async_session() as session:
+        await soft_delete_job(session, job_id)
+        await session.commit()
+
     return {"job_id": job_id, "status": "deleted"}
 
 
@@ -264,3 +271,41 @@ async def regenerate_job(job_id: str) -> RegenerateResponse:
     await create_job(new_job_id, input_type=job.input_type, input_text=job.input_text)
 
     return RegenerateResponse(new_job_id=new_job_id, status="created")
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/jobs/{job_id}/corrections — 用户修正记录
+# ---------------------------------------------------------------------------
+
+
+class CorrectionItem(BaseModel):
+    """单条用户修正记录。"""
+
+    field_path: str
+    original_value: str
+    corrected_value: str
+    timestamp: str
+
+
+@router.get("/{job_id}/corrections")
+async def get_job_corrections(job_id: str) -> list[CorrectionItem]:
+    """返回 Job 的所有用户修正记录。"""
+    job = await get_job(job_id)
+    if job is None:
+        raise JobNotFoundError(job_id)
+
+    from backend.db.database import async_session
+    from backend.db.repository import list_corrections_by_job
+
+    async with async_session() as session:
+        corrections = await list_corrections_by_job(session, job_id)
+
+    return [
+        CorrectionItem(
+            field_path=c.field_path,
+            original_value=c.original_value,
+            corrected_value=c.corrected_value,
+            timestamp=c.timestamp.isoformat() if c.timestamp else "",
+        )
+        for c in corrections
+    ]

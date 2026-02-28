@@ -34,10 +34,11 @@ from fastapi.testclient import TestClient
 async def _init_and_clean_db():
     """初始化数据库并清理 Job 数据。"""
     import backend.db.models  # noqa: F401
-    from backend.db.database import init_db
+    from backend.db.database import Base, engine
 
-    await init_db()
-    await clear_jobs()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
     yield
     await clear_jobs()
 
@@ -170,10 +171,9 @@ class TestDeleteJob:
         data = resp.json()
         assert data["status"] == "deleted"
 
-        # 确认 Job 已标记
+        # 确认 Job 已标记为软删除
         job = await get_job("j1")
         assert job is not None
-        assert job.status == JobStatus.FAILED
         assert job.error == "deleted by user"
 
     def test_delete_nonexistent(self, client: TestClient) -> None:

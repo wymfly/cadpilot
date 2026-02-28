@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from backend.db.models import JobModel, OrganicJobModel, UserCorrectionModel
-
 
 # ---------------------------------------------------------------------------
 # JobModel CRUD
@@ -45,6 +45,20 @@ async def update_job(
     return job
 
 
+async def soft_delete_job(
+    session: AsyncSession, job_id: str,
+) -> JobModel:
+    """Soft-delete a job by setting deleted_at. Raises KeyError if not found."""
+    job = await session.get(JobModel, job_id)
+    if job is None:
+        raise KeyError(f"Job {job_id} not found")
+    job.deleted_at = datetime.now(timezone.utc)
+    job.status = "failed"
+    job.error = "deleted by user"
+    await session.flush()
+    return job
+
+
 async def list_jobs(
     session: AsyncSession,
     page: int = 1,
@@ -55,9 +69,12 @@ async def list_jobs(
     """Return a paginated list of jobs and total count.
 
     Filters by status and/or input_type when provided.
+    Excludes soft-deleted jobs.
     """
-    stmt = select(JobModel)
-    count_stmt = select(func.count()).select_from(JobModel)
+    stmt = select(JobModel).where(JobModel.deleted_at.is_(None))
+    count_stmt = select(func.count()).select_from(JobModel).where(
+        JobModel.deleted_at.is_(None),
+    )
 
     if status is not None:
         stmt = stmt.where(JobModel.status == status)
@@ -165,3 +182,52 @@ async def list_corrections_by_job(
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+# ---------------------------------------------------------------------------
+# SQLiteJobRepository — 封装类实现 JobRepository Protocol
+# ---------------------------------------------------------------------------
+
+
+class SQLiteJobRepository:
+    """SQLite 实现的 JobRepository，封装独立的 CRUD 函数。
+
+    每个方法自动管理 session + commit，调用方无需手动管理事务。
+    """
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def create(self, job_id: str, **kwargs: Any) -> JobModel:
+        async with self._session_factory() as session:
+            job = await create_job(session, job_id, **kwargs)
+            await session.commit()
+            return job
+
+    async def get(self, job_id: str) -> JobModel | None:
+        async with self._session_factory() as session:
+            return await get_job(session, job_id)
+
+    async def update(self, job_id: str, **kwargs: Any) -> JobModel:
+        async with self._session_factory() as session:
+            job = await update_job(session, job_id, **kwargs)
+            await session.commit()
+            return job
+
+    async def soft_delete(self, job_id: str) -> None:
+        async with self._session_factory() as session:
+            await soft_delete_job(session, job_id)
+            await session.commit()
+
+    async def list(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        status: str | None = None,
+        input_type: str | None = None,
+    ) -> tuple[list[JobModel], int]:
+        async with self._session_factory() as session:
+            return await list_jobs(
+                session, page=page, page_size=page_size,
+                status=status, input_type=input_type,
+            )
