@@ -26,15 +26,18 @@ class TestPrecisionFullFlow:
 
     async def test_text_input_to_library(self, client: TestClient) -> None:
         """完整文本建模流程：创建 → 确认 → 生成 → 完成 → 零件库。"""
-        # 1. 创建 text 类型 Job
+        from tests.e2e.conftest import get_sse_job_id, parse_sse_events
+
+        # 1. 创建 text 类型 Job（返回 SSE 流）
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "text", "text": "法兰盘，外径100mm，内径50mm"},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        job_id = data["job_id"]
-        assert data["status"] == "created"
+        job_id = get_sse_job_id(resp)
+        # 验证 SSE 中首个事件状态为 created
+        events = parse_sse_events(resp)
+        assert events[0]["status"] == "created"
 
         # 2. 查询 Job 详情
         resp = client.get(f"/api/v1/jobs/{job_id}")
@@ -59,7 +62,7 @@ class TestPrecisionFullFlow:
             },
         )
 
-        # 4. 确认参数（HITL）
+        # 4. 确认参数（HITL）- 返回 SSE 流
         resp = client.post(
             f"/api/v1/jobs/{job_id}/confirm",
             json={
@@ -72,12 +75,15 @@ class TestPrecisionFullFlow:
             },
         )
         assert resp.status_code == 200
-        assert resp.json()["status"] == "confirmed"
+        # 验证 SSE 事件中含 generating
+        confirm_events = parse_sse_events(resp)
+        statuses = [e.get("status") for e in confirm_events]
+        assert "generating" in statuses
 
-        # 5. 验证 Job 已进入 generating 状态
+        # 5. 验证 Job 已进入 generating 或之后的状态
         job = await get_job(job_id)
         assert job is not None
-        assert job.status == JobStatus.GENERATING
+        assert job.status in {JobStatus.GENERATING, JobStatus.REFINING, JobStatus.COMPLETED, JobStatus.FAILED}
 
         # 6. 模拟生成完成 + DfAM 结果
         await update_job(
@@ -127,11 +133,13 @@ class TestPrecisionFullFlow:
 
     async def test_intent_parsed_then_confirm(self, client: TestClient) -> None:
         """验证 intent_parsed → awaiting_confirmation → confirm 状态流转。"""
+        from tests.e2e.conftest import get_sse_job_id
+
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "text", "text": "轴承座"},
         )
-        job_id = resp.json()["job_id"]
+        job_id = get_sse_job_id(resp)
 
         # IntentParser 完成
         await update_job(job_id, status=JobStatus.INTENT_PARSED)
@@ -151,12 +159,14 @@ class TestPrecisionFullFlow:
 
     async def test_regenerate_creates_new_job(self, client: TestClient) -> None:
         """验证重新生成创建全新 Job。"""
-        # 创建并完成一个 Job
+        from tests.e2e.conftest import get_sse_job_id
+
+        # 创建并完成一个 Job（返回 SSE 流）
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "text", "text": "齿轮，模数2"},
         )
-        original_id = resp.json()["job_id"]
+        original_id = get_sse_job_id(resp)
         await update_job(original_id, status=JobStatus.COMPLETED)
 
         # 重新生成

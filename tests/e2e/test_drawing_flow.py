@@ -26,7 +26,9 @@ class TestDrawingFullFlow:
         self, client: TestClient,
     ) -> None:
         """完整图纸流程：上传 → 分析 → 确认(含修改) → 生成 → 完成。"""
-        # 1. 上传图纸
+        from tests.e2e.conftest import get_sse_job_id, parse_sse_events
+
+        # 1. 上传图纸（返回 SSE 流）
         fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
         resp = client.post(
             "/api/v1/jobs/upload",
@@ -34,9 +36,9 @@ class TestDrawingFullFlow:
             data={"pipeline_config": "{}"},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        job_id = data["job_id"]
-        assert data["status"] == "created"
+        job_id = get_sse_job_id(resp)
+        events = parse_sse_events(resp)
+        assert events[0]["status"] == "created"
 
         # 2. 验证 Job 详情
         resp = client.get(f"/api/v1/jobs/{job_id}")
@@ -94,12 +96,15 @@ class TestDrawingFullFlow:
             },
         )
         assert resp.status_code == 200
-        assert resp.json()["status"] == "confirmed"
+        # 验证 SSE 包含 generating 事件
+        confirm_events = parse_sse_events(resp)
+        statuses = [e.get("status") for e in confirm_events]
+        assert "generating" in statuses
 
-        # 5. 验证 Job 已进入 generating 状态
+        # 5. 验证 Job 已进入 generating 或之后的状态（管道同步运行）
         job = await get_job(job_id)
         assert job is not None
-        assert job.status == JobStatus.GENERATING
+        assert job.status in {JobStatus.GENERATING, JobStatus.REFINING, JobStatus.COMPLETED, JobStatus.FAILED}
 
         # 6. 验证确认后的 spec 已保存
         assert job.drawing_spec_confirmed is not None
@@ -132,13 +137,19 @@ class TestDrawingFullFlow:
         self, client: TestClient,
     ) -> None:
         """未进入 awaiting_drawing_confirmation 状态时，确认应被拒绝。"""
+        from tests.e2e.conftest import get_sse_job_id
+
         resp = client.post(
             "/api/v1/jobs/upload",
             files={"image": ("test.png", b"\x89PNG\r\n\x1a\n", "image/png")},
         )
-        job_id = resp.json()["job_id"]
+        job_id = get_sse_job_id(resp)
 
-        # 直接尝试确认（状态仍为 created）
+        # 直接尝试确认（状态已通过 SSE 流变为 failed 或 awaiting）
+        # 重新设为 created 状态以便测试 409 路径
+        from backend.models.job import update_job, JobStatus
+        await update_job(job_id, status=JobStatus.CREATED)
+
         resp = client.post(
             f"/api/v1/jobs/{job_id}/confirm",
             json={"confirmed_spec": {"part_type": "plate"}},

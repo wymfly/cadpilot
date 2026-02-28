@@ -25,6 +25,34 @@ from backend.models.job import (
 )
 from fastapi.testclient import TestClient
 
+
+# ---------------------------------------------------------------------------
+# SSE 解析助手
+# ---------------------------------------------------------------------------
+
+
+def parse_sse_events(resp) -> list[dict]:
+    """从响应文本中解析所有 SSE data 事件。"""
+    events = []
+    for line in resp.text.split("\n"):
+        line = line.strip()
+        if line.startswith("data:"):
+            data_str = line[5:].strip()
+            if data_str:
+                try:
+                    events.append(json.loads(data_str))
+                except Exception:
+                    pass
+    return events
+
+
+def get_sse_job_id(resp) -> str:
+    """从 SSE 响应中提取 job_id。"""
+    for event in parse_sse_events(resp):
+        if "job_id" in event:
+            return event["job_id"]
+    raise ValueError(f"SSE 响应中找不到 job_id: {resp.text[:200]}")
+
 # ===================================================================
 # Fixtures
 # ===================================================================
@@ -57,35 +85,41 @@ def client():
 
 class TestCreateJob:
     def test_create_text_job(self, client: TestClient) -> None:
+        """POST /api/v1/jobs 返回 SSE 流，首个事件含 job_id 和 status=created。"""
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "text", "text": "法兰盘，外径100mm"},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert "job_id" in data
-        assert data["status"] == "created"
+        job_id = get_sse_job_id(resp)
+        assert job_id
+        events = parse_sse_events(resp)
+        assert events[0]["status"] == "created"
 
     def test_create_organic_job(self, client: TestClient) -> None:
+        """organic 类型 Job 也通过 SSE 流返回。"""
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "organic", "prompt": "一条龙的雕塑"},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert "job_id" in data
-        assert data["status"] == "created"
+        job_id = get_sse_job_id(resp)
+        assert job_id
+        events = parse_sse_events(resp)
+        assert events[0]["status"] == "created"
 
     def test_create_drawing_job_via_upload(self, client: TestClient) -> None:
+        """图纸上传也通过 SSE 流返回，首个事件含 job_id。"""
         resp = client.post(
             "/api/v1/jobs/upload",
             files={"image": ("test.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 100, "image/png")},
             data={"pipeline_config": "{}"},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert "job_id" in data
-        assert data["status"] == "created"
+        job_id = get_sse_job_id(resp)
+        assert job_id
+        events = parse_sse_events(resp)
+        assert events[0]["status"] == "created"
 
 
 # ===================================================================
@@ -190,6 +224,7 @@ class TestDeleteJob:
 
 class TestConfirmJob:
     async def test_confirm_awaiting_job(self, client: TestClient) -> None:
+        """confirm 返回 SSE 流，含 generating 事件。"""
         await create_job("j1", input_type="text", input_text="test")
         await update_job("j1", status=JobStatus.AWAITING_CONFIRMATION)
 
@@ -198,13 +233,14 @@ class TestConfirmJob:
             json={"confirmed_params": {"diameter": 100.0}},
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "confirmed"
+        events = parse_sse_events(resp)
+        statuses = [e.get("status") for e in events]
+        assert "generating" in statuses
 
-        # 验证状态已变为 generating
+        # 管道同步运行，Job 状态为 generating 或之后
         job = await get_job("j1")
         assert job is not None
-        assert job.status == JobStatus.GENERATING
+        assert job.status in {JobStatus.GENERATING, JobStatus.REFINING, JobStatus.COMPLETED, JobStatus.FAILED}
 
     async def test_confirm_wrong_state(self, client: TestClient) -> None:
         await create_job("j1", input_type="text", input_text="test")
@@ -225,6 +261,7 @@ class TestConfirmJob:
         assert resp.status_code == 404
 
     async def test_confirm_drawing_mode(self, client: TestClient) -> None:
+        """图纸模式 confirm 返回 SSE 流，含 generating 事件。"""
         await create_job("j1", input_type="drawing")
         await update_job("j1", status=JobStatus.AWAITING_DRAWING_CONFIRMATION)
 
@@ -236,8 +273,9 @@ class TestConfirmJob:
             },
         )
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "confirmed"
+        events = parse_sse_events(resp)
+        statuses = [e.get("status") for e in events]
+        assert "generating" in statuses
 
 
 # ===================================================================

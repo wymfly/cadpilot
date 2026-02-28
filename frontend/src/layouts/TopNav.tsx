@@ -16,11 +16,19 @@ const TABS: NavTab[] = [
   { key: 'precision', path: '/precision', label: '精密建模' },
   { key: 'organic', path: '/organic', label: '创意雕塑' },
   { key: 'library', path: '/library', label: '零件库' },
+  { key: 'templates', path: '/templates', label: '模板' },
+  { key: 'standards', path: '/standards', label: '标准' },
+  { key: 'benchmark', path: '/benchmark', label: '评测' },
+  { key: 'settings', path: '/settings', label: '设置' },
 ];
 
 function getActiveTab(pathname: string): string {
   if (pathname.startsWith('/organic')) return 'organic';
   if (pathname.startsWith('/library')) return 'library';
+  if (pathname.startsWith('/templates')) return 'templates';
+  if (pathname.startsWith('/standards')) return 'standards';
+  if (pathname.startsWith('/benchmark')) return 'benchmark';
+  if (pathname.startsWith('/settings')) return 'settings';
   return 'precision';
 }
 

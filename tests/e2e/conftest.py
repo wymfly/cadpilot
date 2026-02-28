@@ -3,15 +3,45 @@
 所有 E2E 测试共享：
 - 数据库初始化/清理
 - FastAPI TestClient
-- 常用辅助函数
+- 常用辅助函数（含 SSE 解析）
 """
 
 from __future__ import annotations
+
+import json
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.models.job import clear_jobs
+
+
+# ---------------------------------------------------------------------------
+# SSE 解析助手
+# ---------------------------------------------------------------------------
+
+
+def parse_sse_events(resp) -> list[dict]:
+    """从响应文本中解析所有 SSE data 事件，返回已解析 dict 列表。"""
+    events = []
+    for line in resp.text.split("\n"):
+        line = line.strip()
+        if line.startswith("data:"):
+            data_str = line[5:].strip()
+            if data_str:
+                try:
+                    events.append(json.loads(data_str))
+                except Exception:
+                    pass
+    return events
+
+
+def get_sse_job_id(resp) -> str:
+    """从 SSE 响应的首个事件中提取 job_id。"""
+    for event in parse_sse_events(resp):
+        if "job_id" in event:
+            return event["job_id"]
+    raise ValueError(f"SSE 响应中找不到 job_id: {resp.text[:200]}")
 
 
 @pytest.fixture(autouse=True)

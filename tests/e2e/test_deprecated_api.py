@@ -27,16 +27,19 @@ class TestV1CanonicalEndpoints:
         assert resp.status_code == 200
 
     def test_v1_jobs_create(self, client: TestClient) -> None:
-        """POST /api/v1/jobs 创建 Job。"""
+        """POST /api/v1/jobs 创建 Job（返回 SSE 流）。"""
+        from tests.e2e.conftest import get_sse_job_id
+
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "text", "text": "test"},
         )
         assert resp.status_code == 200
-        assert "job_id" in resp.json()
+        job_id = get_sse_job_id(resp)
+        assert job_id  # job_id 存在于 SSE 事件中
 
     def test_v1_upload_exists(self, client: TestClient) -> None:
-        """POST /api/v1/jobs/upload 图纸上传端点存在。"""
+        """POST /api/v1/jobs/upload 图纸上传端点存在（返回 SSE 流）。"""
         resp = client.post(
             "/api/v1/jobs/upload",
             files={"image": ("test.png", b"\x89PNG\r\n\x1a\n", "image/png")},

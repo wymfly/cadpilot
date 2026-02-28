@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { Layout, Button, Drawer } from 'antd';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useOutletContext } from 'react-router-dom';
 import TopNav from './TopNav.tsx';
 import { useTheme } from '../contexts/ThemeContext.tsx';
 
@@ -38,6 +38,19 @@ export interface WorkbenchOutletContext {
   setPanels: (panels: WorkbenchPanels) => void;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
+}
+
+/** 全宽页面包装器：不使用左右面板，中央区域占满 */
+export function FullWidthPage({ children }: { children: ReactNode }) {
+  const { setPanels } = useOutletContext<WorkbenchOutletContext>();
+  useEffect(() => {
+    setPanels({});
+  }, [setPanels]);
+  return (
+    <div style={{ padding: 24, height: '100%', overflow: 'auto' }}>
+      {children}
+    </div>
+  );
 }
 
 function useMediaQuery(query: string): boolean {
@@ -184,7 +197,10 @@ export default function WorkbenchLayout() {
     );
   }
 
-  // 桌面端：三栏布局
+  const hasLeftPanel = !!panels.left;
+  const hasRightPanel = !!panels.right;
+
+  // 桌面端：三栏布局（无面板内容时自动全宽）
   return (
     <Layout style={{ minHeight: '100vh', background: layoutBg }}>
       <TopNav />
@@ -196,35 +212,38 @@ export default function WorkbenchLayout() {
           position: 'relative',
         }}
       >
-        {/* 左面板 */}
-        <div
-          style={{
-            width: leftCollapsed ? 0 : LEFT_WIDTH,
-            minWidth: leftCollapsed ? 0 : LEFT_WIDTH,
-            background: panelBg,
-            borderRight: leftCollapsed ? 'none' : `1px solid ${borderColor}`,
-            overflow: leftCollapsed ? 'hidden' : 'auto',
-            transition: 'width 0.2s, min-width 0.2s',
-            position: 'relative',
-            padding: leftCollapsed ? 0 : 16,
-          }}
-        >
-          {!leftCollapsed && panels.left}
-        </div>
+        {/* 左面板（仅在有内容时渲染） */}
+        {hasLeftPanel && (
+          <>
+            <div
+              style={{
+                width: leftCollapsed ? 0 : LEFT_WIDTH,
+                minWidth: leftCollapsed ? 0 : LEFT_WIDTH,
+                background: panelBg,
+                borderRight: leftCollapsed ? 'none' : `1px solid ${borderColor}`,
+                overflow: leftCollapsed ? 'hidden' : 'auto',
+                transition: 'width 0.2s, min-width 0.2s',
+                position: 'relative',
+                padding: leftCollapsed ? 0 : 16,
+              }}
+            >
+              {!leftCollapsed && panels.left}
+            </div>
 
-        {/* 左面板折叠按钮 */}
-        <Button
-          type="text"
-          size="small"
-          icon={leftCollapsed ? <RightOutlined /> : <LeftOutlined />}
-          onClick={toggleLeft}
-          style={{
-            ...collapseButtonStyle,
-            left: leftCollapsed ? 0 : LEFT_WIDTH - 10,
-          }}
-        />
+            <Button
+              type="text"
+              size="small"
+              icon={leftCollapsed ? <RightOutlined /> : <LeftOutlined />}
+              onClick={toggleLeft}
+              style={{
+                ...collapseButtonStyle,
+                left: leftCollapsed ? 0 : LEFT_WIDTH - 10,
+              }}
+            />
+          </>
+        )}
 
-        {/* 中央 3D 预览区 */}
+        {/* 中央区域 */}
         <div
           style={{
             flex: 1,
@@ -236,33 +255,36 @@ export default function WorkbenchLayout() {
           <Outlet context={outletContext} />
         </div>
 
-        {/* 右面板折叠按钮 */}
-        <Button
-          type="text"
-          size="small"
-          icon={rightCollapsed ? <LeftOutlined /> : <RightOutlined />}
-          onClick={toggleRight}
-          style={{
-            ...collapseButtonStyle,
-            right: rightCollapsed ? 0 : RIGHT_WIDTH - 10,
-          }}
-        />
+        {/* 右面板（仅在有内容时渲染） */}
+        {hasRightPanel && (
+          <>
+            <Button
+              type="text"
+              size="small"
+              icon={rightCollapsed ? <LeftOutlined /> : <RightOutlined />}
+              onClick={toggleRight}
+              style={{
+                ...collapseButtonStyle,
+                right: rightCollapsed ? 0 : RIGHT_WIDTH - 10,
+              }}
+            />
 
-        {/* 右面板 */}
-        <div
-          style={{
-            width: rightCollapsed ? 0 : RIGHT_WIDTH,
-            minWidth: rightCollapsed ? 0 : RIGHT_WIDTH,
-            background: panelBg,
-            borderLeft: rightCollapsed ? 'none' : `1px solid ${borderColor}`,
-            overflow: rightCollapsed ? 'hidden' : 'auto',
-            transition: 'width 0.2s, min-width 0.2s',
-            position: 'relative',
-            padding: rightCollapsed ? 0 : 16,
-          }}
-        >
-          {!rightCollapsed && panels.right}
-        </div>
+            <div
+              style={{
+                width: rightCollapsed ? 0 : RIGHT_WIDTH,
+                minWidth: rightCollapsed ? 0 : RIGHT_WIDTH,
+                background: panelBg,
+                borderLeft: rightCollapsed ? 'none' : `1px solid ${borderColor}`,
+                overflow: rightCollapsed ? 'hidden' : 'auto',
+                transition: 'width 0.2s, min-width 0.2s',
+                position: 'relative',
+                padding: rightCollapsed ? 0 : 16,
+              }}
+            >
+              {!rightCollapsed && panels.right}
+            </div>
+          </>
+        )}
       </div>
     </Layout>
   );

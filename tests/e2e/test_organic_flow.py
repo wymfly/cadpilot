@@ -24,7 +24,9 @@ class TestOrganicFullFlow:
 
     async def test_organic_job_lifecycle(self, client: TestClient) -> None:
         """Organic Job 完整生命周期: created → generating → completed。"""
-        # 1. 通过 V1 API 创建 organic 类型 Job
+        from tests.e2e.conftest import get_sse_job_id, parse_sse_events
+
+        # 1. 通过 V1 API 创建 organic 类型 Job（返回 SSE 流）
         resp = client.post(
             "/api/v1/jobs",
             json={
@@ -35,9 +37,9 @@ class TestOrganicFullFlow:
             },
         )
         assert resp.status_code == 200
-        data = resp.json()
-        job_id = data["job_id"]
-        assert data["status"] == "created"
+        job_id = get_sse_job_id(resp)
+        events = parse_sse_events(resp)
+        assert events[0]["status"] == "created"
 
         # 2. 查询 Job 详情
         resp = client.get(f"/api/v1/jobs/{job_id}")
@@ -95,11 +97,13 @@ class TestOrganicFullFlow:
         self, client: TestClient,
     ) -> None:
         """Organic Job 失败场景。"""
+        from tests.e2e.conftest import get_sse_job_id
+
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "organic", "prompt": "test"},
         )
-        job_id = resp.json()["job_id"]
+        job_id = get_sse_job_id(resp)
 
         # 模拟生成失败
         await update_job(
@@ -115,11 +119,13 @@ class TestOrganicFullFlow:
 
     async def test_organic_regenerate(self, client: TestClient) -> None:
         """Organic Job 重新生成。"""
+        from tests.e2e.conftest import get_sse_job_id
+
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "organic", "prompt": "猫咪雕像"},
         )
-        original_id = resp.json()["job_id"]
+        original_id = get_sse_job_id(resp)
         await update_job(original_id, status=JobStatus.COMPLETED)
 
         resp = client.post(f"/api/v1/jobs/{original_id}/regenerate")

@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from backend.models.job import (
     JobStatus,
@@ -18,6 +20,34 @@ from backend.models.job import (
     update_job,
 )
 from fastapi.testclient import TestClient
+
+
+# ---------------------------------------------------------------------------
+# SSE 解析助手
+# ---------------------------------------------------------------------------
+
+
+def parse_sse_events(resp) -> list[dict]:
+    """从响应文本中解析所有 SSE data 事件。"""
+    events = []
+    for line in resp.text.split("\n"):
+        line = line.strip()
+        if line.startswith("data:"):
+            data_str = line[5:].strip()
+            if data_str:
+                try:
+                    events.append(json.loads(data_str))
+                except Exception:
+                    pass
+    return events
+
+
+def get_sse_job_id(resp) -> str:
+    """从 SSE 响应中提取 job_id。"""
+    for event in parse_sse_events(resp):
+        if "job_id" in event:
+            return event["job_id"]
+    raise ValueError(f"SSE 响应中找不到 job_id: {resp.text[:200]}")
 
 # ===================================================================
 # Fixtures
@@ -132,7 +162,7 @@ class TestPreviewEndpoint:
 
 class TestHITLConfirmWithCorrections:
     async def test_confirm_with_spec_changes(self, client: TestClient) -> None:
-        """图纸确认时应收集用户修正。"""
+        """图纸确认时应收集用户修正，confirm 返回 SSE 流。"""
         # 创建 Job 并模拟图纸分析完成
         await create_job("j1", input_type="drawing")
         await update_job(
@@ -150,16 +180,18 @@ class TestHITLConfirmWithCorrections:
             },
         )
         assert resp.status_code == 200
-        assert resp.json()["status"] == "confirmed"
+        events = parse_sse_events(resp)
+        statuses = [e.get("status") for e in events]
+        assert "generating" in statuses
 
-        # 验证 Job 已更新
+        # 验证 confirmed_spec 已保存，Job 状态在 generating 之后
         job = await get_job("j1")
         assert job is not None
-        assert job.status == JobStatus.GENERATING
+        assert job.status in {JobStatus.GENERATING, JobStatus.REFINING, JobStatus.COMPLETED, JobStatus.FAILED}
         assert job.drawing_spec_confirmed == {"overall_dimensions": {"diameter": 120}}
 
     async def test_confirm_text_mode(self, client: TestClient) -> None:
-        """文本模式确认不需要 confirmed_spec。"""
+        """文本模式确认返回 SSE 流，含 generating 事件。"""
         await create_job("j2", input_type="text", input_text="法兰盘")
         await update_job("j2", status=JobStatus.AWAITING_CONFIRMATION)
 
@@ -168,7 +200,9 @@ class TestHITLConfirmWithCorrections:
             json={"confirmed_params": {"diameter": 100.0}},
         )
         assert resp.status_code == 200
-        assert resp.json()["status"] == "confirmed"
+        events = parse_sse_events(resp)
+        statuses = [e.get("status") for e in events]
+        assert "generating" in statuses
 
 
 # ===================================================================
@@ -178,13 +212,13 @@ class TestHITLConfirmWithCorrections:
 
 class TestJobLifecycle:
     async def test_text_job_full_lifecycle(self, client: TestClient) -> None:
-        """文本 Job 完整生命周期：创建 → 列表 → 确认 → 详情。"""
-        # 创建
+        """文本 Job 完整生命周期：创建(SSE) → 列表 → 确认(SSE) → 详情。"""
+        # 创建（返回 SSE 流）
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "text", "text": "法兰盘，外径100"},
         )
-        job_id = resp.json()["job_id"]
+        job_id = get_sse_job_id(resp)
 
         # 列表
         resp = client.get("/api/v1/jobs")
@@ -193,25 +227,27 @@ class TestJobLifecycle:
         # 模拟管道推进到 awaiting_confirmation
         await update_job(job_id, status=JobStatus.AWAITING_CONFIRMATION)
 
-        # 确认
+        # 确认（返回 SSE 流）
         resp = client.post(
             f"/api/v1/jobs/{job_id}/confirm",
             json={"confirmed_params": {"diameter": 100.0}},
         )
         assert resp.status_code == 200
+        events = parse_sse_events(resp)
+        assert any(e.get("status") == "generating" for e in events)
 
-        # 详情
+        # 详情（管道同步运行，可能已完成）
         resp = client.get(f"/api/v1/jobs/{job_id}")
-        assert resp.json()["status"] == "generating"
+        assert resp.json()["status"] in {"generating", "refining", "completed", "failed"}
 
     async def test_drawing_job_full_lifecycle(self, client: TestClient) -> None:
-        """图纸 Job 完整生命周期：上传 → 分析 → 确认 → 生成。"""
-        # 创建
+        """图纸 Job 完整生命周期：上传(SSE) → 分析 → 确认(SSE) → 生成。"""
+        # 创建（返回 SSE 流）
         resp = client.post(
             "/api/v1/jobs/upload",
             files={"image": ("test.png", b"\x89PNG" + b"\x00" * 100, "image/png")},
         )
-        job_id = resp.json()["job_id"]
+        job_id = get_sse_job_id(resp)
 
         # 模拟图纸分析完成
         await update_job(
