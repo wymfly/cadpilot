@@ -23,8 +23,8 @@ from unittest.mock import MagicMock
 
 # Top-level package names that should be auto-stubbed.
 _STUB_ROOTS: frozenset[str] = frozenset({
-    "langchain",
-    "langchain_core",
+    # langchain / langchain_core — NOT stubbed; langgraph depends on real
+    # langchain_core classes at import time (metaclass resolution).
     "langchain_experimental",
     "langchain_openai",
     "langchain_anthropic",

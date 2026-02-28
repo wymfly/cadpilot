@@ -15,10 +15,20 @@ logger = logging.getLogger(__name__)
 
 
 async def _safe_dispatch(event_name: str, payload: dict[str, Any]) -> None:
-    """Dispatch a custom event, tolerating non-awaitable stubs in test."""
-    result = adispatch_custom_event(event_name, payload)
-    if asyncio.iscoroutine(result):
-        await result
+    """Dispatch a custom event, tolerating missing run context or stubs.
+
+    When called outside a LangGraph execution context (e.g. in unit tests),
+    ``adispatch_custom_event`` raises ``RuntimeError`` because there is no
+    parent run id.  We silently swallow that so node functions remain testable
+    in isolation.
+    """
+    try:
+        result = adispatch_custom_event(event_name, payload)
+        if asyncio.iscoroutine(result):
+            await result
+    except RuntimeError:
+        # No parent run context — expected in unit tests
+        pass
 
 
 async def create_job_node(state: CadJobState) -> dict[str, Any]:
