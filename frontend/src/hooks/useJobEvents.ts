@@ -102,20 +102,19 @@ export function useJobEvents({
       }
     };
 
-    // 后端使用命名 SSE 事件（event: generating 等），
+    // 后端使用命名 SSE 事件（event: job.generating 等），
     // EventSource.onmessage 不会捕获命名事件，必须逐一注册。
     const SSE_EVENT_TYPES = [
       'status',
       'progress',
-      'job_created',
-      'intent_parsed',
-      'awaiting_confirmation',
-      'analyzing',
-      'drawing_spec_ready',
-      'generating',
-      'refining',
-      'completed',
-      'failed',
+      'job.created',
+      'job.intent_analyzed',
+      'job.awaiting_confirmation',
+      'job.vision_analyzing',
+      'job.spec_ready',
+      'job.generating',
+      'job.completed',
+      'job.failed',
     ] as const;
 
     for (const eventType of SSE_EVENT_TYPES) {
@@ -123,8 +122,9 @@ export function useJobEvents({
         const data = safeParse(e.data);
         if (!data) return;
         // 确保 status 字段与事件类型一致
-        if (eventType === 'completed' || eventType === 'failed') {
-          handleEvent({ ...data, status: eventType });
+        if (eventType === 'job.completed' || eventType === 'job.failed') {
+          const terminalStatus = eventType === 'job.completed' ? 'completed' : 'failed';
+          handleEvent({ ...data, status: terminalStatus });
         } else {
           handleEvent(data);
         }
