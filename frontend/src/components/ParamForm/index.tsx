@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { Form, Button, Card, Space, Typography, Tag, Empty } from 'antd';
-import { CheckOutlined, UndoOutlined } from '@ant-design/icons';
+import { CheckOutlined, UndoOutlined, EyeOutlined, EyeInvisibleOutlined, SyncOutlined } from '@ant-design/icons';
 import ParamField from './ParamField.tsx';
 import ConstraintAlert from './ConstraintAlert.tsx';
 import type { ParamDefinition } from '../../types/template.ts';
 import type { ParamRecommendation, ConstraintViolation } from '../../types/standard.ts';
+import type { PreviewStatus } from '../../hooks/useParametricPreview.ts';
 
 const { Title, Text } = Typography;
 
@@ -13,6 +14,8 @@ export interface ParamFormProps {
   values: Record<string, number | string | boolean>;
   recommendations?: ParamRecommendation[];
   violations?: ConstraintViolation[];
+  previewStatus?: PreviewStatus;
+  onRetryPreview?: () => void;
   onChange: (name: string, value: number | string | boolean) => void;
   onConfirm: () => void;
   onReset?: () => void;
@@ -25,6 +28,8 @@ export default function ParamForm({
   values,
   recommendations = [],
   violations = [],
+  previewStatus,
+  onRetryPreview,
   onChange,
   onConfirm,
   onReset,
@@ -60,6 +65,31 @@ export default function ParamForm({
           <Tag>{params.length} 个参数</Tag>
           {recommendations.length > 0 && (
             <Tag color="blue">{recommendations.length} 个推荐</Tag>
+          )}
+          {previewStatus && (
+            previewStatus.loading ? (
+              <Tag icon={<SyncOutlined spin />} color="processing">实时预览</Tag>
+            ) : previewStatus.timedOut ? (
+              <Tag
+                icon={<EyeInvisibleOutlined />}
+                color="warning"
+                style={{ cursor: onRetryPreview ? 'pointer' : undefined }}
+                onClick={onRetryPreview}
+              >
+                预览超时{onRetryPreview ? ' (点击重试)' : ''}
+              </Tag>
+            ) : previewStatus.error ? (
+              <Tag
+                icon={<EyeInvisibleOutlined />}
+                color="error"
+                style={{ cursor: onRetryPreview ? 'pointer' : undefined }}
+                onClick={onRetryPreview}
+              >
+                预览不可用
+              </Tag>
+            ) : previewStatus.available ? (
+              <Tag icon={<EyeOutlined />} color="success">实时预览</Tag>
+            ) : null
           )}
         </Space>
       }

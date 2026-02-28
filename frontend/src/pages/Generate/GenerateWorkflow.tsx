@@ -126,10 +126,10 @@ export function useGenerateWorkflow() {
     });
 
     try {
-      const resp = await fetch('/api/generate', {
+      const resp = await fetch('/api/v1/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, pipeline_config: pipelineConfig ?? {} }),
+        body: JSON.stringify({ input_type: 'text', text, prompt: text, pipeline_config: pipelineConfig ?? {} }),
         signal: abort.signal,
       });
 
@@ -162,7 +162,7 @@ export function useGenerateWorkflow() {
       }));
 
       try {
-        const resp = await fetch(`/api/generate/${state.jobId}/confirm`, {
+        const resp = await fetch(`/api/v1/jobs/${state.jobId}/confirm`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ confirmed_params: confirmedParams }),
@@ -209,7 +209,7 @@ export function useGenerateWorkflow() {
     formData.append('pipeline_config', JSON.stringify(pipelineConfig ?? {}));
 
     try {
-      const resp = await fetch('/api/generate/drawing', {
+      const resp = await fetch('/api/v1/jobs/upload', {
         method: 'POST',
         body: formData,
         signal: abort.signal,
@@ -244,7 +244,7 @@ export function useGenerateWorkflow() {
       }));
 
       try {
-        const resp = await fetch(`/api/generate/drawing/${state.jobId}/confirm`, {
+        const resp = await fetch(`/api/v1/jobs/${state.jobId}/confirm`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
