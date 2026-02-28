@@ -48,12 +48,22 @@ def _run_generate_from_spec(
     drawing_spec: dict | None,
     step_path: str,
 ) -> None:
-    """Synchronous drawing generation — delegates to pipeline."""
+    """Synchronous drawing generation — delegates to pipeline.
+
+    Deserializes drawing_spec dict → DrawingSpec Pydantic model before
+    calling the pipeline, which expects attribute access (spec.part_type).
+    """
     from backend.pipeline.pipeline import generate_step_from_spec
+
+    # Pipeline expects DrawingSpec model, not a plain dict.
+    spec_obj = drawing_spec
+    if isinstance(drawing_spec, dict):
+        from cad3dify.knowledge.part_types import DrawingSpec
+        spec_obj = DrawingSpec(**drawing_spec)
 
     generate_step_from_spec(
         image_filepath=image_path,
-        drawing_spec=drawing_spec,
+        drawing_spec=spec_obj,
         output_filepath=step_path,
     )
 
