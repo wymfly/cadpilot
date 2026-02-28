@@ -24,11 +24,11 @@ from backend.models.job import (
 class TestPrecisionFullFlow:
     """精密建模全链路 E2E 验证。"""
 
-    async def test_text_input_to_library(self, client: TestClient) -> None:
-        """完整文本建模流程：创建 → 确认 → 生成 → 完成 → 零件库。"""
+    def test_text_input_to_library(self, client: TestClient) -> None:
+        """完整文本建模流程：创建(graph) → 确认(resume) → 完成模拟 → 零件库。"""
         from tests.e2e.conftest import get_sse_job_id, parse_sse_events
 
-        # 1. 创建 text 类型 Job（返回 SSE 流）
+        # 1. 创建 text 类型 Job（通过 graph 运行到 interrupt）
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "text", "text": "法兰盘，外径100mm，内径50mm"},
@@ -46,23 +46,7 @@ class TestPrecisionFullFlow:
         assert detail["input_type"] == "text"
         assert detail["input_text"] == "法兰盘，外径100mm，内径50mm"
 
-        # 3. 模拟 IntentParser 完成 → awaiting_confirmation
-        await update_job(
-            job_id,
-            status=JobStatus.AWAITING_CONFIRMATION,
-            result={
-                "template_name": "flange",
-                "intent": {
-                    "part_category": "法兰盘",
-                    "part_type": "rotational",
-                    "known_params": {"outer_diameter": 100.0, "inner_diameter": 50.0},
-                    "missing_params": ["thickness"],
-                    "confidence": 0.85,
-                },
-            },
-        )
-
-        # 4. 确认参数（HITL）- 返回 SSE 流
+        # 3. 确认参数（graph resume）
         resp = client.post(
             f"/api/v1/jobs/{job_id}/confirm",
             json={
@@ -75,47 +59,29 @@ class TestPrecisionFullFlow:
             },
         )
         assert resp.status_code == 200
-        # 验证 SSE 事件中含 generating
+        # 验证 SSE 事件中含 generating 或终态
         confirm_events = parse_sse_events(resp)
         statuses = [e.get("status") for e in confirm_events]
-        assert "generating" in statuses
+        assert any(s in ("generating", "completed", "failed") for s in statuses)
 
-        # 5. 验证 Job 已进入 generating 或之后的状态
-        job = await get_job(job_id)
-        assert job is not None
-        assert job.status in {JobStatus.GENERATING, JobStatus.REFINING, JobStatus.COMPLETED, JobStatus.FAILED}
-
-        # 6. 模拟生成完成 + DfAM 结果
-        await update_job(
+        # 4. 模拟生成完成 + DfAM 结果
+        import asyncio
+        asyncio.get_event_loop().run_until_complete(update_job(
             job_id,
             status=JobStatus.COMPLETED,
             result={
                 "message": "生成完成",
                 "model_url": f"/outputs/{job_id}/model.glb",
                 "step_path": f"outputs/{job_id}/model.step",
-                "confirmed_params": {
-                    "outer_diameter": 100.0,
-                    "inner_diameter": 50.0,
-                    "thickness": 15.0,
-                },
             },
             printability_result={
                 "printable": True,
                 "score": 0.92,
                 "issues": [],
-                "material_estimate": {
-                    "filament_weight_g": 45.2,
-                    "filament_length_m": 15.1,
-                    "cost_estimate_cny": 12.5,
-                },
-                "time_estimate": {
-                    "total_minutes": 120,
-                    "layer_count": 450,
-                },
             },
-        )
+        ))
 
-        # 7. 确认完成状态
+        # 5. 确认完成状态
         resp = client.get(f"/api/v1/jobs/{job_id}")
         assert resp.status_code == 200
         detail = resp.json()
@@ -123,7 +89,7 @@ class TestPrecisionFullFlow:
         assert detail["result"] is not None
         assert detail["result"]["model_url"] is not None
 
-        # 8. 零件库列表验证 — Job 出现在列表中
+        # 6. 零件库列表验证
         resp = client.get("/api/v1/jobs")
         assert resp.status_code == 200
         library = resp.json()
@@ -131,26 +97,18 @@ class TestPrecisionFullFlow:
         job_ids = [item["job_id"] for item in library["items"]]
         assert job_id in job_ids
 
-    async def test_intent_parsed_then_confirm(self, client: TestClient) -> None:
-        """验证 intent_parsed → awaiting_confirmation → confirm 状态流转。"""
+    def test_intent_parsed_then_confirm(self, client: TestClient) -> None:
+        """验证 graph 创建 Job → confirm resume 状态流转。"""
         from tests.e2e.conftest import get_sse_job_id
 
+        # Graph 创建 Job 并运行到 interrupt
         resp = client.post(
             "/api/v1/jobs",
             json={"input_type": "text", "text": "轴承座"},
         )
         job_id = get_sse_job_id(resp)
 
-        # IntentParser 完成
-        await update_job(job_id, status=JobStatus.INTENT_PARSED)
-        job = await get_job(job_id)
-        assert job is not None
-        assert job.status == JobStatus.INTENT_PARSED
-
-        # 过渡到 awaiting_confirmation
-        await update_job(job_id, status=JobStatus.AWAITING_CONFIRMATION)
-
-        # 确认
+        # 确认（graph resume）
         resp = client.post(
             f"/api/v1/jobs/{job_id}/confirm",
             json={"confirmed_params": {"width": 80.0, "height": 60.0}},

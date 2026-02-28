@@ -65,7 +65,7 @@ async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
 
     await _safe_dispatch(
         "job.generating",
-        {"job_id": state["job_id"], "stage": "template"},
+        {"job_id": state["job_id"], "stage": "template", "status": "generating"},
     )
 
     try:
@@ -97,7 +97,7 @@ async def generate_step_drawing_node(state: CadJobState) -> dict[str, Any]:
 
     await _safe_dispatch(
         "job.generating",
-        {"job_id": state["job_id"], "stage": "drawing_pipeline"},
+        {"job_id": state["job_id"], "stage": "drawing_pipeline", "status": "generating"},
     )
 
     try:

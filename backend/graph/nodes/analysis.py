@@ -8,8 +8,17 @@ from typing import Any
 
 from backend.graph.llm_utils import map_exception_to_failure_reason
 from backend.graph.state import CadJobState
+from backend.models.job import update_job as _update_job
 
 logger = logging.getLogger(__name__)
+
+
+async def _safe_update_job(job_id: str, **kwargs: Any) -> None:
+    """Update DB job, tolerating missing records (e.g. in unit tests)."""
+    try:
+        await _update_job(job_id, **kwargs)
+    except (KeyError, Exception) as exc:
+        logger.debug("DB update skipped for job %s: %s", job_id, exc)
 
 LLM_TIMEOUT_S = 60.0
 
@@ -43,9 +52,11 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
     except Exception as exc:
         reason = map_exception_to_failure_reason(exc)
         logger.error("Intent analysis failed: %s (%s)", exc, reason)
+        # Sync DB to awaiting_confirmation so confirm endpoint accepts resume
+        await _safe_update_job(state["job_id"], status="awaiting_confirmation")
         await _safe_dispatch(
             "job.failed",
-            {"job_id": state["job_id"], "error": str(exc), "failure_reason": reason},
+            {"job_id": state["job_id"], "error": str(exc), "failure_reason": reason, "status": "failed"},
         )
         return {"error": str(exc), "failure_reason": reason, "status": "failed"}
 
@@ -61,9 +72,10 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
 
     await _safe_dispatch(
         "job.intent_analyzed",
-        {"job_id": state["job_id"], "intent": intent, "matched_template": matched_template},
+        {"job_id": state["job_id"], "intent": intent, "matched_template": matched_template, "status": "intent_parsed"},
     )
-    await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"]})
+    await _safe_update_job(state["job_id"], status="awaiting_confirmation", intent=intent)
+    await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"], "status": "awaiting_confirmation"})
     return {
         "intent": intent,
         "matched_template": matched_template,
@@ -73,7 +85,7 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
 
 async def analyze_vision_node(state: CadJobState) -> dict[str, Any]:
     """Run VL model to extract DrawingSpec from uploaded image (with timeout)."""
-    await _safe_dispatch("job.vision_analyzing", {"job_id": state["job_id"]})
+    await _safe_dispatch("job.vision_analyzing", {"job_id": state["job_id"], "status": "analyzing"})
 
     try:
         spec_dict, reasoning = await asyncio.wait_for(
@@ -83,21 +95,25 @@ async def analyze_vision_node(state: CadJobState) -> dict[str, Any]:
     except Exception as exc:
         reason = map_exception_to_failure_reason(exc)
         logger.error("Vision analysis failed: %s (%s)", exc, reason)
+        # Sync DB to awaiting_drawing_confirmation so confirm endpoint accepts resume
+        await _safe_update_job(state["job_id"], status="awaiting_drawing_confirmation")
         await _safe_dispatch(
             "job.failed",
-            {"job_id": state["job_id"], "error": str(exc), "failure_reason": reason},
+            {"job_id": state["job_id"], "error": str(exc), "failure_reason": reason, "status": "failed"},
         )
         return {"error": str(exc), "failure_reason": reason, "status": "failed"}
 
     await _safe_dispatch(
         "job.spec_ready",
-        {"job_id": state["job_id"], "drawing_spec": spec_dict, "reasoning": reasoning},
+        {"job_id": state["job_id"], "drawing_spec": spec_dict, "reasoning": reasoning, "status": "drawing_spec_ready"},
     )
-    await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"]})
+    await _safe_update_job(state["job_id"], status="awaiting_drawing_confirmation", drawing_spec=spec_dict)
+    await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"], "status": "awaiting_drawing_confirmation"})
     return {"drawing_spec": spec_dict, "status": "awaiting_drawing_confirmation"}
 
 
 async def stub_organic_node(state: CadJobState) -> dict[str, Any]:
     """Organic input: no LLM analysis needed, go straight to HITL."""
-    await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"]})
+    await _safe_update_job(state["job_id"], status="awaiting_confirmation")
+    await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"], "status": "awaiting_confirmation"})
     return {"status": "awaiting_confirmation"}

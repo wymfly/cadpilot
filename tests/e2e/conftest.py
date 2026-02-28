@@ -59,7 +59,15 @@ async def _init_and_clean_db():
 
 @pytest.fixture()
 def client() -> TestClient:
-    """创建 FastAPI TestClient 实例。"""
+    """创建 FastAPI TestClient 实例（含 LangGraph 初始化）。"""
     from backend.main import app
+
+    # TestClient 不经过 lifespan，需手动初始化 cad_graph
+    import asyncio
+
+    from backend.graph import get_compiled_graph
+
+    loop = asyncio.get_event_loop()
+    app.state.cad_graph = loop.run_until_complete(get_compiled_graph(None))
 
     return TestClient(app)

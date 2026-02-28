@@ -38,9 +38,11 @@ async def create_job_node(state: CadJobState) -> dict[str, Any]:
         input_type=state["input_type"],
         input_text=state.get("input_text") or "",
     )
+    if state.get("image_path"):
+        await update_job(state["job_id"], image_path=state["image_path"])
     await _safe_dispatch(
         "job.created",
-        {"job_id": state["job_id"], "input_type": state["input_type"]},
+        {"job_id": state["job_id"], "input_type": state["input_type"], "status": "created"},
     )
     return {"status": "created"}
 
