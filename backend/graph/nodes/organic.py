@@ -120,13 +120,21 @@ async def generate_organic_mesh_node(state: CadJobState) -> dict[str, Any]:
     })
     await _safe_update_job(job_id, status="generating")
 
-    # Instantiate provider directly — no factory function exists.
+    # Instantiate provider with config from Settings.
+    from backend.config import Settings as _Settings
+
+    _settings = _Settings()
+    _output_dir = Path("outputs") / "organic"
+
     if provider_name == "tripo3d":
-        provider = TripoProvider()
+        provider = TripoProvider(api_key=_settings.tripo3d_api_key, output_dir=_output_dir)
     elif provider_name == "hunyuan3d":
-        provider = HunyuanProvider()
+        provider = HunyuanProvider(api_key=_settings.hunyuan3d_api_key, output_dir=_output_dir)
     else:
-        provider = AutoProvider(tripo=TripoProvider(), hunyuan=HunyuanProvider())
+        provider = AutoProvider(
+            tripo=TripoProvider(api_key=_settings.tripo3d_api_key, output_dir=_output_dir),
+            hunyuan=HunyuanProvider(api_key=_settings.hunyuan3d_api_key, output_dir=_output_dir),
+        )
 
     # Bridge sync on_progress callback to dispatch keepalive SSE events.
     # provider.generate() may run sync loops internally; use sync dispatch.
