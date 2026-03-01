@@ -9,7 +9,7 @@ def test_health_check():
     from backend.main import app
 
     client = TestClient(app)
-    resp = client.get("/api/health")
+    resp = client.get("/api/v1/health")
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
@@ -20,7 +20,7 @@ def test_pipeline_tooltips_endpoint():
     from backend.main import app
 
     client = TestClient(app)
-    resp = client.get("/api/pipeline/tooltips")
+    resp = client.get("/api/v1/pipeline/tooltips")
     assert resp.status_code == 200
     data = resp.json()
     assert "best_of_n" in data
@@ -32,7 +32,7 @@ def test_pipeline_presets_endpoint():
     from backend.main import app
 
     client = TestClient(app)
-    resp = client.get("/api/pipeline/presets")
+    resp = client.get("/api/v1/pipeline/presets")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 3

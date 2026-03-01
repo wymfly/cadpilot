@@ -146,8 +146,8 @@ class TestLegacyRoutesStatus:
     """
 
     def test_legacy_health_still_available(self, client: TestClient) -> None:
-        """旧版 /api/health 仍可访问。"""
-        resp = client.get("/api/health")
+        """旧版 /api/health 已迁移到 /api/v1/health。"""
+        resp = client.get("/api/v1/health")
         assert resp.status_code == 200
 
     def test_legacy_templates_still_available(self, client: TestClient) -> None:

@@ -34,12 +34,12 @@ export function extractApiError(err: unknown): ApiError {
 
 
 export async function getTooltips(): Promise<Record<string, TooltipSpec>> {
-  const { data } = await api.get<Record<string, TooltipSpec>>('/pipeline/tooltips');
+  const { data } = await api.get<Record<string, TooltipSpec>>('/v1/pipeline/tooltips');
   return data;
 }
 
 export async function getPresets(): Promise<Array<{ name: string } & PipelineConfig>> {
-  const { data } = await api.get<Array<{ name: string } & PipelineConfig>>('/pipeline/presets');
+  const { data } = await api.get<Array<{ name: string } & PipelineConfig>>('/v1/pipeline/presets');
   return data;
 }
 

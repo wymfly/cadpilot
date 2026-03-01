@@ -19,8 +19,8 @@ async def client():
 
 
 async def test_health_endpoint_unaffected(client: AsyncClient):
-    """Health endpoint must remain operational."""
-    resp = await client.get("/api/health")
+    """Health endpoint must remain operational (migrated to V1)."""
+    resp = await client.get("/api/v1/health")
     assert resp.status_code == 200
 
 

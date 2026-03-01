@@ -66,15 +66,15 @@ app.include_router(v1_router, prefix="/api/v1")
 register_error_handlers(app)
 
 # 旧版路由（保持兼容，后续移除）
-app.include_router(health.router, prefix="/api")
-app.include_router(pipeline.router, prefix="/api/pipeline")
+# app.include_router(health.router, prefix="/api")  # [V1-MIGRATED]
+# app.include_router(pipeline.router, prefix="/api/pipeline")  # [V1-MIGRATED]
 app.include_router(generate.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 app.include_router(benchmark.router, prefix="/api")
 app.include_router(templates.router, prefix="/api")
 app.include_router(standards.router, prefix="/api")
 app.include_router(print_config.router, prefix="/api")
-app.include_router(rag.router, prefix="/api")
+# app.include_router(rag.router, prefix="/api")  # [V1-MIGRATED]
 app.include_router(organic.router, prefix="/api")
 app.include_router(preview.router, prefix="/api")
 app.include_router(history.router, prefix="/api")

@@ -17,8 +17,8 @@ class TestThemeAndAppHealth:
     """应用健康检查与主题基础设施验证。"""
 
     def test_health_endpoint(self, client: TestClient) -> None:
-        """验证 /api/health 端点正常。"""
-        resp = client.get("/api/health")
+        """验证 /api/v1/health 端点正常。"""
+        resp = client.get("/api/v1/health")
         assert resp.status_code == 200
 
     def test_cors_headers_present(self, client: TestClient) -> None:
