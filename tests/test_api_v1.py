@@ -121,7 +121,8 @@ class TestCreateJob:
         job_id = get_sse_job_id(resp)
         assert job_id
         events = parse_sse_events(resp)
-        assert events[0]["status"] == "created"
+        # @timed_node emits node.started as first event for create_job
+        assert events[0]["node"] == "create_job"
 
     def test_create_organic_job(self, client: TestClient) -> None:
         """organic 类型 Job 也通过 SSE 流返回。"""
@@ -133,7 +134,8 @@ class TestCreateJob:
         job_id = get_sse_job_id(resp)
         assert job_id
         events = parse_sse_events(resp)
-        assert events[0]["status"] == "created"
+        # @timed_node emits node.started as first event for create_job
+        assert events[0]["node"] == "create_job"
 
     def test_create_drawing_job_via_upload(self, client: TestClient) -> None:
         """图纸上传也通过 SSE 流返回，首个事件含 job_id。"""
@@ -146,7 +148,8 @@ class TestCreateJob:
         job_id = get_sse_job_id(resp)
         assert job_id
         events = parse_sse_events(resp)
-        assert events[0]["status"] == "created"
+        # @timed_node emits node.started as first event for create_job
+        assert events[0]["node"] == "create_job"
 
 
 # ===================================================================

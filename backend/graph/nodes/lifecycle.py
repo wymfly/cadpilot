@@ -28,6 +28,10 @@ async def _safe_dispatch(event_name: str, payload: dict[str, Any]) -> None:
         pass
 
 
+from backend.graph.decorators import timed_node
+
+
+@timed_node("create_job")
 async def create_job_node(state: CadJobState) -> dict[str, Any]:
     """Create DB Job record and dispatch job.created event."""
     await create_job(
@@ -37,18 +41,19 @@ async def create_job_node(state: CadJobState) -> dict[str, Any]:
     )
     if state.get("image_path"):
         await update_job(state["job_id"], image_path=state["image_path"])
-    await _safe_dispatch(
-        "job.created",
-        {"job_id": state["job_id"], "input_type": state["input_type"], "status": "created"},
-    )
 
     # Initialize token tracker (serialized as dict in state)
     from backend.infra.token_tracker import TokenTracker
 
     tracker = TokenTracker()
-    return {"status": "created", "token_stats": tracker.get_stats()}
+    return {
+        "status": "created",
+        "token_stats": tracker.get_stats(),
+        "_reasoning": {"input_routing": f"input_type={state['input_type']}"},
+    }
 
 
+@timed_node("confirm_with_user")
 async def confirm_with_user_node(state: CadJobState) -> dict[str, Any]:
     """Process Command(resume=...) data after interrupt.
 
@@ -56,9 +61,10 @@ async def confirm_with_user_node(state: CadJobState) -> dict[str, Any]:
     resume payload into state (confirmed_params / confirmed_spec / disclaimer_accepted).
     We just advance the status.
     """
-    return {"status": "confirmed"}
+    return {"status": "confirmed", "_reasoning": {"confirmation": "user confirmed parameters"}}
 
 
+@timed_node("finalize")
 async def finalize_node(state: CadJobState) -> dict[str, Any]:
     """Write final state to DB and dispatch terminal event."""
     is_failed = state.get("error") is not None or state.get("status") == "failed"
@@ -135,4 +141,8 @@ async def finalize_node(state: CadJobState) -> dict[str, Any]:
             })
 
     await _safe_dispatch(event_name, payload)
-    return {"status": final_status}
+    _stages = token_stats.get("stages", []) if token_stats else []
+    return {
+        "status": final_status,
+        "_reasoning": {"final_status": final_status, "total_stages": str(len(_stages))},
+    }

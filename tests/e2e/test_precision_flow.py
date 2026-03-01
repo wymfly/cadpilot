@@ -35,9 +35,9 @@ class TestPrecisionFullFlow:
         )
         assert resp.status_code == 200
         job_id = get_sse_job_id(resp)
-        # 验证 SSE 中首个事件状态为 created
+        # @timed_node emits node.started as first event for create_job
         events = parse_sse_events(resp)
-        assert events[0]["status"] == "created"
+        assert events[0]["node"] == "create_job"
 
         # 2. 查询 Job 详情
         resp = client.get(f"/api/v1/jobs/{job_id}")
