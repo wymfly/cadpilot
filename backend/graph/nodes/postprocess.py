@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from backend.graph.decorators import timed_node
 from backend.graph.nodes.lifecycle import _safe_dispatch
 from backend.graph.state import CadJobState
 
@@ -31,11 +32,12 @@ def _run_printability_check(step_path: str) -> dict | None:
     return _orig(step_path)
 
 
+@timed_node("convert_preview")
 async def convert_preview_node(state: CadJobState) -> dict[str, Any]:
     """Convert STEP to GLB for 3D preview (non-fatal on failure)."""
     step_path = state.get("step_path")
     if not step_path:
-        return {}
+        return {"_reasoning": {"result": "跳过", "format": "GLB"}}
 
     try:
         glb_path = await asyncio.wait_for(
@@ -44,27 +46,30 @@ async def convert_preview_node(state: CadJobState) -> dict[str, Any]:
         )
     except Exception as exc:
         logger.warning("GLB preview conversion failed (non-fatal): %s", exc)
-        return {"model_url": None}
+        return {"model_url": None, "_reasoning": {"result": f"失败: {exc}", "format": "GLB"}}
 
     model_url = f"/outputs/{state['job_id']}/model.glb" if glb_path else None
-    await _safe_dispatch(
-        "job.preview_ready",
-        {"job_id": state["job_id"], "model_url": model_url},
-    )
-    return {"model_url": model_url}
+    return {
+        "model_url": model_url,
+        "_reasoning": {
+            "format": "GLB",
+            "result": "成功" if glb_path else "跳过",
+        },
+    }
 
 
+@timed_node("check_printability")
 async def check_printability_node(state: CadJobState) -> dict[str, Any]:
     """Run DfAM printability analysis (non-fatal on failure)."""
     step_path = state.get("step_path")
     if not step_path:
-        return {}
+        return {"_reasoning": {"printable": "检查跳过", "issues_count": "0", "recommendations_count": "0"}}
 
     try:
         result = await asyncio.to_thread(_run_printability_check, step_path)
     except Exception as exc:
         logger.warning("Printability check failed (non-fatal): %s", exc)
-        return {"printability": None}
+        return {"printability": None, "_reasoning": {"printable": f"检查失败: {exc}", "issues_count": "0", "recommendations_count": "0"}}
 
     # Generate post-processing recommendations
     from backend.core.recommendation_engine import generate_recommendations
@@ -81,10 +86,11 @@ async def check_printability_node(state: CadJobState) -> dict[str, Any]:
     deduped_new = [r for r in rec_dicts if r.get("action") not in seen_actions]
     all_recs = existing_recs + deduped_new
 
-    await _safe_dispatch(
-        "job.printability_ready",
-        {"job_id": state["job_id"], "printability": result, "recommendations": all_recs},
-    )
+    _reasoning = {
+        "printable": str(result.get("printable", "N/A")) if result else "检查跳过",
+        "issues_count": str(len(result.get("issues", []))) if result else "0",
+        "recommendations_count": str(len(all_recs)),
+    }
 
     # Intercept error-level printability issues to fail the pipeline
     if result and not result.get("printable", True):
@@ -101,6 +107,7 @@ async def check_printability_node(state: CadJobState) -> dict[str, Any]:
                 "error": f"Printability check failed: {error_msgs}",
                 "failure_reason": "printability_error",
                 "status": "failed",
+                "_reasoning": _reasoning,
             }
 
-    return {"printability": result, "recommendations": all_recs}
+    return {"printability": result, "recommendations": all_recs, "_reasoning": _reasoning}
