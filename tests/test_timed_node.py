@@ -23,12 +23,30 @@ class TestSummarizeOutputs:
 
         assert _summarize_outputs({}) == {}
 
-    def test_large_dict_summarized(self):
+    def test_large_dict_truncated(self):
         from backend.graph.decorators import _summarize_outputs
 
-        big = {"k" + str(i): i for i in range(100)}
+        big = {"key_" + str(i): "value_" * 20 for i in range(50)}
         result = _summarize_outputs({"data": big})
-        assert "data" in result
+        assert result["data"]["_truncated"] is True
+        assert "keys" in result["data"]
+        assert "size" in result["data"]
+
+    def test_large_list_truncated(self):
+        from backend.graph.decorators import _summarize_outputs
+
+        big = list(range(200))
+        result = _summarize_outputs({"items": big})
+        assert result["items"]["_truncated"] is True
+        assert "length" in result["items"]
+        assert result["items"]["length"] == 200
+
+    def test_small_dict_preserved(self):
+        from backend.graph.decorators import _summarize_outputs
+
+        small = {"a": 1, "b": 2}
+        result = _summarize_outputs({"data": small})
+        assert result["data"] == {"a": 1, "b": 2}
 
     def test_preserves_small_values(self):
         from backend.graph.decorators import _summarize_outputs

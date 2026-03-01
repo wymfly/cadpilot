@@ -13,18 +13,33 @@ from typing import Any
 from backend.graph.nodes.lifecycle import _safe_dispatch
 
 
-def _summarize_outputs(result: dict[str, Any]) -> dict[str, Any]:
+def _summarize_outputs(result: dict[str, Any], max_json_len: int = 500) -> dict[str, Any]:
     """Create a compact summary of node outputs for event payloads.
 
     - Filters out underscore-prefixed keys (metadata, not outputs)
     - Truncates long string values to 200 chars
+    - Summarizes large dict/list values to avoid SSE payload bloat
     """
+    import json as _json
+
     summary: dict[str, Any] = {}
     for key, value in result.items():
         if key.startswith("_"):
             continue
         if isinstance(value, str) and len(value) > 200:
             summary[key] = value[:200] + "..."
+        elif isinstance(value, (dict, list)):
+            try:
+                serialized = _json.dumps(value, ensure_ascii=False, default=str)
+            except (TypeError, ValueError):
+                serialized = str(value)
+            if len(serialized) > max_json_len:
+                if isinstance(value, dict):
+                    summary[key] = {"_truncated": True, "keys": list(value.keys())[:20], "size": len(serialized)}
+                else:
+                    summary[key] = {"_truncated": True, "length": len(value), "size": len(serialized)}
+            else:
+                summary[key] = value
         else:
             summary[key] = value
     return summary

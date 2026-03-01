@@ -48,6 +48,15 @@ async def create_job_node(state: CadJobState) -> dict[str, Any]:
     from backend.infra.token_tracker import TokenTracker
 
     tracker = TokenTracker()
+
+    # Business event: frontend needs status="created" to set jobId early
+    await _safe_dispatch("job.created", {
+        "job_id": state["job_id"],
+        "input_type": state["input_type"],
+        "status": "created",
+        "message": f"任务已创建 (类型: {state['input_type']})",
+    })
+
     return {
         "status": "created",
         "token_stats": tracker.get_stats(),
@@ -107,13 +116,10 @@ async def finalize_node(state: CadJobState) -> dict[str, Any]:
     if state.get("recommendations"):
         result_dict["recommendations"] = state["recommendations"]
 
-    # Include token stats in result (recalculate aggregates from stages)
+    # Include token stats in result (pass through as-is; per-node timing
+    # is now in node.completed SSE events via @timed_node decorator)
     token_stats = state.get("token_stats")
     if token_stats:
-        stages = token_stats.get("stages", [])
-        token_stats["total_input_tokens"] = sum(s.get("input_tokens", 0) for s in stages)
-        token_stats["total_output_tokens"] = sum(s.get("output_tokens", 0) for s in stages)
-        token_stats["total_duration_s"] = round(sum(s.get("duration_s", 0) for s in stages), 3)
         result_dict["token_stats"] = token_stats
 
     if result_dict:
@@ -141,8 +147,7 @@ async def finalize_node(state: CadJobState) -> dict[str, Any]:
             })
 
     await _safe_dispatch(event_name, payload)
-    _stages = token_stats.get("stages", []) if token_stats else []
     return {
         "status": final_status,
-        "_reasoning": {"final_status": final_status, "total_stages": str(len(_stages))},
+        "_reasoning": {"final_status": final_status},
     }
