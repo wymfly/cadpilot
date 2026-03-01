@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from backend.core.spec_compiler import CompilationError, SpecCompiler
 from backend.graph.llm_utils import map_exception_to_failure_reason
 from backend.graph.nodes.lifecycle import _safe_dispatch
 from backend.graph.state import CadJobState
@@ -14,33 +15,6 @@ from backend.graph.state import CadJobState
 logger = logging.getLogger(__name__)
 
 OUTPUTS_DIR = Path("outputs").resolve()
-
-
-def _run_template_generation(
-    job_id: str,
-    confirmed_params: dict,
-    matched_template: str | None,
-    step_path: str,
-) -> str:
-    """Synchronous template generation — delegates to existing logic."""
-    from backend.pipeline.vision_cad_pipeline import _run_template_generation as _orig_run
-    from backend.models.job import Job
-
-    # Build a minimal mock job object for the legacy function signature.
-    # The legacy function reads template_name from job.result dict.
-    job = Job(
-        job_id=job_id,
-        input_type="text",
-        input_text="",
-        created_at="",
-    )
-    job.result = {"template_name": matched_template} if matched_template else None
-    success = _orig_run(job, confirmed_params, step_path)
-    if not success:
-        raise RuntimeError(
-            f"Template generation failed: template={matched_template!r}"
-        )
-    return step_path
 
 
 def _run_generate_from_spec(
@@ -69,7 +43,7 @@ def _run_generate_from_spec(
 
 
 async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
-    """Generate STEP from text intent via TemplateEngine + Sandbox."""
+    """Generate STEP from text intent via SpecCompiler (template-first, LLM-fallback)."""
     import time as _time
 
     _t0 = _time.time()
@@ -82,20 +56,29 @@ async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
     job_dir.mkdir(parents=True, exist_ok=True)
     step_path = str(job_dir / "model.step")
 
+    matched = state.get("matched_template")
+    stage = "template" if matched else "llm_fallback"
     await _safe_dispatch(
         "job.generating",
-        {"job_id": state["job_id"], "stage": "template", "status": "generating"},
+        {"job_id": state["job_id"], "stage": stage, "status": "generating"},
     )
 
     try:
-        result_path = await asyncio.to_thread(
-            _run_template_generation,
-            state["job_id"],
-            state.get("confirmed_params") or {},
-            state.get("matched_template"),
-            step_path,
+        compiler = SpecCompiler()
+        result = await asyncio.to_thread(
+            compiler.compile,
+            matched_template=matched,
+            params=state.get("confirmed_params") or {},
+            output_path=step_path,
+            input_text=state.get("input_text") or "",
+            intent=state.get("intent"),
         )
-    except Exception as exc:
+        if result.method != stage:
+            await _safe_dispatch(
+                "job.generating",
+                {"job_id": state["job_id"], "stage": result.method, "status": "generating"},
+            )
+    except (CompilationError, Exception) as exc:
         reason = map_exception_to_failure_reason(exc)
         logger.error("Text generation failed: %s (%s)", exc, reason)
         return {"error": str(exc), "failure_reason": reason, "status": "failed"}
@@ -106,7 +89,7 @@ async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
     stages.append({"name": "generate_step_text", "input_tokens": 0, "output_tokens": 0, "duration_s": round(_duration, 3)})
     token_stats["stages"] = stages
 
-    return {"step_path": result_path, "status": "generating", "token_stats": token_stats}
+    return {"step_path": result.step_path, "status": "generating", "token_stats": token_stats}
 
 
 async def generate_step_drawing_node(state: CadJobState) -> dict[str, Any]:

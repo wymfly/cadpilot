@@ -3,29 +3,53 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from backend.core.spec_compiler import CompilationError, CompileResult
 from backend.graph.state import CadJobState
 
 
 class TestGenerateStepTextNode:
+    @pytest.fixture
+    def base_state(self):
+        return CadJobState(
+            job_id="t1",
+            input_type="text",
+            input_text="生成一个圆柱体",
+            status="confirmed",
+            matched_template="cylinder_simple",
+            confirmed_params={"diameter": 50, "height": 100},
+            token_stats={"stages": []},
+        )
+
     @pytest.mark.asyncio
-    async def test_success(self) -> None:
+    @patch("backend.graph.nodes.generation.SpecCompiler")
+    async def test_template_path(self, MockCompiler, base_state) -> None:
         from backend.graph.nodes.generation import generate_step_text_node
 
-        state = CadJobState(
-            job_id="t1", input_type="text", status="confirmed",
-            confirmed_params={"diameter": 50}, matched_template="gear_spur",
+        compiler = MockCompiler.return_value
+        compiler.compile.return_value = CompileResult(
+            method="template", template_name="cylinder_simple", step_path="/tmp/model.step"
         )
-        with patch(
-            "backend.graph.nodes.generation._run_template_generation",
-            return_value="/outputs/t1/model.step",
-        ):
-            result = await generate_step_text_node(state)
+        result = await generate_step_text_node(base_state)
+        assert result["step_path"] == "/tmp/model.step"
+        assert result["status"] == "generating"
+        compiler.compile.assert_called_once()
 
-        assert result["step_path"] == "/outputs/t1/model.step"
+    @pytest.mark.asyncio
+    @patch("backend.graph.nodes.generation.SpecCompiler")
+    async def test_llm_fallback_path(self, MockCompiler, base_state) -> None:
+        from backend.graph.nodes.generation import generate_step_text_node
+
+        base_state["matched_template"] = None
+        compiler = MockCompiler.return_value
+        compiler.compile.return_value = CompileResult(
+            method="llm_fallback", step_path="/tmp/model.step"
+        )
+        result = await generate_step_text_node(base_state)
+        assert result["step_path"] == "/tmp/model.step"
         assert result["status"] == "generating"
 
     @pytest.mark.asyncio
@@ -42,18 +66,28 @@ class TestGenerateStepTextNode:
         assert result == {}
 
     @pytest.mark.asyncio
-    async def test_error_returns_failed(self) -> None:
+    @patch("backend.graph.nodes.generation.SpecCompiler")
+    async def test_both_fail(self, MockCompiler, base_state) -> None:
+        from backend.graph.nodes.generation import generate_step_text_node
+
+        compiler = MockCompiler.return_value
+        compiler.compile.side_effect = CompilationError("all failed")
+        result = await generate_step_text_node(base_state)
+        assert result["status"] == "failed"
+        assert "all failed" in result["error"]
+
+    @pytest.mark.asyncio
+    @patch("backend.graph.nodes.generation.SpecCompiler")
+    async def test_error_returns_failed(self, MockCompiler) -> None:
         from backend.graph.nodes.generation import generate_step_text_node
 
         state = CadJobState(
             job_id="t1", input_type="text", status="confirmed",
             confirmed_params={"diameter": 50},
         )
-        with patch(
-            "backend.graph.nodes.generation._run_template_generation",
-            side_effect=RuntimeError("Sandbox failure"),
-        ):
-            result = await generate_step_text_node(state)
+        compiler = MockCompiler.return_value
+        compiler.compile.side_effect = RuntimeError("Sandbox failure")
+        result = await generate_step_text_node(state)
 
         assert result["status"] == "failed"
         assert result["failure_reason"] == "generation_error"
