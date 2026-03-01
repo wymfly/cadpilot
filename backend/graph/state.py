@@ -27,6 +27,7 @@ class CadJobState(TypedDict, total=False):
     step_path: str | None
     model_url: str | None        # GLB preview URL
     printability: dict | None
+    recommendations: list[dict] | None  # ParamRecommendation / PostProcessRecommendation
 
     # ── Organic outputs ──
     organic_spec: dict | None            # OrganicSpec.model_dump()
