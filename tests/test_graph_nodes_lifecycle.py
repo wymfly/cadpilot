@@ -101,6 +101,35 @@ class TestFinalizeNode:
         assert result["status"] == "failed"
 
     @pytest.mark.asyncio
+    async def test_organic_completed_assembles_result(self) -> None:
+        from backend.graph.nodes.lifecycle import finalize_node
+
+        organic_result = {
+            "model_url": "/outputs/org-1/model.glb",
+            "stl_url": "/outputs/org-1/model.stl",
+            "threemf_url": "/outputs/org-1/model.3mf",
+            "mesh_stats": {"vertex_count": 1000, "is_watertight": True},
+            "warnings": ["3MF may need verification"],
+            "printability": {"printable": True},
+        }
+        state = CadJobState(
+            job_id="org-1",
+            input_type="organic",
+            status="post_processed",
+            organic_result=organic_result,
+            error=None,
+        )
+        with patch("backend.graph.nodes.lifecycle.update_job", new_callable=AsyncMock) as mock_update:
+            result = await finalize_node(state)
+
+        assert result["status"] == "completed"
+        call_kwargs = mock_update.call_args[1]
+        assert call_kwargs["result"]["model_url"] == "/outputs/org-1/model.glb"
+        assert call_kwargs["result"]["stl_url"] == "/outputs/org-1/model.stl"
+        assert call_kwargs["result"]["threemf_url"] == "/outputs/org-1/model.3mf"
+        assert call_kwargs["result"]["mesh_stats"]["vertex_count"] == 1000
+
+    @pytest.mark.asyncio
     async def test_orm_mapping_used_correctly(self) -> None:
         from backend.graph.nodes.lifecycle import finalize_node
 
