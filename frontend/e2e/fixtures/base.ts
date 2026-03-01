@@ -124,7 +124,7 @@ export async function mockCommonApis(page: Page) {
       body: JSON.stringify({ status: 'ok', version: '3.0.0' }),
     });
   });
-  await page.route('**/api/templates**', async (route: Route) => {
+  await page.route('**/api/v1/templates**', async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

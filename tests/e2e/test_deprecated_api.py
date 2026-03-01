@@ -150,9 +150,9 @@ class TestLegacyRoutesStatus:
         resp = client.get("/api/v1/health")
         assert resp.status_code == 200
 
-    def test_legacy_templates_still_available(self, client: TestClient) -> None:
-        """旧版 /api/templates 仍可访问。"""
-        resp = client.get("/api/templates")
+    def test_legacy_templates_migrated_to_v1(self, client: TestClient) -> None:
+        """旧版 /api/templates 已迁移到 /api/v1/templates。"""
+        resp = client.get("/api/v1/templates")
         assert resp.status_code == 200
 
     def test_v1_is_canonical(self, client: TestClient) -> None:

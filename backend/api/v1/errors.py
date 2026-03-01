@@ -30,6 +30,8 @@ class ErrorCode:
     PROFILE_EXISTS = "PROFILE_EXISTS"
     PROFILE_PROTECTED = "PROFILE_PROTECTED"
     REPORT_NOT_FOUND = "REPORT_NOT_FOUND"
+    TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND"
+    TEMPLATE_EXISTS = "TEMPLATE_EXISTS"
 
 
 # ---------------------------------------------------------------------------

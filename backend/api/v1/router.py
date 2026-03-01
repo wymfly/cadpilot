@@ -15,6 +15,7 @@ from backend.api.v1 import (
     print_config,
     rag,
     standards,
+    templates,
 )
 
 router = APIRouter()
@@ -28,3 +29,4 @@ router.include_router(export.router)
 router.include_router(benchmark.router)
 router.include_router(standards.router)
 router.include_router(print_config.router)
+router.include_router(templates.router)

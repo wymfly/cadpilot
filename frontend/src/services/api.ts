@@ -120,19 +120,19 @@ export async function getBenchmarkDatasets(): Promise<string[]> {
 // Template API
 export async function getTemplates(partType?: string): Promise<ParametricTemplate[]> {
   const params = partType ? { part_type: partType } : {};
-  const { data } = await api.get<ParametricTemplate[]>('/templates', { params });
+  const { data } = await api.get<ParametricTemplate[]>('/v1/templates', { params });
   return data;
 }
 
 export async function getTemplate(name: string): Promise<ParametricTemplate> {
-  const { data } = await api.get<ParametricTemplate>(`/templates/${name}`);
+  const { data } = await api.get<ParametricTemplate>(`/v1/templates/${name}`);
   return data;
 }
 
 export async function createTemplate(
   template: Partial<ParametricTemplate>,
 ): Promise<ParametricTemplate> {
-  const { data } = await api.post<ParametricTemplate>('/templates', template);
+  const { data } = await api.post<ParametricTemplate>('/v1/templates', template);
   return data;
 }
 
@@ -141,14 +141,14 @@ export async function updateTemplate(
   template: Partial<ParametricTemplate>,
 ): Promise<ParametricTemplate> {
   const { data } = await api.put<ParametricTemplate>(
-    `/templates/${name}`,
+    `/v1/templates/${name}`,
     template,
   );
   return data;
 }
 
 export async function deleteTemplate(name: string): Promise<void> {
-  await api.delete(`/templates/${name}`);
+  await api.delete(`/v1/templates/${name}`);
 }
 
 export async function validateTemplateParams(
@@ -156,7 +156,7 @@ export async function validateTemplateParams(
   params: Record<string, unknown>,
 ): Promise<ValidateResponse> {
   const { data } = await api.post<ValidateResponse>(
-    `/templates/${name}/validate`,
+    `/v1/templates/${name}/validate`,
     params,
   );
   return data;

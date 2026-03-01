@@ -71,7 +71,7 @@ register_error_handlers(app)
 app.include_router(generate.router, prefix="/api")
 # app.include_router(export.router, prefix="/api")  # [V1-MIGRATED]
 # app.include_router(benchmark.router, prefix="/api")  # [V1-MIGRATED]
-app.include_router(templates.router, prefix="/api")
+# app.include_router(templates.router, prefix="/api")  # [V1-MIGRATED]
 # app.include_router(standards.router, prefix="/api")  # [V1-MIGRATED]
 # app.include_router(print_config.router, prefix="/api")  # [V1-MIGRATED]
 # app.include_router(rag.router, prefix="/api")  # [V1-MIGRATED]
