@@ -12,20 +12,6 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import (
-    benchmark,
-    export,
-    generate,
-    health,
-    history,
-    organic,
-    pipeline,
-    preview,
-    print_config,
-    rag,
-    standards,
-    templates,
-)
 from backend.api.v1.errors import register_error_handlers
 from backend.api.v1.router import router as v1_router
 from backend.config import Settings
@@ -65,19 +51,7 @@ app.add_middleware(
 app.include_router(v1_router, prefix="/api/v1")
 register_error_handlers(app)
 
-# 旧版路由（保持兼容，后续移除）
-# app.include_router(health.router, prefix="/api")  # [V1-MIGRATED]
-# app.include_router(pipeline.router, prefix="/api/pipeline")  # [V1-MIGRATED]
-app.include_router(generate.router, prefix="/api")
-# app.include_router(export.router, prefix="/api")  # [V1-MIGRATED]
-# app.include_router(benchmark.router, prefix="/api")  # [V1-MIGRATED]
-# app.include_router(templates.router, prefix="/api")  # [V1-MIGRATED]
-# app.include_router(standards.router, prefix="/api")  # [V1-MIGRATED]
-# app.include_router(print_config.router, prefix="/api")  # [V1-MIGRATED]
-# app.include_router(rag.router, prefix="/api")  # [V1-MIGRATED]
-app.include_router(organic.router, prefix="/api")
-app.include_router(preview.router, prefix="/api")
-app.include_router(history.router, prefix="/api")
+# 旧版路由已全部迁移至 V1，legacy 文件已删除（Phase 5b）
 
 from pathlib import Path as _Path
 from starlette.staticfiles import StaticFiles

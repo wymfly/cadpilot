@@ -40,10 +40,10 @@ def test_pipeline_presets_endpoint():
     assert names == {"fast", "balanced", "precise"}
 
 
-def test_generate_endpoint_exists():
+def test_v1_jobs_endpoint_exists():
     from backend.main import app
 
     client = TestClient(app)
-    # POST without file should return 422 (validation error), not 404
-    resp = client.post("/api/generate")
+    # POST without body should return 422 (validation error), not 404
+    resp = client.post("/api/v1/jobs")
     assert resp.status_code == 422
