@@ -80,6 +80,19 @@ async def finalize_node(state: CadJobState) -> dict[str, Any]:
         result_dict["model_url"] = state["model_url"]
     if state.get("matched_template"):
         result_dict["template_name"] = state["matched_template"]
+    # Organic input: merge mesh/printability results
+    input_type = state.get("input_type", "text")
+    if input_type == "organic" and not is_failed:
+        organic_result = state.get("organic_result") or {}
+        result_dict.update({
+            "model_url": organic_result.get("model_url"),
+            "stl_url": organic_result.get("stl_url"),
+            "threemf_url": organic_result.get("threemf_url"),
+            "mesh_stats": organic_result.get("mesh_stats"),
+            "warnings": organic_result.get("warnings", []),
+            "printability": organic_result.get("printability"),
+        })
+
     if result_dict:
         orm_kwargs["result"] = result_dict
 
@@ -94,6 +107,14 @@ async def finalize_node(state: CadJobState) -> dict[str, Any]:
         payload["model_url"] = state.get("model_url")
         payload["step_path"] = state.get("step_path")
         payload["printability"] = state.get("printability")
+        if input_type == "organic":
+            organic_result = state.get("organic_result") or {}
+            payload.update({
+                "stl_url": organic_result.get("stl_url"),
+                "threemf_url": organic_result.get("threemf_url"),
+                "mesh_stats": organic_result.get("mesh_stats"),
+                "warnings": organic_result.get("warnings", []),
+            })
 
     await _safe_dispatch(event_name, payload)
     return {"status": final_status}
