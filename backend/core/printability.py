@@ -409,7 +409,7 @@ class PrintabilityChecker:
         self, geometry_info: dict, infill_percent: float = 20.0
     ) -> MaterialEstimate:
         """Estimate material usage based on volume and infill."""
-        volume = geometry_info.get("volume_cm3", 0)
+        volume = geometry_info.get("volume_cm3") or 0
         if volume <= 0:
             return MaterialEstimate(
                 filament_length_m=0,

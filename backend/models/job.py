@@ -17,9 +17,6 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
-from backend.models.intent import IntentSpec, PreciseSpec
-
-
 class JobStatus(str, Enum):
     """Lifecycle states for a generate job."""
 
@@ -41,8 +38,8 @@ class Job(BaseModel):
     status: JobStatus = JobStatus.CREATED
     input_type: str = "text"  # "text" | "drawing"
     input_text: str = ""
-    intent: Optional[IntentSpec] = None
-    precise_spec: Optional[PreciseSpec] = None
+    intent: dict[str, Any] | None = None
+    precise_spec: dict[str, Any] | None = None
     recommendations: list[dict[str, Any]] = Field(default_factory=list)
     drawing_spec: Optional[dict[str, Any]] = None
     drawing_spec_confirmed: Optional[dict[str, Any]] = None
