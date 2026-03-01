@@ -83,11 +83,7 @@ export default function Generate() {
 
   // M3: DAG events for PipelinePanel
   const { events: dagEvents } = useJobEvents({ jobId: workflow.jobId });
-  const dagInputType = useMemo(() => {
-    if (workflow.phase === 'idle') return null;
-    if (workflow.drawingSpec) return 'drawing';
-    return 'text';
-  }, [workflow.phase, workflow.drawingSpec]);
+  const dagInputType = workflow.inputType;
 
   const isInputDisabled =
     workflow.phase !== 'idle' && workflow.phase !== 'completed' && workflow.phase !== 'failed';

@@ -17,6 +17,7 @@ const { Text } = Typography;
 export interface WorkflowState {
   phase: WorkflowPhase;
   jobId: string | null;
+  inputType: 'text' | 'drawing' | null;
   message: string;
   error: string | null;
   modelUrl: string | null;
@@ -96,6 +97,7 @@ export function useGenerateWorkflow() {
   const [state, setState] = useState<WorkflowState>({
     phase: 'idle',
     jobId: null,
+    inputType: null,
     message: '',
     error: null,
     modelUrl: null,
@@ -115,6 +117,7 @@ export function useGenerateWorkflow() {
     setState({
       phase: 'parsing',
       jobId: null,
+      inputType: 'text',
       message: '正在解析意图…',
       error: null,
       modelUrl: null,
@@ -194,6 +197,7 @@ export function useGenerateWorkflow() {
     setState({
       phase: 'parsing',
       jobId: null,
+      inputType: 'drawing',
       message: '正在上传图纸…',
       error: null,
       modelUrl: null,
@@ -276,6 +280,7 @@ export function useGenerateWorkflow() {
     setState({
       phase: 'idle',
       jobId: null,
+      inputType: null,
       message: '',
       error: null,
       modelUrl: null,
