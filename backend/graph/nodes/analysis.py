@@ -69,7 +69,7 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
     # Template matching (best-effort)
     matched_template = None
     try:
-        from backend.api.generate import _match_template
+        from backend.pipeline.vision_cad_pipeline import _match_template
         template_result = _match_template(state.get("input_text") or "")
         if template_result and template_result[0]:
             matched_template = template_result[0].name

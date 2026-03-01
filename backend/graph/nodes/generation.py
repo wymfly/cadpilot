@@ -23,7 +23,7 @@ def _run_template_generation(
     step_path: str,
 ) -> str:
     """Synchronous template generation — delegates to existing logic."""
-    from backend.api.generate import _run_template_generation as _orig_run
+    from backend.pipeline.vision_cad_pipeline import _run_template_generation as _orig_run
     from backend.models.job import Job
 
     # Build a minimal mock job object for the legacy function signature.

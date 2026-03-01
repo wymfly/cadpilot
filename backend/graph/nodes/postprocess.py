@@ -17,7 +17,7 @@ PREVIEW_TIMEOUT_S = 30.0
 
 def _convert_step_to_glb(step_path: str) -> str | None:
     """Synchronous STEP->GLB conversion — delegates to existing logic."""
-    from backend.api.generate import _convert_step_to_glb as _orig
+    from backend.pipeline.vision_cad_pipeline import _convert_step_to_glb as _orig
 
     glb_path = str(Path(step_path).with_suffix(".glb"))
     _orig(step_path, glb_path)
@@ -26,7 +26,7 @@ def _convert_step_to_glb(step_path: str) -> str | None:
 
 def _run_printability_check(step_path: str) -> dict | None:
     """Synchronous printability check — delegates to existing logic."""
-    from backend.api.generate import _run_printability_check as _orig
+    from backend.pipeline.vision_cad_pipeline import _run_printability_check as _orig
 
     return _orig(step_path)
 
