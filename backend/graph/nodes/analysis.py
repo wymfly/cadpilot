@@ -83,26 +83,54 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
         )
         return {"error": str(exc), "failure_reason": reason, "status": "failed"}
 
-    # Template matching (best-effort)
+    # Template matching via part_type semantic routing (replaces keyword _match_template)
     matched_template = None
     template_params: list[dict] = []
     try:
-        from backend.pipeline.vision_cad_pipeline import _match_template
-        template_result = _match_template(state.get("input_text") or "")
-        if template_result and template_result[0]:
-            tpl = template_result[0]
+        from backend.core.template_engine import TemplateEngine
+        from backend.core.spec_compiler import rank_templates
+
+        _templates_dir = Path(__file__).parent.parent.parent / "knowledge" / "templates"
+        engine = TemplateEngine.from_directory(_templates_dir)
+
+        part_type = None
+        if isinstance(intent, dict):
+            part_type = intent.get("part_type")
+        if part_type:
+            candidates = engine.find_matches(part_type)
+        else:
+            candidates = engine.list_templates()
+
+        known = intent.get("known_params", {}) if isinstance(intent, dict) else {}
+        ranked = rank_templates(candidates, known)
+
+        if ranked:
+            tpl = ranked[0]
             matched_template = tpl.name
-            # Build params array with known_params merged as defaults
-            known = intent.get("known_params", {}) if isinstance(intent, dict) else {}
             template_params = []
             for p in tpl.params:
                 d = p.model_dump()
-                # 优先级: canonical name > display_name (LLM 可能返回中文键)
                 if p.name in known:
                     d["default"] = known[p.name]
                 elif p.display_name and p.display_name in known:
                     d["default"] = known[p.display_name]
                 template_params.append(d)
+    except Exception:
+        pass
+
+    # Engineering standards recommendations (best-effort)
+    recommendations: list[dict] = []
+    try:
+        from backend.core.engineering_standards import EngineeringStandards
+
+        part_type_for_rec = None
+        if isinstance(intent, dict):
+            part_type_for_rec = intent.get("part_type")
+        if part_type_for_rec:
+            known_for_rec = intent.get("known_params", {}) if isinstance(intent, dict) else {}
+            standards = EngineeringStandards()
+            recs = standards.recommend_params(part_type_for_rec, known_for_rec)
+            recommendations = [r.model_dump() for r in recs]
     except Exception:
         pass
 
@@ -113,6 +141,7 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
             "intent": intent,
             "template_name": matched_template,
             "params": template_params,
+            "recommendations": recommendations,
             "status": "intent_parsed",
         },
     )
@@ -129,6 +158,7 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
     return {
         "intent": intent,
         "matched_template": matched_template,
+        "recommendations": recommendations,
         "status": "awaiting_confirmation",
         "token_stats": token_stats,
     }
