@@ -6,6 +6,7 @@ Three presets (fast / balanced / precise) provide sensible defaults.
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
 from pydantic import BaseModel
@@ -95,6 +96,20 @@ PRESETS: dict[str, PipelineConfig] = {
         output_formats=["step", "stl", "3mf"],
     ),
 }
+
+
+def _parse_pipeline_config(config_json: str) -> PipelineConfig:
+    """Parse pipeline_config JSON string into PipelineConfig."""
+    try:
+        raw = json.loads(config_json)
+    except json.JSONDecodeError:
+        return PRESETS["balanced"]
+    if not isinstance(raw, dict):
+        return PRESETS["balanced"]
+    preset = raw.get("preset", "balanced")
+    if preset in PRESETS and len(raw) <= 2:  # only preset key (+ maybe extra)
+        return PRESETS[preset]
+    return PipelineConfig(**raw)
 
 
 def get_tooltips() -> dict[str, TooltipSpec]:

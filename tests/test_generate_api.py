@@ -1007,33 +1007,33 @@ class TestParsePipelineConfig:
     """Tests for _parse_pipeline_config edge cases."""
 
     def test_valid_preset(self) -> None:
-        from backend.api.generate import _parse_pipeline_config
+        from backend.models.pipeline_config import _parse_pipeline_config
 
         config = _parse_pipeline_config('{"preset": "fast"}')
         assert config is not None
 
     def test_invalid_json(self) -> None:
-        from backend.api.generate import _parse_pipeline_config
+        from backend.models.pipeline_config import _parse_pipeline_config
 
         config = _parse_pipeline_config("not json at all")
         # Should fall back to balanced preset
         assert config is not None
 
     def test_empty_string(self) -> None:
-        from backend.api.generate import _parse_pipeline_config
+        from backend.models.pipeline_config import _parse_pipeline_config
 
         config = _parse_pipeline_config("")
         assert config is not None
 
     def test_non_dict_json(self) -> None:
-        from backend.api.generate import _parse_pipeline_config
+        from backend.models.pipeline_config import _parse_pipeline_config
 
         config = _parse_pipeline_config("[1, 2, 3]")
         # Non-dict should fall back to balanced
         assert config is not None
 
     def test_empty_dict(self) -> None:
-        from backend.api.generate import _parse_pipeline_config
+        from backend.models.pipeline_config import _parse_pipeline_config
 
         config = _parse_pipeline_config("{}")
         assert config is not None
@@ -1041,7 +1041,7 @@ class TestParsePipelineConfig:
     def test_unknown_preset(self) -> None:
         from pydantic import ValidationError
 
-        from backend.api.generate import _parse_pipeline_config
+        from backend.models.pipeline_config import _parse_pipeline_config
 
         # Unknown preset falls through to PipelineConfig(**raw) which raises
         # ValidationError because preset is Literal["fast","balanced","precise","custom"]
