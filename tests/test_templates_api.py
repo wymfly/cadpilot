@@ -7,6 +7,7 @@ Validates:
 - PUT    /templates/{name}    update, 404
 - DELETE /templates/{name}    delete, 404
 - POST   /templates/{name}/validate   valid params, invalid params, 404
+- API key authentication on write endpoints (POST/PUT/DELETE)
 
 Tests call the async handler functions directly (via ``asyncio.run``) to
 avoid dependency on ``httpx``/``TestClient`` which is stubbed in conftest.
@@ -16,11 +17,12 @@ from __future__ import annotations
 
 import asyncio
 import textwrap
+from unittest.mock import patch
 
 import pytest
 
 import backend.api.v1.templates as tmpl_api
-from backend.api.v1.errors import APIError
+from backend.api.v1.errors import APIError, ErrorCode
 
 
 # ---------------------------------------------------------------------------
@@ -223,3 +225,75 @@ class TestValidateParams:
         with pytest.raises(APIError) as exc_info:
             asyncio.run(tmpl_api.validate_params("nonexistent", {}))
         assert exc_info.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# API Key authentication — _require_api_key
+# ---------------------------------------------------------------------------
+
+
+def _make_settings(api_key: str | None = None):
+    """Build a mock Settings with the given api_key."""
+    from backend.config import Settings
+
+    return Settings(api_key=api_key)
+
+
+class TestRequireApiKey:
+    """Unit tests for the _require_api_key dependency function."""
+
+    def test_no_key_configured_allows_access(self) -> None:
+        """When api_key is None (unconfigured), all requests pass."""
+        with patch(
+            "backend.config.Settings",
+            return_value=_make_settings(api_key=None),
+        ):
+            # Should not raise
+            tmpl_api._require_api_key(x_api_key=None)
+
+    def test_correct_key_allows_access(self) -> None:
+        """When correct API key is provided, request passes."""
+        with patch(
+            "backend.config.Settings",
+            return_value=_make_settings(api_key="secret-123"),
+        ):
+            tmpl_api._require_api_key(x_api_key="secret-123")
+
+    def test_missing_key_returns_401(self) -> None:
+        """When api_key is configured but header is missing, raise 401."""
+        with patch(
+            "backend.config.Settings",
+            return_value=_make_settings(api_key="secret-123"),
+        ):
+            with pytest.raises(APIError) as exc_info:
+                tmpl_api._require_api_key(x_api_key=None)
+            assert exc_info.value.status_code == 401
+            assert exc_info.value.code == ErrorCode.UNAUTHORIZED
+
+    def test_wrong_key_returns_401(self) -> None:
+        """When api_key is configured but header value is wrong, raise 401."""
+        with patch(
+            "backend.config.Settings",
+            return_value=_make_settings(api_key="secret-123"),
+        ):
+            with pytest.raises(APIError) as exc_info:
+                tmpl_api._require_api_key(x_api_key="wrong-key")
+            assert exc_info.value.status_code == 401
+            assert exc_info.value.code == ErrorCode.UNAUTHORIZED
+
+    def test_get_list_no_auth_required(self) -> None:
+        """GET list_templates works without API key (no auth on GET)."""
+        result = asyncio.run(tmpl_api.list_templates())
+        assert isinstance(result, list)
+
+    def test_get_single_no_auth_required(self) -> None:
+        """GET get_template works without API key (no auth on GET)."""
+        result = asyncio.run(tmpl_api.get_template("test_disk"))
+        assert result["name"] == "test_disk"
+
+    def test_validate_no_auth_required(self) -> None:
+        """POST validate_params works without API key (read-only)."""
+        result = asyncio.run(
+            tmpl_api.validate_params("test_disk", {"diameter": 100})
+        )
+        assert result.valid is True

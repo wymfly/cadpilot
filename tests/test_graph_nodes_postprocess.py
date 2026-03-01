@@ -93,6 +93,53 @@ class TestCheckPrintabilityNode:
         assert "status" not in result or result.get("status") != "failed"
 
     @pytest.mark.asyncio
+    async def test_printability_failure_sets_failed_status(self) -> None:
+        from backend.graph.nodes.postprocess import check_printability_node
+
+        state = CadJobState(
+            job_id="t1", input_type="text", status="generating",
+            step_path="/outputs/t1/model.step",
+        )
+        mock_result = {
+            "printable": False,
+            "issues": [
+                {"severity": "error", "message": "Wall thickness below minimum"},
+            ],
+        }
+        with patch(
+            "backend.graph.nodes.postprocess._run_printability_check",
+            return_value=mock_result,
+        ):
+            result = await check_printability_node(state)
+
+        assert result["status"] == "failed"
+        assert "Wall thickness" in result["error"]
+        assert result["printability"] == mock_result
+
+    @pytest.mark.asyncio
+    async def test_printability_warning_only_continues(self) -> None:
+        from backend.graph.nodes.postprocess import check_printability_node
+
+        state = CadJobState(
+            job_id="t1", input_type="text", status="generating",
+            step_path="/outputs/t1/model.step",
+        )
+        mock_result = {
+            "printable": True,
+            "issues": [
+                {"severity": "warning", "message": "Minor overhang"},
+            ],
+        }
+        with patch(
+            "backend.graph.nodes.postprocess._run_printability_check",
+            return_value=mock_result,
+        ):
+            result = await check_printability_node(state)
+
+        assert result.get("status") != "failed"
+        assert result["printability"] == mock_result
+
+    @pytest.mark.asyncio
     async def test_skips_if_no_step_path(self) -> None:
         from backend.graph.nodes.postprocess import check_printability_node
 

@@ -70,4 +70,20 @@ async def check_printability_node(state: CadJobState) -> dict[str, Any]:
         "job.printability_ready",
         {"job_id": state["job_id"], "printability": result},
     )
+
+    # Intercept error-level printability issues to fail the pipeline
+    if result and not result.get("printable", True):
+        error_issues = [
+            issue
+            for issue in result.get("issues", [])
+            if issue.get("severity") == "error"
+        ]
+        if error_issues:
+            error_msgs = "; ".join(issue.get("message", "") for issue in error_issues)
+            return {
+                "printability": result,
+                "error": f"Printability check failed: {error_msgs}",
+                "status": "failed",
+            }
+
     return {"printability": result}

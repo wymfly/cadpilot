@@ -8,11 +8,87 @@ Core engine for the parametric template system:
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import jinja2
 
 from backend.models.template import ParametricTemplate, load_all_templates
+
+
+# -- safe constraint evaluation ----------------------------------------------
+
+_ALLOWED_BUILTINS = {"min": min, "max": max, "abs": abs}
+
+# AST node types that are allowed in constraint expressions (whitelist mode).
+# Any node type NOT in this set will be rejected.
+_ALLOWED_NODES = (
+    ast.Expression,
+    ast.BoolOp,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.Compare,
+    ast.Constant,
+    ast.Name,
+    ast.Load,
+    ast.Call,  # only whitelisted calls (min/max/abs) pass further check
+    ast.Tuple,
+    ast.List,
+    # Comparison / boolean operators
+    ast.And,
+    ast.Or,
+    ast.Not,
+    ast.Eq,
+    ast.NotEq,
+    ast.Lt,
+    ast.LtE,
+    ast.Gt,
+    ast.GtE,
+    ast.Is,
+    ast.IsNot,
+    ast.In,
+    ast.NotIn,
+    # Arithmetic operators
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.Div,
+    ast.FloorDiv,
+    ast.Mod,
+    ast.Pow,
+    ast.USub,
+    ast.UAdd,
+)
+
+
+def _safe_eval_constraint(expr: str, variables: dict) -> object:
+    """Evaluate a constraint expression with AST-level safety checks.
+
+    Uses a **whitelist** approach — only explicitly allowed AST node types
+    are permitted.  All others (Lambda, ListComp, Attribute, Import, etc.)
+    are rejected.
+
+    Only ``min``, ``max``, and ``abs`` calls are allowed.
+    """
+    tree = ast.parse(expr, mode="eval")
+
+    for node in ast.walk(tree):
+        if not isinstance(node, _ALLOWED_NODES):
+            raise ValueError(f"Forbidden construct in constraint: {type(node).__name__}")
+        # Whitelist-check function calls (only min/max/abs)
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in _ALLOWED_BUILTINS:
+                continue
+            raise ValueError(f"Forbidden call in constraint: {ast.dump(node)}")
+        # Reject underscore-prefixed names (blocks __builtins__, __import__, etc.)
+        if isinstance(node, ast.Name) and node.id.startswith("_"):
+            raise ValueError(f"Underscore-prefixed name not allowed: {node.id}")
+
+    code = compile(tree, filename="<constraint>", mode="eval")
+    global_ns: dict = {"__builtins__": {}}
+    global_ns.update(variables)
+    global_ns.update(_ALLOWED_BUILTINS)  # builtins override user variables
+    return eval(code, global_ns)  # noqa: S307
 
 
 class TemplateEngine:
@@ -66,10 +142,9 @@ class TemplateEngine:
         merged = tmpl.get_defaults()
         merged.update(params)
 
-        _safe_builtins = {"__builtins__": {"min": min, "max": max, "abs": abs}}
         for constraint in tmpl.constraints:
             try:
-                if not eval(constraint, _safe_builtins, merged):  # noqa: S307
+                if not _safe_eval_constraint(constraint, merged):
                     errors.append(f"Constraint violation: {constraint}")
             except Exception as exc:
                 errors.append(f"Constraint evaluation error: {constraint} ({exc})")
@@ -101,6 +176,6 @@ class TemplateEngine:
             if k in merged and isinstance(merged[k], float):
                 merged[k] = int(merged[k])
 
-        env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+        env = jinja2.sandbox.SandboxedEnvironment(undefined=jinja2.StrictUndefined)
         template = env.from_string(tmpl.code_template)
         return template.render(**merged)

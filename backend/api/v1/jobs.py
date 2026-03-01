@@ -210,11 +210,25 @@ async def create_job_endpoint(body: CreateJobRequest, request: Request) -> Event
     cad_graph = request.app.state.cad_graph
     config = {"configurable": {"thread_id": job_id}}
 
+    # Parse pipeline_config — resolve presets into full config dict
+    from backend.models.pipeline_config import PRESETS, PipelineConfig
+
+    pc_raw = body.pipeline_config
+    if isinstance(pc_raw, dict) and pc_raw:
+        preset = pc_raw.get("preset", "balanced")
+        if preset in PRESETS and len(pc_raw) <= 2:
+            pc = PRESETS[preset]
+        else:
+            pc = PipelineConfig(**pc_raw)
+    else:
+        pc = PRESETS["balanced"]
+
     initial_state: dict[str, Any] = {
         "job_id": job_id,
         "input_type": body.input_type,
         "input_text": input_text,
         "image_path": None,
+        "pipeline_config": pc.model_dump(),  # consumed by generation nodes in M2
         "status": "pending",
     }
 
@@ -257,6 +271,11 @@ async def create_drawing_job(
     image_path = str(job_dir / f"input{ext}")
     await asyncio.to_thread(Path(image_path).write_bytes, content)
 
+    # Parse pipeline_config for drawing upload
+    from backend.models.pipeline_config import PRESETS, PipelineConfig, _parse_pipeline_config
+
+    pc = _parse_pipeline_config(pipeline_config)
+
     cad_graph = request.app.state.cad_graph
     config = {"configurable": {"thread_id": job_id}}
 
@@ -265,6 +284,7 @@ async def create_drawing_job(
         "input_type": "drawing",
         "input_text": None,
         "image_path": image_path,
+        "pipeline_config": pc.model_dump(),
         "status": "pending",
     }
 

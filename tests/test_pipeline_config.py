@@ -65,3 +65,29 @@ def test_presets_has_three_entries():
 
     assert len(PRESETS) == 3
     assert set(PRESETS.keys()) == {"fast", "balanced", "precise"}
+
+
+def test_parse_pipeline_config_preset():
+    """_parse_pipeline_config resolves preset name to full config."""
+    from backend.models.pipeline_config import _parse_pipeline_config
+
+    pc = _parse_pipeline_config('{"preset": "fast"}')
+    assert pc.preset == "fast"
+    assert pc.best_of_n == 1
+
+
+def test_parse_pipeline_config_invalid_json():
+    """Invalid JSON falls back to balanced preset."""
+    from backend.models.pipeline_config import _parse_pipeline_config
+
+    pc = _parse_pipeline_config("not json")
+    assert pc.preset == "balanced"
+
+
+def test_pipeline_config_in_state():
+    """pipeline_config field exists in CadJobState."""
+    from backend.graph.state import CadJobState
+    import typing
+
+    hints = typing.get_type_hints(CadJobState)
+    assert "pipeline_config" in hints

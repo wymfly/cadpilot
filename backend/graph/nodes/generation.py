@@ -70,6 +70,9 @@ def _run_generate_from_spec(
 
 async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
     """Generate STEP from text intent via TemplateEngine + Sandbox."""
+    import time as _time
+
+    _t0 = _time.time()
     # Idempotent: skip if already generated
     existing = state.get("step_path")
     if existing and Path(existing).exists():
@@ -97,11 +100,20 @@ async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
         logger.error("Text generation failed: %s (%s)", exc, reason)
         return {"error": str(exc), "failure_reason": reason, "status": "failed"}
 
-    return {"step_path": result_path, "status": "generating"}
+    _duration = _time.time() - _t0
+    token_stats = dict(state.get("token_stats") or {})
+    stages = list(token_stats.get("stages", []))
+    stages.append({"name": "generate_step_text", "input_tokens": 0, "output_tokens": 0, "duration_s": round(_duration, 3)})
+    token_stats["stages"] = stages
+
+    return {"step_path": result_path, "status": "generating", "token_stats": token_stats}
 
 
 async def generate_step_drawing_node(state: CadJobState) -> dict[str, Any]:
     """Generate STEP from confirmed DrawingSpec via VL pipeline."""
+    import time as _time
+
+    _t0 = _time.time()
     # Idempotent: skip if already generated
     existing = state.get("step_path")
     if existing and Path(existing).exists():
@@ -131,4 +143,10 @@ async def generate_step_drawing_node(state: CadJobState) -> dict[str, Any]:
         logger.error("Drawing generation failed: %s (%s)", exc, reason)
         return {"error": str(exc), "failure_reason": reason, "status": "failed"}
 
-    return {"step_path": step_path, "status": "generating"}
+    _duration = _time.time() - _t0
+    token_stats = dict(state.get("token_stats") or {})
+    stages = list(token_stats.get("stages", []))
+    stages.append({"name": "generate_step_drawing", "input_tokens": 0, "output_tokens": 0, "duration_s": round(_duration, 3)})
+    token_stats["stages"] = stages
+
+    return {"step_path": step_path, "status": "generating", "token_stats": token_stats}

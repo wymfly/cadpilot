@@ -4,20 +4,26 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any
 
 from backend.graph.llm_utils import map_exception_to_failure_reason
 from backend.graph.state import CadJobState
 from backend.models.job import update_job as _update_job
 
+from backend.core.cost_optimizer import CostOptimizer
+
 logger = logging.getLogger(__name__)
+
+# Module-level cost optimizer instance (result cache + model degradation)
+_cost_optimizer = CostOptimizer()
 
 
 async def _safe_update_job(job_id: str, **kwargs: Any) -> None:
     """Update DB job, tolerating missing records (e.g. in unit tests)."""
     try:
         await _update_job(job_id, **kwargs)
-    except (KeyError, Exception) as exc:
+    except Exception as exc:
         logger.debug("DB update skipped for job %s: %s", job_id, exc)
 
 LLM_TIMEOUT_S = 60.0
@@ -59,6 +65,9 @@ def _run_analyze_vision(image_path: str) -> tuple:
 
 async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
     """Parse user text into IntentSpec via LLM (with timeout)."""
+    import time as _time
+
+    _t0 = _time.time()
     try:
         intent = await asyncio.wait_for(
             _parse_intent(state.get("input_text") or ""),
@@ -109,15 +118,27 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
     )
     await _safe_update_job(state["job_id"], status="awaiting_confirmation", intent=intent)
     await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"], "status": "awaiting_confirmation"})
+
+    # Record stage timing into token_stats
+    _duration = _time.time() - _t0
+    token_stats = dict(state.get("token_stats") or {})
+    stages = list(token_stats.get("stages", []))
+    stages.append({"name": "analyze_intent", "input_tokens": 0, "output_tokens": 0, "duration_s": round(_duration, 3)})
+    token_stats["stages"] = stages
+
     return {
         "intent": intent,
         "matched_template": matched_template,
         "status": "awaiting_confirmation",
+        "token_stats": token_stats,
     }
 
 
 async def analyze_vision_node(state: CadJobState) -> dict[str, Any]:
     """Run VL model to extract DrawingSpec from uploaded image (with timeout)."""
+    import time as _time
+
+    _t0 = _time.time()
     await _safe_dispatch("job.vision_analyzing", {"job_id": state["job_id"], "status": "analyzing"})
 
     image_path = state.get("image_path")
@@ -129,20 +150,35 @@ async def analyze_vision_node(state: CadJobState) -> dict[str, Any]:
         )
         return {"error": "No image_path provided", "failure_reason": "generation_error", "status": "failed"}
 
+    # Check result cache (keyed by image content SHA256)
     try:
-        spec_dict, reasoning = await asyncio.wait_for(
-            asyncio.to_thread(_run_analyze_vision, image_path),
-            timeout=LLM_TIMEOUT_S,
-        )
-    except Exception as exc:
-        reason = map_exception_to_failure_reason(exc)
-        logger.error("Vision analysis failed: %s (%s)", exc, reason)
-        await _safe_update_job(state["job_id"], status="failed", error=str(exc))
-        await _safe_dispatch(
-            "job.failed",
-            {"job_id": state["job_id"], "error": str(exc), "failure_reason": reason, "status": "failed"},
-        )
-        return {"error": str(exc), "failure_reason": reason, "status": "failed"}
+        image_data = await asyncio.to_thread(Path(image_path).read_bytes)
+        cached = _cost_optimizer.get_cached_result(image_data)
+    except Exception:
+        image_data = None
+        cached = None
+
+    if cached is not None:
+        spec_dict, reasoning = cached
+        logger.info("Vision analysis cache hit for job %s", state["job_id"])
+    else:
+        try:
+            spec_dict, reasoning = await asyncio.wait_for(
+                asyncio.to_thread(_run_analyze_vision, image_path),
+                timeout=LLM_TIMEOUT_S,
+            )
+            # Store in cache for future identical images
+            if image_data is not None:
+                _cost_optimizer.cache_result(image_data, (spec_dict, reasoning))
+        except Exception as exc:
+            reason = map_exception_to_failure_reason(exc)
+            logger.error("Vision analysis failed: %s (%s)", exc, reason)
+            await _safe_update_job(state["job_id"], status="failed", error=str(exc))
+            await _safe_dispatch(
+                "job.failed",
+                {"job_id": state["job_id"], "error": str(exc), "failure_reason": reason, "status": "failed"},
+            )
+            return {"error": str(exc), "failure_reason": reason, "status": "failed"}
 
     await _safe_dispatch(
         "job.spec_ready",
@@ -150,6 +186,13 @@ async def analyze_vision_node(state: CadJobState) -> dict[str, Any]:
     )
     await _safe_update_job(state["job_id"], status="awaiting_drawing_confirmation", drawing_spec=spec_dict)
     await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"], "status": "awaiting_drawing_confirmation"})
-    return {"drawing_spec": spec_dict, "status": "awaiting_drawing_confirmation"}
+
+    _duration = _time.time() - _t0
+    token_stats = dict(state.get("token_stats") or {})
+    stages = list(token_stats.get("stages", []))
+    stages.append({"name": "analyze_vision", "input_tokens": 0, "output_tokens": 0, "duration_s": round(_duration, 3)})
+    token_stats["stages"] = stages
+
+    return {"drawing_spec": spec_dict, "status": "awaiting_drawing_confirmation", "token_stats": token_stats}
 
 

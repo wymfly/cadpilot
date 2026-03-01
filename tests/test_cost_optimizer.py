@@ -224,3 +224,12 @@ class TestCostOptimizer:
         opt.cache_result(b"image_2", {"part_type": "plate"})
         assert opt.get_cached_result(b"image_1") == {"part_type": "rotational"}
         assert opt.get_cached_result(b"image_2") == {"part_type": "plate"}
+
+
+class TestCostOptimizerIntegration:
+    """Verify CostOptimizer is wired into the analysis pipeline."""
+
+    def test_module_level_instance_exists(self):
+        from backend.graph.nodes import analysis
+        assert hasattr(analysis, "_cost_optimizer")
+        assert isinstance(analysis._cost_optimizer, CostOptimizer)

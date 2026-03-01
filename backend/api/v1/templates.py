@@ -13,12 +13,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel
+
+import re
 
 from backend.api.v1.errors import APIError, ErrorCode
 from backend.core.template_engine import TemplateEngine
 from backend.models.template import ParametricTemplate
+
+_SAFE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 
 router = APIRouter(prefix="/templates", tags=["templates"])
 
@@ -29,6 +33,24 @@ _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "knowledge" / "templates"
 def _get_engine() -> TemplateEngine:
     """Load a fresh engine from the templates directory."""
     return TemplateEngine.from_directory(_TEMPLATES_DIR)
+
+
+def _require_api_key(
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
+) -> None:
+    """Reject write requests when API key is configured but not provided."""
+    import hmac
+
+    from backend.config import Settings
+
+    settings = Settings()
+    if settings.api_key is not None and settings.api_key != "":
+        if not x_api_key or not hmac.compare_digest(x_api_key, settings.api_key):
+            raise APIError(
+                status_code=401,
+                code=ErrorCode.UNAUTHORIZED,
+                message="Invalid or missing API key",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -73,10 +95,16 @@ async def get_template(name: str) -> dict[str, Any]:
     return tmpl.model_dump()
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(_require_api_key)])
 async def create_template(body: dict[str, Any]) -> dict[str, Any]:
     """创建新模板（名称冲突则 409）。"""
     tmpl = ParametricTemplate.model_validate(body)
+    if not _SAFE_NAME_RE.match(tmpl.name):
+        raise APIError(
+            status_code=422,
+            code=ErrorCode.VALIDATION_FAILED,
+            message="Template name must contain only alphanumeric, underscore, or hyphen characters",
+        )
     path = _TEMPLATES_DIR / f"{tmpl.name}.yaml"
     if path.exists():
         raise APIError(
@@ -88,13 +116,15 @@ async def create_template(body: dict[str, Any]) -> dict[str, Any]:
     return tmpl.model_dump()
 
 
-@router.put("/{name}")
+@router.put("/{name}", dependencies=[Depends(_require_api_key)])
 async def update_template(name: str, body: dict[str, Any]) -> dict[str, Any]:
     """更新已有模板（不存在则 404）。"""
     path = _TEMPLATES_DIR / f"{name}.yaml"
     if not path.exists():
         # Try glob match for templates stored with prefixed filenames.
-        matches = list(_TEMPLATES_DIR.glob(f"*{name}*.yaml"))
+        from glob import escape as _glob_escape
+
+        matches = list(_TEMPLATES_DIR.glob(f"*{_glob_escape(name)}*.yaml"))
         if not matches:
             raise APIError(
                 status_code=404,
@@ -107,12 +137,14 @@ async def update_template(name: str, body: dict[str, Any]) -> dict[str, Any]:
     return tmpl.model_dump()
 
 
-@router.delete("/{name}")
+@router.delete("/{name}", dependencies=[Depends(_require_api_key)])
 async def delete_template(name: str) -> dict[str, str]:
     """删除模板（不存在则 404）。"""
     path = _TEMPLATES_DIR / f"{name}.yaml"
     if not path.exists():
-        matches = list(_TEMPLATES_DIR.glob(f"*{name}*.yaml"))
+        from glob import escape as _glob_escape
+
+        matches = list(_TEMPLATES_DIR.glob(f"*{_glob_escape(name)}*.yaml"))
         if not matches:
             raise APIError(
                 status_code=404,

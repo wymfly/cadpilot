@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+
 from langgraph.graph import END, START, StateGraph
+
+logger = logging.getLogger(__name__)
 
 from backend.graph.nodes.analysis import (
     analyze_intent_node,
@@ -89,17 +94,37 @@ def build_graph():
 
 
 async def get_compiled_graph():
-    """Compile graph with MemorySaver checkpointer for HITL support.
+    """Compile graph with a persistent SQLite checkpointer for HITL support.
 
-    Uses in-memory checkpointing which is sufficient for single-worker
-    deployments where each job is a one-shot run.
-
-    Note: MemorySaver only supports a single worker process. For
-    multi-worker deployments, switch to a persistent checkpointer.
+    Uses ``AsyncSqliteSaver`` so that graph state survives process restarts.
+    Falls back to in-memory ``MemorySaver`` when the SQLite checkpointer is
+    unavailable (e.g. missing dependency or filesystem error).
     """
-    from langgraph.checkpoint.memory import MemorySaver
+    try:
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-    checkpointer = MemorySaver()
+        db_path = Path("backend/data/checkpoints.db")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        checkpointer = AsyncSqliteSaver.from_conn_string(str(db_path))
+        await checkpointer.setup()
+        logger.info("Using persistent SQLite checkpointer at %s", db_path)
+    except ImportError:
+        from langgraph.checkpoint.memory import MemorySaver
+
+        checkpointer = MemorySaver()
+        logger.warning(
+            "langgraph-checkpoint-sqlite not installed, using MemorySaver "
+            "(state lost on restart)"
+        )
+    except Exception as exc:
+        from langgraph.checkpoint.memory import MemorySaver
+
+        checkpointer = MemorySaver()
+        logger.warning(
+            "SQLite checkpointer setup failed (%s), using MemorySaver "
+            "(state lost on restart)",
+            exc,
+        )
 
     compiled = _build_workflow().compile(
         checkpointer=checkpointer,

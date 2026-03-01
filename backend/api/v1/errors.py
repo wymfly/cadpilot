@@ -34,6 +34,7 @@ class ErrorCode:
     TEMPLATE_EXISTS = "TEMPLATE_EXISTS"
     ORGANIC_DISABLED = "ORGANIC_DISABLED"
     ORGANIC_JOB_NOT_FOUND = "ORGANIC_JOB_NOT_FOUND"
+    UNAUTHORIZED = "UNAUTHORIZED"
 
 
 # ---------------------------------------------------------------------------

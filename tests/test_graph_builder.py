@@ -34,6 +34,12 @@ class TestGetCompiledGraph:
         graph = await get_compiled_graph()
         assert graph is not None
 
+    @pytest.mark.asyncio
+    async def test_compiled_graph_has_checkpointer(self) -> None:
+        from backend.graph.builder import get_compiled_graph
+        graph = await get_compiled_graph()
+        assert graph.checkpointer is not None
+
 
 class TestGraphExports:
     def test_imports_from_package(self) -> None:

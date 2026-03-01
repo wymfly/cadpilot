@@ -53,3 +53,13 @@ def test_wall_time_is_positive():
     tracker.record("x", input_tokens=1, output_tokens=1, duration_s=0.1)
     stats = tracker.get_stats()
     assert stats["wall_time_s"] > 0
+
+
+def test_token_stats_in_graph_state():
+    """token_stats field exists in CadJobState."""
+    import typing
+
+    from backend.graph.state import CadJobState
+
+    hints = typing.get_type_hints(CadJobState)
+    assert "token_stats" in hints

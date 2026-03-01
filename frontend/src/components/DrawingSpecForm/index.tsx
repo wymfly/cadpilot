@@ -22,13 +22,13 @@ import type { DrawingSpec, DrawingSpecFeature } from '../../types/generate.ts';
 const { Text, Title } = Typography;
 
 const PART_TYPE_OPTIONS = [
-  { value: 'ROTATIONAL', label: '回转体' },
-  { value: 'ROTATIONAL_STEPPED', label: '阶梯回转体' },
-  { value: 'PLATE', label: '板件' },
-  { value: 'BRACKET', label: '支架' },
-  { value: 'HOUSING', label: '壳体' },
-  { value: 'GEAR', label: '齿轮' },
-  { value: 'GENERAL', label: '通用' },
+  { value: 'rotational', label: '回转体' },
+  { value: 'rotational_stepped', label: '阶梯回转体' },
+  { value: 'plate', label: '板件' },
+  { value: 'bracket', label: '支架' },
+  { value: 'housing', label: '壳体' },
+  { value: 'gear', label: '齿轮' },
+  { value: 'general', label: '通用' },
 ];
 
 const BASE_BODY_METHOD_OPTIONS = [

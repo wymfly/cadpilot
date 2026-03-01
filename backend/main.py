@@ -31,6 +31,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
+    # Clean up checkpointer resources
+    if hasattr(app.state, "cad_graph") and hasattr(app.state.cad_graph, "checkpointer"):
+        cp = app.state.cad_graph.checkpointer
+        if hasattr(cp, "conn") and cp.conn is not None:
+            await cp.conn.close()
+
 
 app = FastAPI(title="cadpilot", version="3.0.0", lifespan=lifespan)
 

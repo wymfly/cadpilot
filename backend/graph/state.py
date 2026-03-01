@@ -39,6 +39,10 @@ class CadJobState(TypedDict, total=False):
     organic_warnings: Annotated[list[str], operator.add]
     organic_result: dict | None          # {model_url, stl_url, threemf_url, ...}
 
+    # ── Pipeline configuration ──
+    pipeline_config: dict | None  # PipelineConfig.model_dump()
+    token_stats: dict | None      # TokenTracker.get_stats()
+
     # ── Status & error ──
     status: str                  # mirrors JobStatus value
     error: str | None

@@ -41,7 +41,12 @@ async def create_job_node(state: CadJobState) -> dict[str, Any]:
         "job.created",
         {"job_id": state["job_id"], "input_type": state["input_type"], "status": "created"},
     )
-    return {"status": "created"}
+
+    # Initialize token tracker (serialized as dict in state)
+    from backend.infra.token_tracker import TokenTracker
+
+    tracker = TokenTracker()
+    return {"status": "created", "token_stats": tracker.get_stats()}
 
 
 async def confirm_with_user_node(state: CadJobState) -> dict[str, Any]:
@@ -92,6 +97,15 @@ async def finalize_node(state: CadJobState) -> dict[str, Any]:
             "warnings": organic_result.get("warnings", []),
             "printability": organic_result.get("printability"),
         })
+
+    # Include token stats in result (recalculate aggregates from stages)
+    token_stats = state.get("token_stats")
+    if token_stats:
+        stages = token_stats.get("stages", [])
+        token_stats["total_input_tokens"] = sum(s.get("input_tokens", 0) for s in stages)
+        token_stats["total_output_tokens"] = sum(s.get("output_tokens", 0) for s in stages)
+        token_stats["total_duration_s"] = round(sum(s.get("duration_s", 0) for s in stages), 3)
+        result_dict["token_stats"] = token_stats
 
     if result_dict:
         orm_kwargs["result"] = result_dict

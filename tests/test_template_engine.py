@@ -291,6 +291,48 @@ class TestTemplateEngineValidate:
         errors = engine.validate("l_bracket", {"width": 100})
         assert errors == []
 
+    def test_constraint_no_code_injection(self) -> None:
+        """Constraint with __import__('os').system('echo pwned') must be rejected."""
+        tmpl = ParametricTemplate(
+            name="injection_test",
+            display_name="注入测试",
+            part_type="general",
+            params=[
+                ParamDefinition(
+                    name="x",
+                    display_name="X",
+                    param_type="float",
+                    default=10,
+                ),
+            ],
+            constraints=["__import__('os').system('echo pwned')"],
+        )
+        engine = TemplateEngine(templates=[tmpl])
+        errors = engine.validate("injection_test", {"x": 5})
+        assert len(errors) == 1
+        assert "Constraint evaluation error" in errors[0]
+
+    def test_constraint_no_builtin_access(self) -> None:
+        """Constraint with eval('1+1') == 2 must be rejected."""
+        tmpl = ParametricTemplate(
+            name="builtin_test",
+            display_name="内置函数测试",
+            part_type="general",
+            params=[
+                ParamDefinition(
+                    name="x",
+                    display_name="X",
+                    param_type="float",
+                    default=10,
+                ),
+            ],
+            constraints=["eval('1+1') == 2"],
+        )
+        engine = TemplateEngine(templates=[tmpl])
+        errors = engine.validate("builtin_test", {"x": 5})
+        assert len(errors) == 1
+        assert "Constraint evaluation error" in errors[0]
+
 
 # ---------------------------------------------------------------------------
 # 4. Load from directory
