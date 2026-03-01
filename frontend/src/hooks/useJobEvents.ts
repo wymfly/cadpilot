@@ -84,9 +84,12 @@ export function useJobEvents({
       }
     };
 
-    const handleEvent = (event: JobEvent) => {
-      lastStatus = event.status;
-      setEvents((prev) => [...prev, event]);
+    const handleEvent = (event: JobEvent, eventType?: string) => {
+      // Inject _eventType so downstream consumers can identify events explicitly
+      const enriched = eventType ? { ...event, _eventType: eventType } : event;
+      // Only update lastStatus from events that carry a status field
+      if (event.status) lastStatus = event.status;
+      setEvents((prev) => [...prev, enriched]);
       onEventRef.current?.(event);
 
       if (event.status === 'completed') {
@@ -131,9 +134,9 @@ export function useJobEvents({
         // 确保 status 字段与事件类型一致
         if (eventType === 'job.completed' || eventType === 'job.failed') {
           const terminalStatus = eventType === 'job.completed' ? 'completed' : 'failed';
-          handleEvent({ ...data, status: terminalStatus });
+          handleEvent({ ...data, status: terminalStatus }, eventType);
         } else {
-          handleEvent(data);
+          handleEvent(data, eventType);
         }
       });
     }

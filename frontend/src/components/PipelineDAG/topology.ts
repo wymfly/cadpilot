@@ -60,6 +60,28 @@ const PATH_NODES: Record<string, string[]> = {
   ],
 };
 
+/**
+ * Layout row assignments for the full (unfiltered) DAG.
+ * Branching nodes at the same depth get different x positions.
+ */
+const FULL_LAYOUT: Record<string, { x: number; y: number }> = {
+  create_job:            { x: 250, y: 0 },
+  // Analysis branch: three parallel paths
+  analyze_intent:        { x: 80,  y: 100 },
+  analyze_vision:        { x: 250, y: 100 },
+  analyze_organic:       { x: 420, y: 100 },
+  confirm_with_user:     { x: 250, y: 200 },
+  // Generation branch: three parallel paths
+  generate_step_text:    { x: 80,  y: 300 },
+  generate_step_drawing: { x: 250, y: 300 },
+  generate_organic_mesh: { x: 420, y: 300 },
+  // Post-processing
+  postprocess_organic:   { x: 420, y: 400 },
+  convert_preview:       { x: 165, y: 400 },
+  check_printability:    { x: 165, y: 500 },
+  finalize:              { x: 250, y: 600 },
+};
+
 /** Filter topology by input_type, return ReactFlow-compatible nodes and edges. */
 export function getFilteredTopology(
   inputType: string | null,
@@ -75,11 +97,16 @@ export function getFilteredTopology(
     (e) => visibleIds.has(e.source) && visibleIds.has(e.target),
   );
 
-  // Layout: vertical, 200px apart
+  // For single-path (filtered), use simple vertical layout centered at x=200
+  // For full DAG (unfiltered), use branch-aware positions
+  const isSinglePath = inputType != null && PATH_NODES[inputType] != null;
+
   const nodes: Node[] = filteredNodes.map((n, i) => ({
     id: n.id,
     type: 'pipelineNode',
-    position: { x: 200, y: i * 100 },
+    position: isSinglePath
+      ? { x: 200, y: i * 100 }
+      : FULL_LAYOUT[n.id] ?? { x: 200, y: i * 100 },
     data: { label: n.label, group: n.group },
   }));
 

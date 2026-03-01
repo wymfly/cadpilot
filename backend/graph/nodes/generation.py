@@ -46,9 +46,6 @@ def _run_generate_from_spec(
 @timed_node("generate_step_text")
 async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
     """Generate STEP from text intent via SpecCompiler (template-first, LLM-fallback)."""
-    import time as _time
-
-    _t0 = _time.time()
     # Idempotent: skip if already generated
     existing = state.get("step_path")
     if existing and Path(existing).exists():
@@ -88,16 +85,9 @@ async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
             "_reasoning": {"error": str(exc)},
         }
 
-    _duration = _time.time() - _t0
-    token_stats = dict(state.get("token_stats") or {})
-    stages = list(token_stats.get("stages", []))
-    stages.append({"name": "generate_step_text", "input_tokens": 0, "output_tokens": 0, "duration_s": round(_duration, 3)})
-    token_stats["stages"] = stages
-
     return {
         "step_path": result.step_path,
         "status": "generating",
-        "token_stats": token_stats,
         "_reasoning": {
             "method": result.method,
             "template": result.template_name or "N/A",
@@ -109,9 +99,6 @@ async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
 @timed_node("generate_step_drawing")
 async def generate_step_drawing_node(state: CadJobState) -> dict[str, Any]:
     """Generate STEP from confirmed DrawingSpec via VL pipeline."""
-    import time as _time
-
-    _t0 = _time.time()
     # Idempotent: skip if already generated
     existing = state.get("step_path")
     if existing and Path(existing).exists():
@@ -153,16 +140,9 @@ async def generate_step_drawing_node(state: CadJobState) -> dict[str, Any]:
             "_reasoning": {"error": str(exc)},
         }
 
-    _duration = _time.time() - _t0
-    token_stats = dict(state.get("token_stats") or {})
-    stages = list(token_stats.get("stages", []))
-    stages.append({"name": "generate_step_drawing", "input_tokens": 0, "output_tokens": 0, "duration_s": round(_duration, 3)})
-    token_stats["stages"] = stages
-
     return {
         "step_path": step_path,
         "status": "generating",
-        "token_stats": token_stats,
         "_reasoning": {
             "pipeline": "V2 drawing pipeline",
             "image_path": image_path or "N/A",

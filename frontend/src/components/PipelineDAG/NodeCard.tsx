@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Tag } from 'antd';
 import {
@@ -17,7 +17,7 @@ interface NodeCardData {
   elapsedMs?: number;
 }
 
-const STATUS_CONFIG: Record<NodeStatus, { color: string; icon: React.ReactNode }> = {
+const STATUS_CONFIG: Record<NodeStatus, { color: string; icon: ReactNode }> = {
   pending: { color: 'default', icon: <ClockCircleOutlined /> },
   running: { color: 'processing', icon: <LoadingOutlined /> },
   completed: { color: 'success', icon: <CheckCircleOutlined /> },
@@ -42,7 +42,7 @@ function NodeCard({ data }: { data: NodeCardData }) {
         background: status === 'failed' ? '#fff2f0' : '#fff',
         minWidth: 140,
         textAlign: 'center',
-        cursor: status === 'completed' || status === 'failed' ? 'pointer' : 'default',
+        cursor: status !== 'pending' ? 'pointer' : 'default',
       }}
     >
       <Handle type="target" position={Position.Top} />

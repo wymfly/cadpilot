@@ -67,9 +67,6 @@ def _run_analyze_vision(image_path: str) -> tuple:
 @timed_node("analyze_intent")
 async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
     """Parse user text into IntentSpec via LLM (with timeout)."""
-    import time as _time
-
-    _t0 = _time.time()
     try:
         intent = await asyncio.wait_for(
             _parse_intent(state.get("input_text") or ""),
@@ -152,19 +149,11 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
     })
     await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"], "status": "awaiting_confirmation"})
 
-    # Record stage timing into token_stats
-    _duration = _time.time() - _t0
-    token_stats = dict(state.get("token_stats") or {})
-    stages = list(token_stats.get("stages", []))
-    stages.append({"name": "analyze_intent", "input_tokens": 0, "output_tokens": 0, "duration_s": round(_duration, 3)})
-    token_stats["stages"] = stages
-
     return {
         "intent": intent,
         "matched_template": matched_template,
         "recommendations": recommendations,
         "status": "awaiting_confirmation",
-        "token_stats": token_stats,
         "_reasoning": {
             "part_type": str(part_type) if part_type else "未识别",
             "template_match": f"匹配模板: {matched_template}" if matched_template else "无匹配模板",
@@ -177,10 +166,6 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
 @timed_node("analyze_vision")
 async def analyze_vision_node(state: CadJobState) -> dict[str, Any]:
     """Run VL model to extract DrawingSpec from uploaded image (with timeout)."""
-    import time as _time
-
-    _t0 = _time.time()
-
     image_path = state.get("image_path")
     if not image_path:
         await _safe_update_job(state["job_id"], status="failed")
@@ -233,16 +218,9 @@ async def analyze_vision_node(state: CadJobState) -> dict[str, Any]:
     await _safe_update_job(state["job_id"], status="awaiting_drawing_confirmation", drawing_spec=spec_dict)
     await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"], "status": "awaiting_drawing_confirmation"})
 
-    _duration = _time.time() - _t0
-    token_stats = dict(state.get("token_stats") or {})
-    stages = list(token_stats.get("stages", []))
-    stages.append({"name": "analyze_vision", "input_tokens": 0, "output_tokens": 0, "duration_s": round(_duration, 3)})
-    token_stats["stages"] = stages
-
     return {
         "drawing_spec": spec_dict,
         "status": "awaiting_drawing_confirmation",
-        "token_stats": token_stats,
         "_reasoning": {
             "spec_source": "VL 模型分析",
             "part_type": spec_dict.get("part_type", "unknown") if isinstance(spec_dict, dict) else "unknown",

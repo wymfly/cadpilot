@@ -30,42 +30,37 @@ export default function PipelineDAG({ inputType, events }: PipelineDAGProps) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorData, setInspectorData] = useState<NodeInspectorData | null>(null);
 
-  // Derive node states from events (pure computation, no side effects)
+  // Derive node states from events using explicit _eventType
   const nodeStates = useMemo(() => {
     const states = new Map<string, NodeState>();
 
     for (const evt of events) {
-      const node = (evt as Record<string, unknown>).node as string | undefined;
-      if (!node) continue;
-
-      const status = evt.status as string;
-
-      if (status === 'node.started' || (evt as Record<string, unknown>).timestamp) {
-        if (!states.has(node) || states.get(node)!.status === 'pending') {
-          states.set(node, { status: 'running' });
-        }
-      }
-    }
-
-    // Second pass: overwrite with completed/failed
-    for (const evt of events) {
       const evtAny = evt as Record<string, unknown>;
+      const eventType = evtAny._eventType as string | undefined;
       const node = evtAny.node as string | undefined;
-      if (!node) continue;
+      if (!node || !eventType) continue;
 
-      if (evtAny.elapsed_ms != null && evtAny.error == null && evtAny.outputs_summary != null) {
-        states.set(node, {
-          status: 'completed',
-          elapsedMs: evtAny.elapsed_ms as number,
-          reasoning: evtAny.reasoning as Record<string, string> | null,
-          outputsSummary: evtAny.outputs_summary as Record<string, unknown>,
-        });
-      } else if (evtAny.elapsed_ms != null && evtAny.error != null) {
-        states.set(node, {
-          status: 'failed',
-          elapsedMs: evtAny.elapsed_ms as number,
-          error: evtAny.error as string,
-        });
+      switch (eventType) {
+        case 'node.started':
+          if (!states.has(node) || states.get(node)!.status === 'pending') {
+            states.set(node, { status: 'running' });
+          }
+          break;
+        case 'node.completed':
+          states.set(node, {
+            status: 'completed',
+            elapsedMs: evtAny.elapsed_ms as number,
+            reasoning: evtAny.reasoning as Record<string, string> | null,
+            outputsSummary: evtAny.outputs_summary as Record<string, unknown>,
+          });
+          break;
+        case 'node.failed':
+          states.set(node, {
+            status: 'failed',
+            elapsedMs: evtAny.elapsed_ms as number,
+            error: evtAny.error as string,
+          });
+          break;
       }
     }
 
