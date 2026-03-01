@@ -25,17 +25,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
 
     # Initialize LangGraph CAD pipeline
-    from backend.db.database import DB_PATH
     from backend.graph import get_compiled_graph
 
-    app.state.cad_graph = await get_compiled_graph(str(DB_PATH))
+    app.state.cad_graph = await get_compiled_graph()
 
     yield
-
-    # Clean up checkpointer connection
-    ctx = getattr(app.state.cad_graph, "_checkpointer_ctx", None)
-    if ctx is not None:
-        await ctx.__aexit__(None, None, None)
 
 
 app = FastAPI(title="cad3dify", version="3.0.0", lifespan=lifespan)

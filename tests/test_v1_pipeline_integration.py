@@ -96,7 +96,7 @@ def client():
     from backend.graph import get_compiled_graph
 
     loop = asyncio.get_event_loop()
-    app.state.cad_graph = loop.run_until_complete(get_compiled_graph(None))
+    app.state.cad_graph = loop.run_until_complete(get_compiled_graph())
 
     return TestClient(app)
 

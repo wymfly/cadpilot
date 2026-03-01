@@ -75,31 +75,21 @@ def build_graph():
     return _build_workflow().compile()
 
 
-async def get_compiled_graph(db_path: str | None = None):
-    """Compile graph with a persistent checkpointer (for production).
+async def get_compiled_graph():
+    """Compile graph with MemorySaver checkpointer for HITL support.
 
-    When *db_path* is provided, ``AsyncSqliteSaver`` is used for durable
-    checkpoint storage.  When ``None``, a lightweight ``MemorySaver`` is
-    created instead (useful for integration tests or ephemeral runs).
+    Uses in-memory checkpointing which is sufficient for single-worker
+    deployments where each job is a one-shot run.
 
-    In both cases the graph is compiled with
-    ``interrupt_before=["confirm_with_user"]`` for HITL support.
+    Note: MemorySaver only supports a single worker process. For
+    multi-worker deployments, switch to a persistent checkpointer.
     """
-    if db_path is not None:
-        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    from langgraph.checkpoint.memory import MemorySaver
 
-        checkpointer_ctx = AsyncSqliteSaver.from_conn_string(db_path)
-        checkpointer = await checkpointer_ctx.__aenter__()
-    else:
-        checkpointer_ctx = None
-        from langgraph.checkpoint.memory import MemorySaver
-
-        checkpointer = MemorySaver()
+    checkpointer = MemorySaver()
 
     compiled = _build_workflow().compile(
         checkpointer=checkpointer,
         interrupt_before=["confirm_with_user"],
     )
-    # Attach the context manager so callers can close the connection.
-    compiled._checkpointer_ctx = checkpointer_ctx  # type: ignore[attr-defined]
     return compiled

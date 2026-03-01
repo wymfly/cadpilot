@@ -45,7 +45,7 @@ class TestHitlTextPath:
         """
         from backend.graph import get_compiled_graph
 
-        graph = await get_compiled_graph(None)  # MemorySaver
+        graph = await get_compiled_graph()  # MemorySaver
         config = {"configurable": {"thread_id": "hitl-text-1"}}
 
         initial = {
@@ -77,7 +77,7 @@ class TestHitlTextPath:
         """After resume with Command, graph should run through generate → postprocess → finalize."""
         from backend.graph import get_compiled_graph
 
-        graph = await get_compiled_graph(None)
+        graph = await get_compiled_graph()
         config = {"configurable": {"thread_id": "hitl-text-2"}}
 
         initial = {
@@ -131,7 +131,7 @@ class TestHitlTextPath:
         """Intent parsed in phase 1 should be available in state after resume."""
         from backend.graph import get_compiled_graph
 
-        graph = await get_compiled_graph(None)
+        graph = await get_compiled_graph()
         config = {"configurable": {"thread_id": "hitl-text-3"}}
 
         initial = {
@@ -190,7 +190,7 @@ class TestHitlDrawingPath:
         """First run on drawing path should interrupt with drawing_spec populated."""
         from backend.graph import get_compiled_graph
 
-        graph = await get_compiled_graph(None)
+        graph = await get_compiled_graph()
         config = {"configurable": {"thread_id": "hitl-drawing-1"}}
 
         initial = {
@@ -220,7 +220,7 @@ class TestHitlDrawingPath:
         """Resume on drawing path should complete through finalize."""
         from backend.graph import get_compiled_graph
 
-        graph = await get_compiled_graph(None)
+        graph = await get_compiled_graph()
         config = {"configurable": {"thread_id": "hitl-drawing-2"}}
 
         initial = {
@@ -282,7 +282,7 @@ class TestHitlEdgeCases:
         """
         from backend.graph import get_compiled_graph
 
-        graph = await get_compiled_graph(None)
+        graph = await get_compiled_graph()
         config = {"configurable": {"thread_id": "hitl-fail-1"}}
 
         initial = {
@@ -312,7 +312,7 @@ class TestHitlEdgeCases:
         """Organic path goes through stub_organic → interrupt before confirm."""
         from backend.graph import get_compiled_graph
 
-        graph = await get_compiled_graph(None)
+        graph = await get_compiled_graph()
         config = {"configurable": {"thread_id": "hitl-organic-1"}}
 
         initial = {

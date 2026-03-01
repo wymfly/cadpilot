@@ -38,7 +38,6 @@ dependencies = [
     "alembic>=1.14.0",
     # LangGraph pipeline orchestration
     "langgraph>=0.3.0,<1.0",
-    "langgraph-checkpoint-sqlite>=2.0.0,<3.0",
 ]
 
 [project.optional-dependencies]

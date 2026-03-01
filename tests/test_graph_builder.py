@@ -28,13 +28,6 @@ class TestBuildGraph:
 
 class TestGetCompiledGraph:
     @pytest.mark.asyncio
-    async def test_compiles_with_checkpointer(self, tmp_path) -> None:
-        from backend.graph.builder import get_compiled_graph
-        db_path = str(tmp_path / "test.db")
-        graph = await get_compiled_graph(db_path)
-        assert graph is not None
-
-    @pytest.mark.asyncio
     async def test_compiles_with_memory_saver(self) -> None:
         from backend.graph.builder import get_compiled_graph
         graph = await get_compiled_graph()
