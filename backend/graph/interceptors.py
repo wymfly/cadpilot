@@ -38,6 +38,10 @@ class InterceptorRegistry:
         """Register a node to be inserted after *after* in the workflow."""
         self._entries.append(_InterceptorEntry(name=name, node_fn=node_fn, after=after))
 
+    def clear(self) -> None:
+        """Remove all registered interceptors (useful for testing)."""
+        self._entries.clear()
+
     def list_interceptors(self) -> list[dict[str, str]]:
         """Return a summary of registered interceptors."""
         return [{"name": e.name, "after": e.after} for e in self._entries]

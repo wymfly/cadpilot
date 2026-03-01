@@ -7,6 +7,13 @@ from unittest.mock import patch, MagicMock
 from backend.core.spec_compiler import SpecCompiler, CompileResult, CompilationError
 
 
+def _make_param(param_name: str) -> MagicMock:
+    """Create a mock param with .name set as attribute (not constructor arg)."""
+    p = MagicMock()
+    p.name = param_name
+    return p
+
+
 class TestCompileResult:
     def test_template_result(self):
         r = CompileResult(
@@ -82,15 +89,15 @@ class TestRankTemplates:
 
         t1 = MagicMock()
         t1.name = "simple"
-        t1.params = [MagicMock(name="diameter"), MagicMock(name="height")]
+        t1.params = [_make_param("diameter"), _make_param("height")]
 
         t2 = MagicMock()
         t2.name = "complex"
         t2.params = [
-            MagicMock(name="diameter"),
-            MagicMock(name="height"),
-            MagicMock(name="wall_thickness"),
-            MagicMock(name="fillet_radius"),
+            _make_param("diameter"),
+            _make_param("height"),
+            _make_param("wall_thickness"),
+            _make_param("fillet_radius"),
         ]
 
         known_params = {"diameter": 50, "height": 100}
@@ -108,9 +115,9 @@ class TestRankTemplates:
 
         t1 = MagicMock()
         t1.name = "a"
-        t1.params = [MagicMock(name="d"), MagicMock(name="h"), MagicMock(name="extra")]
+        t1.params = [_make_param("d"), _make_param("h"), _make_param("extra")]
         t2 = MagicMock()
         t2.name = "b"
-        t2.params = [MagicMock(name="d"), MagicMock(name="h")]
+        t2.params = [_make_param("d"), _make_param("h")]
         ranked = rank_templates([t1, t2], {"d": 1, "h": 2})
         assert ranked[0].name == "b"  # fewer params -> simpler

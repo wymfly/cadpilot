@@ -37,6 +37,10 @@ def _match_template(
 ) -> tuple[Any, list[Any]]:
     """Simple keyword matching to find a parametric template.
 
+    .. deprecated::
+        Use ``TemplateEngine.find_matches(part_type)`` +
+        ``rank_templates()`` from ``backend.core.spec_compiler`` instead.
+
     Returns ``(template, params)`` where *params* is
     ``list[ParamDefinition]``.  If nothing matches, returns
     ``(None, [])``.

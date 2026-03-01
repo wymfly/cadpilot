@@ -88,6 +88,16 @@ class SpecCompiler:
         from backend.infra.sandbox import SafeExecutor
 
         engine = TemplateEngine.from_directory(self._templates_dir)
+
+        # Validate params before rendering (errors are non-fatal warnings)
+        validation_errors = engine.validate(template_name, params)
+        if validation_errors:
+            logger.warning(
+                "Template '%s' param validation warnings: %s",
+                template_name,
+                validation_errors,
+            )
+
         code = engine.render(template_name, params, output_filename=output_path)
 
         executor = SafeExecutor(timeout_s=120)
@@ -107,28 +117,15 @@ class SpecCompiler:
     def _compile_from_llm(
         self, params: dict, output_path: str, input_text: str, intent: dict | None
     ) -> CompileResult:
-        """Fall back to V2 pipeline CodeGeneratorChain."""
-        from backend.pipeline.pipeline import generate_step_from_2d_cad_image
+        """Fall back to LLM-based code generation.
 
-        # Build description from intent or params
-        description = input_text
-        if not description and intent:
-            description = intent.get("raw_text", str(params))
-
-        # Use V2 pipeline for LLM-based generation
-        generate_step_from_2d_cad_image(
-            image_filepath="",  # no image for text path
-            output_filepath=output_path,
-        )
-
-        if not Path(output_path).exists():
-            raise RuntimeError(
-                f"LLM generation failed: STEP file not created at {output_path}"
-            )
-
-        return CompileResult(
-            method="llm_fallback",
-            step_path=output_path,
+        Currently not implemented — text-to-STEP LLM generation requires
+        a dedicated CodeGeneratorChain (planned for M3). The V2 pipeline
+        is image-based and cannot be used for text-only input.
+        """
+        raise RuntimeError(
+            "LLM fallback for text-to-STEP is not yet implemented. "
+            "Template matching is required for text-path generation."
         )
 
 

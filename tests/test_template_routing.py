@@ -3,12 +3,19 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 
+def _make_param(param_name: str) -> MagicMock:
+    """Create a mock param with .name set as attribute (not constructor arg)."""
+    p = MagicMock()
+    p.name = param_name
+    return p
+
+
 class TestTemplateRouting:
     def test_part_type_routes_to_matching_templates(self):
         from backend.core.spec_compiler import rank_templates
         tpl = MagicMock()
         tpl.name = "cylinder_simple"
-        tpl.params = [MagicMock(name="diameter"), MagicMock(name="height")]
+        tpl.params = [_make_param("diameter"), _make_param("height")]
         tpl.part_type = "rotational"
         result = rank_templates([tpl], {"diameter": 50, "height": 100})
         assert result[0].name == "cylinder_simple"
@@ -21,10 +28,10 @@ class TestTemplateRouting:
         from backend.core.spec_compiler import rank_templates
         t1 = MagicMock()
         t1.name = "full_match"
-        t1.params = [MagicMock(name="diameter"), MagicMock(name="height")]
+        t1.params = [_make_param("diameter"), _make_param("height")]
         t2 = MagicMock()
         t2.name = "partial_match"
-        t2.params = [MagicMock(name="diameter"), MagicMock(name="height"), MagicMock(name="wall")]
+        t2.params = [_make_param("diameter"), _make_param("height"), _make_param("wall")]
         ranked = rank_templates([t1, t2], {"diameter": 50, "height": 100})
         assert ranked[0].name == "full_match"
 

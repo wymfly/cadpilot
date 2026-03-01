@@ -12,10 +12,12 @@ All DB calls are mocked (no real database needed).  The graph uses
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langgraph.types import Command
+
+from backend.core.spec_compiler import CompileResult
 
 
 # ---------------------------------------------------------------------------
@@ -98,8 +100,8 @@ class TestHitlTextPath:
                 return_value=mock_intent,
             ),
             patch(
-                "backend.graph.nodes.generation._run_template_generation",
-                return_value="/tmp/model.step",
+                "backend.graph.nodes.generation.SpecCompiler",
+                return_value=MagicMock(compile=MagicMock(return_value=CompileResult(method="template", step_path="/tmp/model.step"))),
             ),
             patch(
                 "backend.graph.nodes.postprocess._convert_step_to_glb",
@@ -152,8 +154,8 @@ class TestHitlTextPath:
                 return_value=mock_intent,
             ),
             patch(
-                "backend.graph.nodes.generation._run_template_generation",
-                return_value="/tmp/bolt.step",
+                "backend.graph.nodes.generation.SpecCompiler",
+                return_value=MagicMock(compile=MagicMock(return_value=CompileResult(method="template", step_path="/tmp/bolt.step"))),
             ),
             patch(
                 "backend.graph.nodes.postprocess._convert_step_to_glb",

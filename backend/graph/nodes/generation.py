@@ -78,7 +78,7 @@ async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
                 "job.generating",
                 {"job_id": state["job_id"], "stage": result.method, "status": "generating"},
             )
-    except (CompilationError, Exception) as exc:
+    except Exception as exc:
         reason = map_exception_to_failure_reason(exc)
         logger.error("Text generation failed: %s (%s)", exc, reason)
         return {"error": str(exc), "failure_reason": reason, "status": "failed"}
