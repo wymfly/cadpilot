@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.api.preview import _preview_cache, invalidate_preview_cache
+from backend.api.v1.preview import _preview_cache, invalidate_preview_cache
 
 
 @pytest.fixture(autouse=True)
@@ -60,7 +60,7 @@ def _mock_render_factory(tmp_path: Path):
 class TestPreviewValidation:
     def test_unknown_template_returns_404(self, client: TestClient) -> None:
         resp = client.post(
-            "/api/preview/parametric",
+            "/api/v1/preview/parametric",
             json={"template_name": "nonexistent_template_xyz", "params": {}},
         )
         assert resp.status_code == 404
@@ -71,7 +71,7 @@ class TestPreviewValidation:
         """When params violate constraints, return 422."""
         from unittest.mock import MagicMock
 
-        import backend.api.preview as prev_mod
+        import backend.api.v1.preview as prev_mod
 
         mock_tpl = MagicMock()
         mock_tpl.validate_params.return_value = [
@@ -80,7 +80,7 @@ class TestPreviewValidation:
         monkeypatch.setattr(prev_mod, "_get_template", lambda name: mock_tpl)
 
         resp = client.post(
-            "/api/preview/parametric",
+            "/api/v1/preview/parametric",
             json={
                 "template_name": "rotational_flange_disk",
                 "params": {"outer_diameter": -10},
@@ -101,7 +101,7 @@ class TestPreviewGeneration:
         """Successful render returns a glb_url."""
         from unittest.mock import MagicMock
 
-        import backend.api.preview as prev_mod
+        import backend.api.v1.preview as prev_mod
 
         mock_tpl = MagicMock()
         mock_tpl.validate_params.return_value = []
@@ -111,7 +111,7 @@ class TestPreviewGeneration:
         )
 
         resp = client.post(
-            "/api/preview/parametric",
+            "/api/v1/preview/parametric",
             json={
                 "template_name": "rotational_flange_disk",
                 "params": {"outer_diameter": 100},
@@ -128,7 +128,7 @@ class TestPreviewGeneration:
         """Different params should produce different preview URLs."""
         from unittest.mock import MagicMock
 
-        import backend.api.preview as prev_mod
+        import backend.api.v1.preview as prev_mod
 
         mock_tpl = MagicMock()
         mock_tpl.validate_params.return_value = []
@@ -138,14 +138,14 @@ class TestPreviewGeneration:
         )
 
         resp1 = client.post(
-            "/api/preview/parametric",
+            "/api/v1/preview/parametric",
             json={
                 "template_name": "rotational_flange_disk",
                 "params": {"outer_diameter": 100},
             },
         )
         resp2 = client.post(
-            "/api/preview/parametric",
+            "/api/v1/preview/parametric",
             json={
                 "template_name": "rotational_flange_disk",
                 "params": {"outer_diameter": 200},
@@ -159,7 +159,7 @@ class TestPreviewGeneration:
         """Render failure returns 500."""
         from unittest.mock import MagicMock
 
-        import backend.api.preview as prev_mod
+        import backend.api.v1.preview as prev_mod
 
         mock_tpl = MagicMock()
         mock_tpl.validate_params.return_value = []
@@ -171,7 +171,7 @@ class TestPreviewGeneration:
         monkeypatch.setattr(prev_mod, "_render_preview", mock_render_fail)
 
         resp = client.post(
-            "/api/preview/parametric",
+            "/api/v1/preview/parametric",
             json={
                 "template_name": "rotational_flange_disk",
                 "params": {"outer_diameter": 100},
@@ -192,7 +192,7 @@ class TestPreviewTimeout:
         """When render exceeds 5s, return 408."""
         from unittest.mock import MagicMock
 
-        import backend.api.preview as prev_mod
+        import backend.api.v1.preview as prev_mod
 
         mock_tpl = MagicMock()
         mock_tpl.validate_params.return_value = []
@@ -207,14 +207,16 @@ class TestPreviewTimeout:
         monkeypatch.setattr(prev_mod, "_render_preview", mock_render_slow)
 
         resp = client.post(
-            "/api/preview/parametric",
+            "/api/v1/preview/parametric",
             json={
                 "template_name": "rotational_flange_disk",
                 "params": {"outer_diameter": 100},
             },
         )
         assert resp.status_code == 408
-        assert "超时" in resp.json().get("detail", "")
+        # V1 APIError format: {"error": {"code": ..., "message": ...}}
+        error_body = resp.json()
+        assert "超时" in error_body.get("error", {}).get("message", "")
 
 
 # ===================================================================
@@ -229,7 +231,7 @@ class TestPreviewCache:
         """Pre-populated cache returns cached=True."""
         from unittest.mock import MagicMock
 
-        import backend.api.preview as prev_mod
+        import backend.api.v1.preview as prev_mod
 
         mock_tpl = MagicMock()
         mock_tpl.validate_params.return_value = []
@@ -244,7 +246,7 @@ class TestPreviewCache:
         _preview_cache[cache_key] = "/outputs/preview-cached/model.glb"
 
         resp = client.post(
-            "/api/preview/parametric",
+            "/api/v1/preview/parametric",
             json={
                 "template_name": "rotational_flange_disk",
                 "params": params,
@@ -260,7 +262,7 @@ class TestPreviewCache:
         """Second request with same params does NOT re-render."""
         from unittest.mock import MagicMock
 
-        import backend.api.preview as prev_mod
+        import backend.api.v1.preview as prev_mod
 
         mock_tpl = MagicMock()
         mock_tpl.validate_params.return_value = []
@@ -275,11 +277,11 @@ class TestPreviewCache:
         }
 
         # First request — renders
-        client.post("/api/preview/parametric", json=payload)
+        client.post("/api/v1/preview/parametric", json=payload)
         assert mock_render.call_count() == 1
 
         # Second request — cache hit, no render
-        resp2 = client.post("/api/preview/parametric", json=payload)
+        resp2 = client.post("/api/v1/preview/parametric", json=payload)
         assert resp2.status_code == 200
         assert mock_render.call_count() == 1  # NOT 2
 
@@ -310,7 +312,7 @@ class TestPreviewCache:
         import time
         from unittest.mock import MagicMock
 
-        import backend.api.preview as prev_mod
+        import backend.api.v1.preview as prev_mod
 
         mock_tpl = MagicMock()
         mock_tpl.validate_params.return_value = []
@@ -326,7 +328,7 @@ class TestPreviewCache:
 
         start = time.monotonic()
         resp = client.post(
-            "/api/preview/parametric",
+            "/api/v1/preview/parametric",
             json={"template_name": "rotational_flange_disk", "params": params},
         )
         elapsed_ms = (time.monotonic() - start) * 1000
