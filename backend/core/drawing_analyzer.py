@@ -11,7 +11,6 @@ from langchain.prompts import (
 from langchain_core.prompts.image import ImagePromptTemplate
 from loguru import logger
 
-from ..infra.chat_models import ChatModelParameters
 from ..infra.image import ImageData
 from ..knowledge.part_types import DrawingSpec, PartType
 
@@ -246,7 +245,9 @@ class DrawingAnalyzerChain(SequentialChain):
                 )
             ],
         )
-        llm = ChatModelParameters.from_model_name("qwen-vl").create_chat_model()
+        from ..infra.llm_config_manager import get_model_for_role
+
+        llm = get_model_for_role("vision_analyzer").create_chat_model()
 
         super().__init__(
             chains=[

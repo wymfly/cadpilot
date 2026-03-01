@@ -33,7 +33,15 @@ async def _parse_intent(text: str) -> dict:
     Returns a plain dict (JSON-serializable) for storage in SQLAlchemy JSON columns.
     """
     from backend.core.intent_parser import IntentParser
-    parser = IntentParser()
+    from backend.infra.llm_config_manager import get_model_for_role
+
+    llm = get_model_for_role("intent_parser").create_chat_model()
+
+    async def _llm_callable(prompt: str, schema: type) -> Any:
+        structured = llm.with_structured_output(schema)
+        return await structured.ainvoke(prompt)
+
+    parser = IntentParser(llm_callable=_llm_callable)
     result = await parser.parse(text)
     # IntentParser may return a Pydantic model; convert to dict for DB/JSON.
     if hasattr(result, "model_dump"):
@@ -68,17 +76,33 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
 
     # Template matching (best-effort)
     matched_template = None
+    template_params: list[dict] = []
     try:
         from backend.pipeline.vision_cad_pipeline import _match_template
         template_result = _match_template(state.get("input_text") or "")
         if template_result and template_result[0]:
-            matched_template = template_result[0].name
+            tpl = template_result[0]
+            matched_template = tpl.name
+            # Build params array with known_params merged as defaults
+            known = intent.get("known_params", {}) if isinstance(intent, dict) else {}
+            template_params = []
+            for p in tpl.params:
+                d = p.model_dump()
+                if p.name in known:
+                    d["default"] = known[p.name]
+                template_params.append(d)
     except Exception:
         pass
 
     await _safe_dispatch(
         "job.intent_analyzed",
-        {"job_id": state["job_id"], "intent": intent, "matched_template": matched_template, "status": "intent_parsed"},
+        {
+            "job_id": state["job_id"],
+            "intent": intent,
+            "template_name": matched_template,
+            "params": template_params,
+            "status": "intent_parsed",
+        },
     )
     await _safe_update_job(state["job_id"], status="awaiting_confirmation", intent=intent)
     await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"], "status": "awaiting_confirmation"})

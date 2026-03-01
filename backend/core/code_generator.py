@@ -4,7 +4,6 @@ from typing import Any, Union
 from langchain.chains import LLMChain, SequentialChain, TransformChain
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, PromptTemplate
 
-from ..infra.chat_models import ChatModelParameters
 from .modeling_strategist import ModelingContext
 
 
@@ -56,7 +55,9 @@ class CodeGeneratorChain(SequentialChain):
                 )
             ],
         )
-        llm = ChatModelParameters.from_model_name("qwen-coder").create_chat_model()
+        from ..infra.llm_config_manager import get_model_for_role
+
+        llm = get_model_for_role("code_generator").create_chat_model()
 
         super().__init__(
             chains=[

@@ -55,9 +55,9 @@ class OrganicSpecBuilder:
         Override in tests with mock. In production, uses configured LLM.
         """
         try:
-            from backend.infra.chat_models import ChatModelParameters
+            from backend.infra.llm_config_manager import get_model_for_role
 
-            params = ChatModelParameters.from_model_name("qwen")
+            params = get_model_for_role("organic_spec")
             llm = params.create_chat_model()
             response = await llm.ainvoke([
                 {"role": "system", "content": _SYSTEM_PROMPT},
