@@ -95,6 +95,12 @@ class TemplateEngine:
         merged.update(params)
         merged["output_filename"] = output_filename
 
+        # Cast int-typed params (API sends all values as float)
+        int_params = {p.name for p in tmpl.params if p.param_type == "int"}
+        for k in int_params:
+            if k in merged and isinstance(merged[k], float):
+                merged[k] = int(merged[k])
+
         env = jinja2.Environment(undefined=jinja2.StrictUndefined)
         template = env.from_string(tmpl.code_template)
         return template.render(**merged)
