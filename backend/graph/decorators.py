@@ -64,7 +64,10 @@ def timed_node(node_name: str):
                 raise
 
             elapsed = (time.time() - t0) * 1000
-            reasoning = result.pop("_reasoning", None)
+            if result is None:
+                result = {}
+            reasoning = result.get("_reasoning")
+            clean_result = {k: v for k, v in result.items() if k != "_reasoning"}
 
             await _safe_dispatch(
                 "node.completed",
@@ -73,11 +76,11 @@ def timed_node(node_name: str):
                     "node": node_name,
                     "elapsed_ms": round(elapsed),
                     "reasoning": reasoning,
-                    "outputs_summary": _summarize_outputs(result),
+                    "outputs_summary": _summarize_outputs(clean_result),
                 },
             )
 
-            return result
+            return clean_result
 
         return wrapper
 

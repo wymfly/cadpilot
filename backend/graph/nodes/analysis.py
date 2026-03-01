@@ -142,6 +142,14 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
         logger.debug("Engineering standards recommendations skipped: %s", exc)
 
     await _safe_update_job(state["job_id"], status="awaiting_confirmation", intent=intent)
+    # Business event: carries params + template_name for frontend ParamForm
+    await _safe_dispatch("job.intent_analyzed", {
+        "job_id": state["job_id"],
+        "status": "intent_parsed",
+        "params": template_params,
+        "template_name": matched_template,
+        "message": f"意图解析完成: {part_type or '未知类型'}",
+    })
     await _safe_dispatch("job.awaiting_confirmation", {"job_id": state["job_id"], "status": "awaiting_confirmation"})
 
     # Record stage timing into token_stats

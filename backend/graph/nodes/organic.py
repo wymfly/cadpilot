@@ -81,6 +81,11 @@ async def analyze_organic_node(state: CadJobState) -> dict[str, Any]:
 
     # Persist to DB so GET /api/v1/jobs/{id} returns spec on page refresh
     await _safe_update_job(job_id, status="awaiting_confirmation", organic_spec=spec_dict)
+    # Business event: carries organic_spec for frontend OrganicWorkflow confirmation UI
+    await _safe_dispatch("job.organic_spec_ready", {
+        "job_id": job_id, "status": "organic_spec_ready",
+        "organic_spec": spec_dict,
+    })
     await _safe_dispatch("job.awaiting_confirmation", {
         "job_id": job_id, "status": "awaiting_confirmation",
     })

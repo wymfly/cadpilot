@@ -60,6 +60,12 @@ async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
 
     matched = state.get("matched_template")
 
+    # Business event: frontend shows "Generating..." phase
+    await _safe_dispatch("job.generating", {
+        "job_id": state["job_id"], "status": "generating",
+        "message": f"正在生成 STEP 模型（模板: {matched or 'LLM'}）",
+    })
+
     try:
         compiler = SpecCompiler()
         result = await asyncio.to_thread(
@@ -117,6 +123,12 @@ async def generate_step_drawing_node(state: CadJobState) -> dict[str, Any]:
 
     image_path = state.get("image_path")
 
+    # Business event: frontend shows "Generating..." phase
+    await _safe_dispatch("job.generating", {
+        "job_id": state["job_id"], "status": "generating",
+        "message": "正在通过 V2 管道生成 STEP 模型",
+    })
+
     try:
         if not image_path:
             return {
@@ -132,6 +144,10 @@ async def generate_step_drawing_node(state: CadJobState) -> dict[str, Any]:
     except Exception as exc:
         reason = map_exception_to_failure_reason(exc)
         logger.error("Drawing generation failed: %s (%s)", exc, reason)
+        await _safe_dispatch(
+            "job.failed",
+            {"job_id": state["job_id"], "error": str(exc), "failure_reason": reason, "status": "failed"},
+        )
         return {
             "error": str(exc), "failure_reason": reason, "status": "failed",
             "_reasoning": {"error": str(exc)},

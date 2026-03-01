@@ -61,7 +61,7 @@ export default function NodeInspector({ open, data, onClose }: NodeInspectorProp
 
       {data.outputsSummary && Object.keys(data.outputsSummary).length > 0 && (
         <>
-          <Divider orientation="left" plain>
+          <Divider titlePlacement="left" plain>
             输出摘要
           </Divider>
           <Descriptions column={1} size="small" bordered>
@@ -76,7 +76,7 @@ export default function NodeInspector({ open, data, onClose }: NodeInspectorProp
         </>
       )}
 
-      <Divider orientation="left" plain>
+      <Divider titlePlacement="left" plain>
         推理过程
       </Divider>
       <ReasoningCard reasoning={data.reasoning ?? null} />

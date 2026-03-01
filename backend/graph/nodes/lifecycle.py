@@ -26,6 +26,8 @@ async def _safe_dispatch(event_name: str, payload: dict[str, Any]) -> None:
     except RuntimeError:
         # No parent run context — expected in unit tests
         pass
+    except Exception as exc:
+        logger.warning("Event dispatch failed for %s: %s", event_name, exc)
 
 
 # NOTE: @timed_node decorators for lifecycle nodes are applied in builder.py

@@ -146,6 +146,45 @@ class TestTimedNode:
         assert dispatched[1][1]["reasoning"] is None
 
     @pytest.mark.asyncio
+    async def test_none_return_treated_as_empty_dict(self):
+        from backend.graph.decorators import timed_node
+
+        @timed_node("test_node")
+        async def my_node(state):
+            return None
+
+        dispatched = []
+        with patch(
+            "backend.graph.decorators._safe_dispatch",
+            new_callable=AsyncMock,
+            side_effect=lambda name, data: dispatched.append((name, data)),
+        ):
+            result = await my_node({"job_id": "j1"})
+
+        assert result == {}
+        assert dispatched[1][0] == "node.completed"
+        assert dispatched[1][1]["outputs_summary"] == {}
+
+    @pytest.mark.asyncio
+    async def test_does_not_mutate_original_result(self):
+        from backend.graph.decorators import timed_node
+
+        original = {"output": "v", "_reasoning": {"why": "because"}}
+
+        @timed_node("test_node")
+        async def my_node(state):
+            return original
+
+        with patch(
+            "backend.graph.decorators._safe_dispatch",
+            new_callable=AsyncMock,
+        ):
+            await my_node({"job_id": "j1"})
+
+        # Original dict still has _reasoning (not mutated)
+        assert "_reasoning" in original
+
+    @pytest.mark.asyncio
     async def test_missing_job_id_uses_unknown(self):
         from backend.graph.decorators import timed_node
 
