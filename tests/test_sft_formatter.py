@@ -129,8 +129,9 @@ class TestRecordToChat:
 
 class TestConvertFile:
     def test_converts_valid_file(self, corrections_file: Path) -> None:
-        samples = convert_corrections_file(corrections_file)
+        samples, skipped = convert_corrections_file(corrections_file)
         assert len(samples) == 20
+        assert skipped == 0
 
     def test_skips_invalid_json_lines(self, tmp_path: Path) -> None:
         path = tmp_path / "mixed.jsonl"
@@ -139,8 +140,9 @@ class TestConvertFile:
             f.write(good + "\n")
             f.write("NOT VALID JSON\n")
             f.write(good + "\n")
-        samples = convert_corrections_file(path)
+        samples, skipped = convert_corrections_file(path)
         assert len(samples) == 2
+        assert skipped == 1
 
     def test_skips_empty_lines(self, tmp_path: Path) -> None:
         path = tmp_path / "sparse.jsonl"
@@ -149,7 +151,7 @@ class TestConvertFile:
             f.write("\n")
             f.write(good + "\n")
             f.write("\n")
-        samples = convert_corrections_file(path)
+        samples, skipped = convert_corrections_file(path)
         assert len(samples) == 1
 
 

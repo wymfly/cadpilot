@@ -107,12 +107,15 @@ def _check_bbox_match(
         (expected_bbox.get("zlen", 0), actual_bbox[2]),
     ]
 
+    checked = 0
     for exp, act in pairs:
         if exp <= 0:
             continue
+        checked += 1
         if abs(act - exp) / exp > tol:
             return False
-    return True
+    # At least one positive dimension must have been checked
+    return checked > 0
 
 
 def _classify_exception(exc: Exception) -> FailureCategory:
@@ -206,7 +209,7 @@ class BenchmarkRunner:
         self,
         dataset_dir: str,
         *,
-        workers: int = 4,
+        workers: int = 4,  # TODO: implement concurrent execution with asyncio.Semaphore
     ) -> BenchmarkReport:
         """Run the full benchmark and return a report."""
         cases = self.load_cases(dataset_dir)
@@ -296,7 +299,10 @@ class BenchmarkRunner:
                 error_detail = geo.error or "Invalid geometry"
             else:
                 compiled = True
-                type_correct = bool(case.expected_spec.get("part_type"))
+                # TODO: compare against pipeline-inferred part_type once
+                # the pipeline exposes it.  For now, mark as correct when
+                # the STEP geometry is valid (placeholder metric).
+                type_correct = compiled
                 param_accuracy = _compute_param_accuracy(case.expected_spec, geo.bbox)
                 bbox_match = _check_bbox_match(case.expected_bbox, geo.bbox)
 
@@ -333,7 +339,13 @@ class BenchmarkRunner:
     async def _run_drawing_case(
         self, case: BenchmarkCase, step_path: str,
     ) -> str | None:
-        """Run drawing pipeline: build DrawingSpec -> generate_step_from_spec."""
+        """Run drawing *generation-only* benchmark.
+
+        Uses the case's expected_spec as a ground-truth DrawingSpec so the
+        benchmark isolates code generation quality from drawing analysis.
+        For end-to-end benchmarks (including VL analysis), a separate
+        pipeline entry point is needed.
+        """
         from backend.knowledge.part_types import DrawingSpec
         from backend.pipeline.pipeline import generate_step_from_spec
 

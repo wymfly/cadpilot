@@ -165,8 +165,11 @@ def record_to_chat(record: dict) -> dict | None:
     }
 
 
-def convert_corrections_file(input_path: Path) -> list[dict]:
-    """Read corrections_clean.jsonl and convert all valid records."""
+def convert_corrections_file(input_path: Path) -> tuple[list[dict], int]:
+    """Read corrections_clean.jsonl and convert all valid records.
+
+    Returns (samples, skipped_count).
+    """
     samples: list[dict] = []
     skipped = 0
 
@@ -199,7 +202,7 @@ def convert_corrections_file(input_path: Path) -> list[dict]:
         skipped,
         input_path,
     )
-    return samples
+    return samples, skipped
 
 
 def split_train_eval(
@@ -233,14 +236,14 @@ def run_corrections_pipeline(
     seed: int = 42,
 ) -> ConversionStats:
     """Full corrections pipeline: read → convert → split → write."""
-    samples = convert_corrections_file(input_path)
+    samples, skipped = convert_corrections_file(input_path)
 
     if not samples:
         logger.warning("No valid samples found in %s", input_path)
         return ConversionStats(
-            total_input=0,
+            total_input=skipped,
             converted=0,
-            skipped=0,
+            skipped=skipped,
             train_count=0,
             eval_count=0,
         )
@@ -253,11 +256,11 @@ def run_corrections_pipeline(
     write_chat_jsonl(train, train_path)
     write_chat_jsonl(eval_, eval_path)
 
-    total_input = len(samples)
+    total_input = len(samples) + skipped
     return ConversionStats(
         total_input=total_input,
         converted=len(samples),
-        skipped=0,
+        skipped=skipped,
         train_count=len(train),
         eval_count=len(eval_),
     )

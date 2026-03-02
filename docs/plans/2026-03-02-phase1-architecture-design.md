@@ -117,19 +117,20 @@ digraph MainGraph {
 在 Phase 1 骨架搭建完毕后，任何开发者或 Agent 可以独立接手以下任务，进行深度研发并替换对应的 Stub 节点：
 
 1. **[攻坚任务 1] 艺术大脑生成节点 (Stage 1 - `generate_raw_mesh`)**
-   - 研究与集成 Tripo3D/CSM 等 Text-to-3D 接口。
+   - 研究与集成 `Hunyuan3D-2.0` (或 `Stable Fast 3D`) 等前馈扩散文生 3D 接口。
+   - 级联 `MeshAnything V2` 进行初步的 AI 拓扑清理与面数精简。
    - 引入 PCA 主成分分析与包围盒比例对齐算法，强制赋予视觉模型正确的物理尺寸。
 2. **[攻坚任务 2] 面向增材的拓扑优化 (Stage 2 - `apply_lattice`)**
    - 引入纯数学晶格 (TPMS，如 Gyroid 陀螺面) 生成算法。
    - 结合包围盒生成三维 Voxel 矩阵并提取等值面，与外壳进行布尔运算。
 3. **[攻坚任务 3] 网格固化神医 (Stage 3 - `mesh_healer` 子图重构)**
-   - 引入 `pyopenvdb`，将“脏 Mesh”转化为具有窄带的 SDF 场，再提取回绝对水密的单壳体。
-   - 在该子图内部建立 `[检查 -> 发现孔洞 -> 执行缝合 -> 再检查]` 的微型循环状态机。
+   - 引入强大的 C++ 绑定库 **`MeshLib`**，替代脆弱的 `trimesh` 修复功能。
+   - 利用 `MeshLib` 原生的体素化 (Voxel) 和拓扑分析能力，实现绝对水密的单壳体提取与孔洞闭合。
 4. **[攻坚任务 4] 混合布尔拼装 (连接 Stage 1 & 3)**
-   - 使用 `manifold3d` 实现艺术水密网格与机械特征（高精度 CAD 孔位）的布尔运算融合。
+   - 使用 **`manifold3d`** 实现艺术水密网格与机械特征（高精度 CAD 孔位）的无飞面、抗共面的鲁棒布尔运算。
 5. **[攻坚任务 5] 打印工艺与支撑计算 (Stage 4 - `orientation_support`)**
-   - 结合代价函数 $Cost = W_1 * H_{max} + W_2 * A_{overhang} + W_3 * V_{support}$，利用全局优化算法寻找最佳摆放旋转矩阵。
-   - 基于 `trimesh.ray` 射线检测与寻路算法生成树状支撑。
+   - 结合代价函数 $Cost = W_1 * H_{max} + W_2 * A_{overhang} + W_3 * V_{support}$，利用 `scipy.optimize` 寻找最佳摆放旋转矩阵。
+   - 基于纯 Python 结合 `trimesh.ray_pyembree` (极速光线追踪) 和空间殖民算法 (Space Colonization) 生成树状支撑。
 6. **[攻坚任务 6] 自动切片引擎 (Stage 6 - `slice_to_gcode`)**
-   - 利用 `Shapely` 进行多边形偏置和直线阵列填充，规划 G-code。
-   - 备选方案：基于 `subprocess` 封装 Cura CLI 的静默调用。
+   - 优先方案：基于 `subprocess` 封装 Cura CLI 的静默调用，将 Agent 打造为“参数调优大师”。
+   - 备选自研方案：利用 `Shapely` 进行多边形偏置和直线阵列填充。

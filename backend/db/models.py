@@ -34,7 +34,7 @@ class JobModel(Base):
     )
     generated_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     parent_job_id: Mapped[str | None] = mapped_column(
-        String(64), nullable=True,
+        String(64), nullable=True, index=True,
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -3,3 +3,4 @@
 
 ALTER TABLE jobs ADD COLUMN generated_code TEXT;
 ALTER TABLE jobs ADD COLUMN parent_job_id VARCHAR(64);
+CREATE INDEX IF NOT EXISTS ix_jobs_parent_job_id ON jobs(parent_job_id);

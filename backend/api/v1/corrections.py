@@ -87,7 +87,23 @@ async def get_correction_stats(
         if not rows:
             return CorrectionStatsResponse(top_fields=[])
 
-        total = sum(r.cnt for r in rows)
+        # Total count across ALL matching corrections (not just top-20)
+        if part_type:
+            total_stmt = (
+                select(func.count())
+                .select_from(UserCorrectionModel)
+                .join(JobModel, UserCorrectionModel.job_id == JobModel.job_id)
+                .where(*base_filter)
+                .where(func.json_extract(JobModel.intent, "$.part_type") == part_type)
+            )
+        else:
+            total_stmt = (
+                select(func.count())
+                .select_from(UserCorrectionModel)
+                .where(*base_filter)
+            )
+        total_result = await session.execute(total_stmt)
+        total = total_result.scalar() or 0
 
         top_fields = [
             FieldStat(
