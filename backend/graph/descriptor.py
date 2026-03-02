@@ -52,6 +52,9 @@ class NodeResult:
 class NodeStrategy(ABC):
     """Base class for pluggable node execution strategies."""
 
+    def __init__(self, config=None):
+        self.config = config
+
     @abstractmethod
     async def execute(self, ctx: Any) -> Any:
         """Execute the strategy with the given node context."""

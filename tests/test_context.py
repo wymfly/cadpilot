@@ -214,6 +214,41 @@ class TestNodeContextStrategy:
         with pytest.raises(RuntimeError, match="not available"):
             ctx.get_strategy()
 
+    def test_strategy_receives_config(self):
+        """get_strategy() passes config to strategy constructor."""
+
+        class ConfigAwareStrategy(NodeStrategy):
+            def __init__(self, config=None):
+                super().__init__(config)
+                self.received_config = config
+
+            async def execute(self, ctx):
+                return "ok"
+
+        desc = _make_descriptor(
+            strategies={"aware": ConfigAwareStrategy},
+        )
+        state = {"pipeline_config": {"test_node": {"strategy": "aware"}}}
+        ctx = NodeContext.from_state(state, desc)
+        strategy = ctx.get_strategy()
+
+        assert isinstance(strategy, ConfigAwareStrategy)
+        assert strategy.received_config is ctx.config
+
+    def test_no_arg_strategy_still_works(self):
+        """Existing strategies without explicit config param still work
+        because NodeStrategy base class has __init__(config=None)."""
+
+        class LegacyStrategy(NodeStrategy):
+            async def execute(self, ctx):
+                return "legacy"
+
+        desc = _make_descriptor(strategies={"legacy": LegacyStrategy})
+        state = {"pipeline_config": {"test_node": {"strategy": "legacy"}}}
+        ctx = NodeContext.from_state(state, desc)
+        strategy = ctx.get_strategy()
+        assert isinstance(strategy, LegacyStrategy)
+
 
 class TestNodeContextStateDiff:
     def test_empty_diff(self):

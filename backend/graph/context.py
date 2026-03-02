@@ -193,7 +193,7 @@ class NodeContext:
                 f"Strategy '{strategy_name}' not found for '{self.node_name}'. "
                 f"Available: {list(strategies.keys())}"
             )
-        instance = strategies[strategy_name]()
+        instance = strategies[strategy_name](config=self.config)
         if not instance.check_available():
             raise RuntimeError(
                 f"Strategy '{strategy_name}' is not available "
