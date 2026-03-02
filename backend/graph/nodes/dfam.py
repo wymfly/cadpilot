@@ -55,43 +55,53 @@ def _run_dfam_analysis(step_path: str, job_id: str) -> dict[str, Any]:
     exporter = FormatExporter()
     stl_path = exporter._step_to_stl_temp(step_path, ExportConfig())
 
-    # Run vertex analysis
-    analyzer = VertexAnalyzer()
-    analysis = analyzer.analyze(stl_path)
+    try:
+        # Run vertex analysis
+        analyzer = VertexAnalyzer()
+        analysis = analyzer.analyze(stl_path)
 
-    # Load mesh for GLB export
-    mesh = trimesh.load(stl_path, force="mesh")
+        # Load mesh for GLB export
+        mesh = trimesh.load(stl_path, force="mesh")
+    finally:
+        import os
+        try:
+            os.unlink(stl_path)
+        except OSError:
+            pass
 
     # Build output path
     output_dir = Path(f"outputs/{job_id}")
     output_dir.mkdir(parents=True, exist_ok=True)
     glb_path = str(output_dir / "model_dfam.glb")
 
-    # Prepare stats
+    # Prepare stats — compute at-risk counts from risk arrays (risk < 0.5)
+    import numpy as np
+
     valid_thickness = analysis.wall_thickness[
         analysis.wall_thickness < VertexAnalyzer.SENTINEL_THICKNESS
     ]
     n_verts = len(mesh.vertices)
+    n_wall_at_risk = int(np.sum(analysis.risk_wall < 0.5))
+    n_overhang_at_risk = int(np.sum(analysis.risk_overhang < 0.5))
 
     wall_stats = {
         "analysis_type": "wall_thickness",
         "threshold": 1.0,
         "min_value": float(valid_thickness.min()) if len(valid_thickness) > 0 else None,
         "max_value": float(valid_thickness.max()) if len(valid_thickness) > 0 else None,
-        "vertices_at_risk_count": analysis.stats.get("vertices_at_risk_wall", 0),
+        "vertices_at_risk_count": n_wall_at_risk,
         "vertices_at_risk_percent": round(
-            analysis.stats.get("vertices_at_risk_wall", 0) / max(n_verts, 1) * 100, 1
+            n_wall_at_risk / max(n_verts, 1) * 100, 1
         ),
     }
     overhang_stats = {
         "analysis_type": "overhang",
         "threshold": 45.0,
         "min_value": 0.0,
-        "max_value": analysis.stats.get("max_overhang_angle"),
-        "vertices_at_risk_count": analysis.stats.get("vertices_at_risk_overhang", 0),
+        "max_value": analysis.stats.get("overhang_max"),
+        "vertices_at_risk_count": n_overhang_at_risk,
         "vertices_at_risk_percent": round(
-            analysis.stats.get("vertices_at_risk_overhang", 0) / max(n_verts, 1) * 100,
-            1,
+            n_overhang_at_risk / max(n_verts, 1) * 100, 1
         ),
     }
 

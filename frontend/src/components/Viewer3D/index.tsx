@@ -73,26 +73,38 @@ function DfamOverlay({ group }: { group: THREE.Group }) {
 interface CameraControllerProps {
   targetPosition: [number, number, number] | null;
   focusRegion: { center: number[]; radius: number } | null;
+  orbitRef: React.RefObject<any>;
   onAnimationDone: () => void;
 }
 
-function CameraController({ targetPosition, focusRegion, onAnimationDone }: CameraControllerProps) {
+function CameraController({ targetPosition, focusRegion, orbitRef, onAnimationDone }: CameraControllerProps) {
   const { camera } = useThree();
 
-  if (focusRegion) {
-    const center = new THREE.Vector3(...focusRegion.center);
-    const viewDistance = Math.max(focusRegion.radius * 3, 2);
-    const direction = camera.position.clone().sub(new THREE.Vector3(0, 0, 0)).normalize();
-    camera.position.copy(center.clone().add(direction.multiplyScalar(viewDistance)));
-    camera.lookAt(center);
-    onAnimationDone();
-  } else if (targetPosition) {
-    const currentDistance = camera.position.length();
-    const targetVec = new THREE.Vector3(...targetPosition).normalize().multiplyScalar(currentDistance);
-    camera.position.copy(targetVec);
-    camera.lookAt(0, 0, 0);
-    onAnimationDone();
-  }
+  useEffect(() => {
+    if (focusRegion) {
+      const center = new THREE.Vector3(...focusRegion.center);
+      const viewDistance = Math.max(focusRegion.radius * 3, 2);
+      const direction = camera.position.clone().sub(new THREE.Vector3(0, 0, 0)).normalize();
+      camera.position.copy(center.clone().add(direction.multiplyScalar(viewDistance)));
+      camera.lookAt(center);
+      // Sync OrbitControls target so it orbits around the focused region
+      if (orbitRef.current) {
+        orbitRef.current.target.copy(center);
+        orbitRef.current.update();
+      }
+      onAnimationDone();
+    } else if (targetPosition) {
+      const currentDistance = camera.position.length();
+      const targetVec = new THREE.Vector3(...targetPosition).normalize().multiplyScalar(currentDistance);
+      camera.position.copy(targetVec);
+      camera.lookAt(0, 0, 0);
+      if (orbitRef.current) {
+        orbitRef.current.target.set(0, 0, 0);
+        orbitRef.current.update();
+      }
+      onAnimationDone();
+    }
+  }, [camera, focusRegion, targetPosition, orbitRef, onAnimationDone]);
 
   return null;
 }
@@ -112,12 +124,14 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
   const [cameraTarget, setCameraTarget] = useState<[number, number, number] | null>(null);
   const [focusRegion, setFocusRegion] = useState<{ center: number[]; radius: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const orbitRef = useRef<any>(null);
 
   // DfAM state
   const [dfamMode, setDfamMode] = useState<DfamMode>('normal');
   const [dfamScene, setDfamScene] = useState<THREE.Group | null>(null);
   const [dfamMeta, setDfamMeta] = useState<DfamMeshMeta | null>(null);
   const [dfamLoading, setDfamLoading] = useState(false);
+  const [loadedDfamUrl, setLoadedDfamUrl] = useState<string | null>(null);
 
   const wireframe = externalWireframe ?? internalWireframe;
 
@@ -136,9 +150,19 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
     setFocusRegion(null);
   }, []);
 
+  // Reset cached DfAM scene when URL changes (new job)
+  useEffect(() => {
+    if (dfamGlbUrl !== loadedDfamUrl) {
+      setDfamScene(null);
+      setDfamMeta(null);
+      setLoadedDfamUrl(null);
+    }
+  }, [dfamGlbUrl, loadedDfamUrl]);
+
   // Load DfAM GLB when switching away from 'normal'
   useEffect(() => {
-    if (dfamMode === 'normal' || dfamScene || !dfamGlbUrl || dfamLoading) return;
+    if (dfamMode === 'normal' || !dfamGlbUrl || dfamLoading) return;
+    if (dfamScene && loadedDfamUrl === dfamGlbUrl) return;
 
     setDfamLoading(true);
     const loader = new GLTFLoader();
@@ -151,14 +175,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
         group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             child.material = createDfamMaterial();
-            // Extract metadata from mesh userData if present
-            if (child.userData?.analysis_type) {
-              // Metadata is stored per-mesh; we'll pick the active one later
-            }
           }
         });
 
         setDfamScene(group);
+        setLoadedDfamUrl(dfamGlbUrl);
         setDfamLoading(false);
       },
       undefined,
@@ -166,7 +187,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
         setDfamLoading(false);
       },
     );
-  }, [dfamMode, dfamScene, dfamGlbUrl, dfamLoading]);
+  }, [dfamMode, dfamScene, dfamGlbUrl, dfamLoading, loadedDfamUrl]);
 
   // Toggle mesh visibility based on dfamMode
   useEffect(() => {
@@ -232,6 +253,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
         <directionalLight position={[-3, -3, -3]} intensity={darkMode ? 0.2 : 0.3} />
         <Environment preset="studio" />
         <OrbitControls
+          ref={orbitRef}
           enableDamping
           dampingFactor={0.1}
           minDistance={1}
@@ -240,6 +262,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
         <CameraController
           targetPosition={cameraTarget}
           focusRegion={focusRegion}
+          orbitRef={orbitRef}
           onAnimationDone={handleAnimationDone}
         />
         {modelUrl && (

@@ -54,7 +54,14 @@ def extract_geometry_from_step(
     if run_vertex_analysis:
         stl_path = _step_to_temp_stl(step_path)
         if stl_path:
-            _try_vertex_analysis(stl_path, geometry_info)
+            try:
+                _try_vertex_analysis(stl_path, geometry_info)
+            finally:
+                import os
+                try:
+                    os.unlink(stl_path)
+                except OSError:
+                    pass
 
     return geometry_info
 
@@ -62,10 +69,10 @@ def extract_geometry_from_step(
 def _step_to_temp_stl(step_path: str) -> Optional[str]:
     """Convert STEP to a temporary STL file for mesh analysis."""
     try:
-        from backend.core.format_exporter import FormatExporter
+        from backend.core.format_exporter import ExportConfig, FormatExporter
 
         exporter = FormatExporter()
-        return exporter._step_to_stl_temp(step_path, exporter._default_config())
+        return exporter._step_to_stl_temp(step_path, ExportConfig())
     except Exception as exc:
         logger.warning("STEP → STL conversion failed: %s", exc)
         return None
