@@ -1,30 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Steps, Typography, Space } from 'antd';
-import {
-  LoadingOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  EditOutlined,
-  RocketOutlined,
-  ToolOutlined,
-  SafetyOutlined,
-} from '@ant-design/icons';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import type { WorkflowPhase } from '../../types/generate.ts';
-
-const { Text } = Typography;
 
 interface StageInfo {
   title: string;
-  icon: React.ReactNode;
 }
 
 const STAGES: StageInfo[] = [
-  { title: '意图解析', icon: <ToolOutlined /> },
-  { title: '参数确认', icon: <EditOutlined /> },
-  { title: '模型生成', icon: <RocketOutlined /> },
-  { title: '模型优化', icon: <LoadingOutlined /> },
-  { title: '质量检查', icon: <SafetyOutlined /> },
-  { title: '完成', icon: <CheckCircleOutlined /> },
+  { title: '意图解析' },
+  { title: '参数确认' },
+  { title: '模型生成' },
+  { title: '模型优化' },
+  { title: '质量检查' },
+  { title: '完成' },
 ];
 
 const PHASE_TO_STEP: Record<WorkflowPhase, number> = {
@@ -56,6 +44,8 @@ export default function PipelineProgress({
   lastActiveStep: externalLastStep,
   onActiveStepChange,
 }: PipelineProgressProps) {
+  const dt = useDesignTokens();
+
   // 本地 fallback：无外部管理时自行维护
   const [internalLastStep, setInternalLastStep] = useState(0);
   const lastActiveStep = externalLastStep ?? internalLastStep;
@@ -86,56 +76,108 @@ export default function PipelineProgress({
 
   if (phase === 'idle') return null;
 
+  const getStepStatus = (idx: number): 'completed' | 'running' | 'failed' | 'pending' => {
+    if (idx < currentStep) return 'completed';
+    if (idx === currentStep) return phase === 'failed' ? 'failed' : 'running';
+    return 'pending';
+  };
+
+  const getLedColor = (status: 'completed' | 'running' | 'failed' | 'pending') => {
+    switch (status) {
+      case 'completed': return dt.color.success;
+      case 'running': return dt.color.primary;
+      case 'failed': return dt.color.error;
+      case 'pending': return 'transparent';
+    }
+  };
+
+  const getLedBorder = (status: 'completed' | 'running' | 'failed' | 'pending') => {
+    if (status === 'pending') return `1px solid ${dt.color.border}`;
+    return '1px solid transparent';
+  };
+
   return (
-    <div>
-      <Steps
-        direction="vertical"
-        size="small"
-        current={currentStep}
-        status={phase === 'failed' ? 'error' : 'process'}
-        items={STAGES.map((stage, idx) => ({
-          title: stage.title,
-          icon:
-            idx < currentStep ? (
-              <CheckCircleOutlined style={{ color: '#52c41a' }} />
-            ) : idx === currentStep ? (
-              phase === 'failed' ? (
-                <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
-              ) : (
-                <LoadingOutlined style={{ color: '#1677ff' }} />
-              )
-            ) : (
-              stage.icon
-            ),
-          description:
-            idx === currentStep ? (
-              <Space direction="vertical" size={2}>
-                {message && <Text type="secondary" style={{ fontSize: 12 }}>{message}</Text>}
-                {elapsed && (
-                  <Text type="secondary" style={{ fontSize: 11 }}>
-                    已用时 {elapsed}
-                  </Text>
-                )}
-              </Space>
-            ) : undefined,
-        }))}
-      />
+    <div style={{ fontFamily: dt.typography.fontMono }}>
+      {/* LED step indicators */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {STAGES.map((stage, idx) => {
+          const status = getStepStatus(idx);
+          const isLast = idx === STAGES.length - 1;
+          return (
+            <div key={idx}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                {/* LED block */}
+                <div
+                  style={{
+                    width: 12,
+                    height: 12,
+                    marginTop: 2,
+                    flexShrink: 0,
+                    borderRadius: 2,
+                    background: getLedColor(status),
+                    border: getLedBorder(status),
+                    animation: status === 'running' ? 'ledPulse 1.5s ease-in-out infinite' : undefined,
+                  }}
+                />
+                {/* Label + description */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: status === 'running' ? 600 : 400,
+                      color: status === 'pending' ? dt.color.textTertiary : dt.color.textPrimary,
+                      lineHeight: '16px',
+                    }}
+                  >
+                    {stage.title}
+                  </div>
+                  {idx === currentStep && (message || elapsed) && (
+                    <div style={{ marginTop: 2 }}>
+                      {message && (
+                        <div style={{ fontSize: 11, color: dt.color.textSecondary }}>{message}</div>
+                      )}
+                      {elapsed && (
+                        <div style={{ fontSize: 11, color: dt.color.textTertiary }}>
+                          已用时 {elapsed}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Connector line */}
+              {!isLast && (
+                <div
+                  style={{
+                    width: 1,
+                    height: idx === currentStep && (message || elapsed) ? 12 : 8,
+                    marginLeft: 5.5,
+                    background: idx < currentStep ? dt.color.success : dt.color.border,
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       {phase === 'failed' && error && (
         <div
           style={{
             marginTop: 8,
             padding: '8px 12px',
-            borderRadius: 6,
-            background: '#fff2f0',
-            border: '1px solid #ffccc7',
+            borderRadius: dt.radius.sm,
+            background: dt.isDark ? 'rgba(255,51,51,0.1)' : 'rgba(229,48,48,0.06)',
+            border: `1px solid ${dt.color.error}`,
           }}
         >
-          <Text type="danger" style={{ fontSize: 13 }}>
+          <span style={{ fontSize: 12, color: dt.color.error }}>
             {error}
-          </Text>
+          </span>
         </div>
       )}
+
+      {/* LED pulse animation — uses globalStyles.css ledPulse */}
     </div>
   );
 }

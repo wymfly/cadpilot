@@ -11,6 +11,7 @@ import {
   HistoryOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useDesignTokens } from '../theme/useDesignTokens.ts';
 
 const { Header, Sider, Content } = Layout;
 
@@ -54,6 +55,7 @@ const getOpenKeys = (pathname: string): string[] => {
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const dt = useDesignTokens();
   const [openKeys, setOpenKeys] = useState<string[]>(getOpenKeys(location.pathname));
 
   return (
@@ -61,7 +63,7 @@ export default function MainLayout() {
       <Sider
         breakpoint="lg"
         collapsedWidth={56}
-        style={{ background: '#fff' }}
+        style={{ background: dt.color.surface1 }}
       >
         <div
           style={{
@@ -70,9 +72,10 @@ export default function MainLayout() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            fontFamily: dt.typography.fontMono,
             fontWeight: 700,
             fontSize: 16,
-            color: '#1677ff',
+            color: dt.color.primary,
           }}
         >
           CAD3Dify
@@ -90,18 +93,25 @@ export default function MainLayout() {
       <Layout>
         <Header
           style={{
-            background: '#fff',
+            background: dt.color.surface1,
             padding: '0 24px',
-            borderBottom: '1px solid #f0f0f0',
+            borderBottom: `1px solid ${dt.color.border}`,
             display: 'flex',
             alignItems: 'center',
           }}
         >
-          <span style={{ fontSize: 14, color: '#999' }}>
+          <span style={{ fontSize: 14, color: dt.color.textTertiary }}>
             AI 驱动的 3D 模型生成平台
           </span>
         </Header>
-        <Content style={{ margin: 24, padding: 24, background: '#fff', borderRadius: 8 }}>
+        <Content
+          style={{
+            margin: 24,
+            padding: 24,
+            background: dt.color.surface1,
+            borderRadius: dt.radius.md,
+          }}
+        >
           <Outlet />
         </Content>
       </Layout>

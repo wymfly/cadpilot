@@ -1,4 +1,5 @@
 import { Drawer, Descriptions, Tag, Divider } from 'antd';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import ReasoningCard from './ReasoningCard.tsx';
 import type { NodeStatus } from './NodeCard.tsx';
 
@@ -26,6 +27,7 @@ const STATUS_LABELS: Record<NodeStatus, { text: string; color: string }> = {
 };
 
 export default function NodeInspector({ open, data, onClose }: NodeInspectorProps) {
+  const dt = useDesignTokens();
   if (!data) return null;
 
   const statusInfo = STATUS_LABELS[data.status];
@@ -36,7 +38,10 @@ export default function NodeInspector({ open, data, onClose }: NodeInspectorProp
       open={open}
       onClose={onClose}
       width={420}
-      styles={{ body: { padding: '16px' } }}
+      styles={{
+        body: { padding: '16px', background: dt.color.surface1, fontFamily: dt.typography.fontMono },
+        header: { background: dt.color.surface2 },
+      }}
     >
       <Descriptions column={1} size="small" bordered>
         <Descriptions.Item label="节点">

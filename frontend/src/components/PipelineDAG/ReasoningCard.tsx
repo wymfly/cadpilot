@@ -1,4 +1,5 @@
 import { Collapse, Empty, Typography } from 'antd';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { Text } = Typography;
 
@@ -28,6 +29,8 @@ const LABEL_MAP: Record<string, string> = {
 };
 
 export default function ReasoningCard({ reasoning }: ReasoningCardProps) {
+  const dt = useDesignTokens();
+
   if (!reasoning || Object.keys(reasoning).length === 0) {
     return <Empty description="无推理数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   }
@@ -35,7 +38,7 @@ export default function ReasoningCard({ reasoning }: ReasoningCardProps) {
   const items = Object.entries(reasoning).map(([key, value]) => ({
     key,
     label: LABEL_MAP[key] || key,
-    children: <Text>{value}</Text>,
+    children: <Text style={{ fontFamily: dt.typography.fontMono, fontSize: 12 }}>{value}</Text>,
   }));
 
   return (

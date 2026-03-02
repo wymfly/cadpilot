@@ -4,7 +4,7 @@ import { ReloadOutlined } from '@ant-design/icons';
 import { useOutletContext } from 'react-router-dom';
 import type { WorkbenchOutletContext } from '../../layouts/WorkbenchLayout.tsx';
 import { useGenerateWorkflowContext } from '../../contexts/GenerateWorkflowContext.tsx';
-import { useTheme } from '../../contexts/ThemeContext.tsx';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import { useParametricPreview } from '../../hooks/useParametricPreview.ts';
 import InputPanel from '../../components/InputPanel/index.tsx';
 import DrawingSpecForm from '../../components/DrawingSpecForm/index.tsx';
@@ -21,7 +21,7 @@ const { Text, Title } = Typography;
 
 export default function PrecisionWorkbench() {
   const { setPanels } = useOutletContext<WorkbenchOutletContext>();
-  const { isDark } = useTheme();
+  const dt = useDesignTokens();
   const {
     workflow,
     startTextGenerate,
@@ -256,7 +256,7 @@ export default function PrecisionWorkbench() {
             </Text>
             <div style={{ marginTop: 16 }}>
               <Title level={5}>示例</Title>
-              <ul style={{ paddingLeft: 16, color: '#666', fontSize: 13 }}>
+              <ul style={{ paddingLeft: 16, color: dt.color.textSecondary, fontSize: 13 }}>
                 <li>做一个外径100mm的法兰盘</li>
                 <li>创建直径50mm高80mm的阶梯轴</li>
                 <li>上传工程图纸自动识别</li>
@@ -317,7 +317,7 @@ export default function PrecisionWorkbench() {
       default:
         return null;
     }
-  }, [workflow.phase, workflow.printability, pipelineConfig, setPipelineConfig]);
+  }, [workflow.phase, workflow.printability, pipelineConfig, setPipelineConfig, dt.color.textSecondary]);
 
   // 注入面板内容到 WorkbenchLayout
   useEffect(() => {
@@ -331,7 +331,7 @@ export default function PrecisionWorkbench() {
         ref={viewerRef}
         modelUrl={viewerModelUrl}
         dfamGlbUrl={workflow.dfamGlbUrl}
-        darkMode={isDark}
+        darkMode={dt.isDark}
         previewLoading={previewStatus.loading}
         previewError={previewStatus.error}
         previewTimedOut={previewStatus.timedOut}

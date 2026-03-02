@@ -1,5 +1,6 @@
 import { Card, Tag, Typography, Badge } from 'antd';
 import { ClockCircleOutlined, CheckCircleFilled, WarningFilled } from '@ant-design/icons';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import type { JobSummary } from '../../services/api.ts';
 
 const { Text } = Typography;
@@ -30,6 +31,7 @@ export interface JobCardProps {
 }
 
 export default function JobCard({ job, onClick }: JobCardProps) {
+  const dt = useDesignTokens();
   const statusInfo = STATUS_TAG_MAP[job.status] ?? {
     color: 'default',
     label: job.status,
@@ -49,28 +51,29 @@ export default function JobCard({ job, onClick }: JobCardProps) {
         hoverable
         size="small"
         onClick={onClick}
+        style={{ boxShadow: dt.shadow.hover }}
         cover={
           <div
             style={{
               height: 140,
-              background: 'linear-gradient(135deg, #f0f2f5 0%, #e8ecf1 100%)',
+              background: `linear-gradient(135deg, ${dt.color.surface2} 0%, ${dt.color.surface3} 100%)`,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#8c8c8c',
+              color: dt.color.textTertiary,
               fontSize: 13,
               gap: 4,
             }}
           >
             {job.status === 'completed' ? (
               <>
-                <CheckCircleFilled style={{ fontSize: 28, color: '#52c41a' }} />
+                <CheckCircleFilled style={{ fontSize: 28, color: dt.color.success }} />
                 <span>3D 模型</span>
               </>
             ) : job.status === 'failed' ? (
               <>
-                <WarningFilled style={{ fontSize: 28, color: '#ff4d4f' }} />
+                <WarningFilled style={{ fontSize: 28, color: dt.color.error }} />
                 <span>生成失败</span>
               </>
             ) : (

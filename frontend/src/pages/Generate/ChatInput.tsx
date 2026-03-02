@@ -6,6 +6,7 @@ import {
   DeleteOutlined,
 } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -48,13 +49,15 @@ export default function ChatInput({
     }
   };
 
+  const dt = useDesignTokens();
+
   return (
     <div
       style={{
         padding: 12,
         borderRadius: 8,
-        border: '1px solid #d9d9d9',
-        background: '#fff',
+        border: `1px solid ${dt.color.border}`,
+        background: dt.color.surface1,
       }}
     >
       {imageFile && (

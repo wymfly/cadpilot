@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Typography,
   Card,
@@ -21,6 +21,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { getBenchmarkReport } from '../../services/api.ts';
 import type { BenchmarkReport, CaseResult, FailureCategory } from '../../types/benchmark.ts';
+import { useDesignTokens, type ResolvedColors } from '../../theme/useDesignTokens.ts';
 
 const { Title, Text } = Typography;
 
@@ -44,80 +45,84 @@ function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-const caseColumns: ColumnsType<CaseResult> = [
-  {
-    title: 'Case',
-    dataIndex: 'case_id',
-    key: 'case_id',
-    width: 100,
-  },
-  {
-    title: '编译',
-    dataIndex: 'compiled',
-    key: 'compiled',
-    width: 70,
-    render: (val: boolean) =>
-      val ? (
-        <CheckCircleOutlined style={{ color: '#52c41a' }} />
-      ) : (
-        <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
-      ),
-  },
-  {
-    title: '类型正确',
-    dataIndex: 'type_correct',
-    key: 'type_correct',
-    width: 90,
-    render: (val: boolean) =>
-      val ? (
-        <CheckCircleOutlined style={{ color: '#52c41a' }} />
-      ) : (
-        <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
-      ),
-  },
-  {
-    title: '参数准确率',
-    dataIndex: 'param_accuracy',
-    key: 'param_accuracy',
-    width: 100,
-    render: (val: number) => formatPercent(val),
-  },
-  {
-    title: '几何匹配',
-    dataIndex: 'bbox_match',
-    key: 'bbox_match',
-    width: 90,
-    render: (val: boolean) =>
-      val ? (
-        <CheckCircleOutlined style={{ color: '#52c41a' }} />
-      ) : (
-        <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
-      ),
-  },
-  {
-    title: '耗时',
-    dataIndex: 'duration_s',
-    key: 'duration_s',
-    width: 80,
-    render: (val: number) => `${val.toFixed(1)}s`,
-  },
-  {
-    title: '失败分类',
-    dataIndex: 'failure_category',
-    key: 'failure_category',
-    width: 110,
-    render: (val?: FailureCategory) =>
-      val ? (
-        <Tag color={FAILURE_COLORS[val]}>{FAILURE_LABELS[val]}</Tag>
-      ) : (
-        <Tag color="green">通过</Tag>
-      ),
-  },
-];
+function getCaseColumns(c: ResolvedColors): ColumnsType<CaseResult> {
+  return [
+    {
+      title: 'Case',
+      dataIndex: 'case_id',
+      key: 'case_id',
+      width: 100,
+    },
+    {
+      title: '编译',
+      dataIndex: 'compiled',
+      key: 'compiled',
+      width: 70,
+      render: (val: boolean) =>
+        val ? (
+          <CheckCircleOutlined style={{ color: c.success }} />
+        ) : (
+          <CloseCircleOutlined style={{ color: c.error }} />
+        ),
+    },
+    {
+      title: '类型正确',
+      dataIndex: 'type_correct',
+      key: 'type_correct',
+      width: 90,
+      render: (val: boolean) =>
+        val ? (
+          <CheckCircleOutlined style={{ color: c.success }} />
+        ) : (
+          <CloseCircleOutlined style={{ color: c.error }} />
+        ),
+    },
+    {
+      title: '参数准确率',
+      dataIndex: 'param_accuracy',
+      key: 'param_accuracy',
+      width: 100,
+      render: (val: number) => formatPercent(val),
+    },
+    {
+      title: '几何匹配',
+      dataIndex: 'bbox_match',
+      key: 'bbox_match',
+      width: 90,
+      render: (val: boolean) =>
+        val ? (
+          <CheckCircleOutlined style={{ color: c.success }} />
+        ) : (
+          <CloseCircleOutlined style={{ color: c.error }} />
+        ),
+    },
+    {
+      title: '耗时',
+      dataIndex: 'duration_s',
+      key: 'duration_s',
+      width: 80,
+      render: (val: number) => `${val.toFixed(1)}s`,
+    },
+    {
+      title: '失败分类',
+      dataIndex: 'failure_category',
+      key: 'failure_category',
+      width: 110,
+      render: (val?: FailureCategory) =>
+        val ? (
+          <Tag color={FAILURE_COLORS[val]}>{FAILURE_LABELS[val]}</Tag>
+        ) : (
+          <Tag color="green">通过</Tag>
+        ),
+    },
+  ];
+}
 
 export default function ReportDetail() {
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
+  const dt = useDesignTokens();
+  const caseColumns = useMemo(() => getCaseColumns(dt.color), [dt.color]);
   const [report, setReport] = useState<BenchmarkReport | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -188,7 +193,7 @@ export default function ReportDetail() {
               precision={1}
               suffix="%"
               valueStyle={{
-                color: metrics.compile_rate >= 0.8 ? '#3f8600' : '#cf1322',
+                color: metrics.compile_rate >= 0.8 ? dt.color.success : dt.color.error,
               }}
             />
           </Card>
@@ -201,7 +206,7 @@ export default function ReportDetail() {
               precision={1}
               suffix="%"
               valueStyle={{
-                color: metrics.type_accuracy >= 0.8 ? '#3f8600' : '#cf1322',
+                color: metrics.type_accuracy >= 0.8 ? dt.color.success : dt.color.error,
               }}
             />
           </Card>
@@ -214,7 +219,7 @@ export default function ReportDetail() {
               precision={1}
               suffix="%"
               valueStyle={{
-                color: metrics.param_accuracy_p50 >= 0.8 ? '#3f8600' : '#cf1322',
+                color: metrics.param_accuracy_p50 >= 0.8 ? dt.color.success : dt.color.error,
               }}
             />
           </Card>
@@ -227,7 +232,7 @@ export default function ReportDetail() {
               precision={1}
               suffix="%"
               valueStyle={{
-                color: metrics.bbox_match_rate >= 0.8 ? '#3f8600' : '#cf1322',
+                color: metrics.bbox_match_rate >= 0.8 ? dt.color.success : dt.color.error,
               }}
             />
           </Card>
@@ -279,11 +284,11 @@ export default function ReportDetail() {
                       width: `${widthPercent}%`,
                       minWidth: 20,
                       maxWidth: '60%',
-                      background: FAILURE_COLORS[category] === 'red' ? '#ff4d4f'
-                        : FAILURE_COLORS[category] === 'orange' ? '#fa8c16'
-                        : FAILURE_COLORS[category] === 'magenta' ? '#eb2f96'
-                        : FAILURE_COLORS[category] === 'volcano' ? '#fa541c'
-                        : '#faad14',
+                      background: FAILURE_COLORS[category] === 'red' ? dt.color.error
+                        : FAILURE_COLORS[category] === 'orange' ? dt.color.warning
+                        : FAILURE_COLORS[category] === 'magenta' ? dt.color.error
+                        : FAILURE_COLORS[category] === 'volcano' ? dt.color.error
+                        : dt.color.warning,
                       borderRadius: 2,
                       marginRight: 8,
                     }}

@@ -7,6 +7,7 @@ import {
   BarChartOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { Title, Paragraph } = Typography;
 
@@ -16,14 +17,14 @@ const primaryCards = [
     description: '上传 2D 工程图纸或输入文本描述，AI 生成精密 3D CAD 模型',
     icon: <ExperimentOutlined style={{ fontSize: 40 }} />,
     path: '/generate',
-    gradient: 'linear-gradient(135deg, #1677ff 0%, #4096ff 100%)',
+    gradientKey: 'primary' as const,
   },
   {
     title: '创意雕塑',
     description: '输入创意描述或参考图片，AI 生成自由曲面 3D 模型',
     icon: <BulbOutlined style={{ fontSize: 40 }} />,
     path: '/generate/organic',
-    gradient: 'linear-gradient(135deg, #722ed1 0%, #b37feb 100%)',
+    gradientKey: 'action' as const,
   },
 ];
 
@@ -50,6 +51,7 @@ const secondaryCards = [
 
 export default function Home() {
   const navigate = useNavigate();
+  const dt = useDesignTokens();
 
   return (
     <div>
@@ -68,7 +70,9 @@ export default function Home() {
             >
               <div
                 style={{
-                  background: card.gradient,
+                  background: card.gradientKey === 'primary'
+                    ? `linear-gradient(135deg, ${dt.color.primary} 0%, ${dt.color.primary}99 100%)`
+                    : `linear-gradient(135deg, ${dt.color.action} 0%, ${dt.color.action}99 100%)`,
                   borderRadius: 8,
                   padding: 24,
                   marginBottom: 16,
@@ -93,7 +97,7 @@ export default function Home() {
               onClick={() => navigate(card.path)}
               style={{ textAlign: 'center', height: '100%' }}
             >
-              <div style={{ marginBottom: 12, color: '#1677ff' }}>
+              <div style={{ marginBottom: 12, color: dt.color.primary }}>
                 {card.icon}
               </div>
               <Title level={5}>{card.title}</Title>

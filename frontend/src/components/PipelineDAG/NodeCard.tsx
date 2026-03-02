@@ -7,6 +7,7 @@ import {
   LoadingOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 export type NodeStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -34,14 +35,22 @@ function formatMs(ms: number): string {
 function NodeCard({ data }: { data: NodeCardData }) {
   const status = data.status || 'pending';
   const config = STATUS_CONFIG[status];
+  const dt = useDesignTokens();
+
+  const borderColor = status === 'running' ? dt.color.primary
+    : status === 'failed' ? dt.color.error
+    : dt.color.border;
+  const bgColor = status === 'failed'
+    ? (dt.isDark ? 'rgba(255,51,51,0.08)' : 'rgba(229,48,48,0.04)')
+    : dt.color.surface2;
 
   return (
     <div
       style={{
         padding: '8px 16px',
-        borderRadius: 8,
-        border: `2px solid ${status === 'running' ? '#1677ff' : '#d9d9d9'}`,
-        background: status === 'failed' ? '#fff2f0' : '#fff',
+        borderRadius: dt.radius.md,
+        border: `2px solid ${borderColor}`,
+        background: bgColor,
         minWidth: 140,
         textAlign: 'center',
         cursor: status !== 'pending' ? 'pointer' : 'default',
@@ -54,12 +63,12 @@ function NodeCard({ data }: { data: NodeCardData }) {
         </Tag>
       </div>
       {data.strategy && (
-        <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
+        <div style={{ fontSize: 10, color: dt.color.textTertiary, marginTop: 2, fontFamily: dt.typography.fontMono }}>
           {data.strategy}
         </div>
       )}
       {data.elapsedMs != null && (
-        <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
+        <div style={{ fontSize: 11, color: dt.color.textSecondary, marginTop: 4, fontFamily: dt.typography.fontMono }}>
           {formatMs(data.elapsedMs)}
         </div>
       )}

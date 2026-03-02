@@ -1,5 +1,6 @@
 import { Slider, InputNumber, Space, Tooltip, Typography } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import type { ParamDefinition } from '../../types/template.ts';
 import type { ParamRecommendation } from '../../types/standard.ts';
 
@@ -18,6 +19,7 @@ export default function ParamSlider({
   recommendation,
   onChange,
 }: ParamSliderProps) {
+  const dt = useDesignTokens();
   const min = param.range_min ?? 0;
   const max = param.range_max ?? 1000;
   const step = max - min > 100 ? 1 : 0.1;
@@ -43,7 +45,7 @@ export default function ParamSlider({
               </span>
             }
           >
-            <InfoCircleOutlined style={{ color: '#1677ff', cursor: 'pointer' }} />
+            <InfoCircleOutlined style={{ color: dt.color.primary, cursor: 'pointer' }} />
           </Tooltip>
         )}
       </Space>

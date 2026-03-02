@@ -4,6 +4,8 @@ import { OrbitControls, Center, Environment } from '@react-three/drei';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { Spin } from 'antd';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
+import TerminalCursor from '../decorative/TerminalCursor.tsx';
 import { createDfamMaterial, type DfamMeshMeta } from './DfamShader.ts';
 import HeatmapLegend from './HeatmapLegend.tsx';
 import ViewControls from './ViewControls.tsx';
@@ -30,9 +32,10 @@ interface ModelProps {
   wireframe: boolean;
   visible?: boolean;
   onLoaded?: () => void;
+  onBoundsReady?: (radius: number) => void;
 }
 
-function Model({ url, wireframe, visible = true, onLoaded }: ModelProps) {
+function Model({ url, wireframe, visible = true, onLoaded, onBoundsReady }: ModelProps) {
   const gltf = useLoader(GLTFLoader, url);
 
   // Apply wireframe to all meshes
@@ -52,7 +55,13 @@ function Model({ url, wireframe, visible = true, onLoaded }: ModelProps) {
 
   useEffect(() => {
     if (onLoaded) onLoaded();
-  }, [url, onLoaded]);
+    if (onBoundsReady) {
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const sphere = new THREE.Sphere();
+      box.getBoundingSphere(sphere);
+      onBoundsReady(sphere.radius);
+    }
+  }, [url, onLoaded, onBoundsReady, gltf.scene]);
 
   return (
     <Center>
@@ -109,6 +118,35 @@ function CameraController({ targetPosition, focusRegion, orbitRef, onAnimationDo
   return null;
 }
 
+/** Auto-frame camera to fit the loaded model's bounding sphere. */
+function AutoFramer({ radius, orbitRef }: { radius: number; orbitRef: React.RefObject<any> }) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    if (radius <= 0) return;
+
+    const cam = camera as THREE.PerspectiveCamera;
+    const fov = cam.fov * (Math.PI / 180);
+    const distance = (radius / Math.sin(fov / 2)) * 1.2;
+
+    const dir = new THREE.Vector3(1, 0.8, 1).normalize();
+    cam.position.copy(dir.multiplyScalar(distance));
+    cam.lookAt(0, 0, 0);
+    cam.near = Math.max(distance * 0.01, 0.01);
+    cam.far = distance * 10;
+    cam.updateProjectionMatrix();
+
+    if (orbitRef.current) {
+      orbitRef.current.target.set(0, 0, 0);
+      orbitRef.current.minDistance = radius * 0.1;
+      orbitRef.current.maxDistance = distance * 3;
+      orbitRef.current.update();
+    }
+  }, [radius, camera, orbitRef]);
+
+  return null;
+}
+
 const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
   modelUrl,
   dfamGlbUrl,
@@ -123,8 +161,13 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
   const [internalWireframe, setInternalWireframe] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<[number, number, number] | null>(null);
   const [focusRegion, setFocusRegion] = useState<{ center: number[]; radius: number } | null>(null);
+  const [modelRadius, setModelRadius] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
+
+  const handleBoundsReady = useCallback((radius: number) => {
+    setModelRadius(radius);
+  }, []);
 
   // DfAM state
   const [dfamMode, setDfamMode] = useState<DfamMode>('normal');
@@ -149,6 +192,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
     setCameraTarget(null);
     setFocusRegion(null);
   }, []);
+
+  // Reset model radius when URL changes (triggers re-frame on new model)
+  useEffect(() => {
+    setModelRadius(0);
+  }, [modelUrl]);
 
   // Reset cached DfAM scene when URL changes (new job)
   useEffect(() => {
@@ -224,11 +272,11 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
   const showOriginalModel = dfamMode === 'normal';
   const dfamAvailable = !!dfamGlbUrl;
 
-  // 暗色模式配置
-  const bgColor = darkMode ? '#0a0a0a' : '#f0f0f0';
-  const ambientIntensity = darkMode ? 0.3 : 0.5;
-  const gridColors: [string, string] = darkMode ? ['#333', '#222'] : ['#ccc', '#eee'];
-  const placeholderColor = darkMode ? '#444' : '#d9d9d9';
+  const dt = useDesignTokens();
+  const bgColor = dt.color.surface0;
+  const ambientIntensity = dt.isDark ? 0.3 : 0.5;
+  const gridColors: [string, string] = dt.isDark ? ['#333', '#222'] : ['#ccc', '#eee'];
+  const placeholderColor = dt.color.surface3;
 
   return (
     <div
@@ -239,7 +287,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
         minHeight: 400,
         position: 'relative',
         background: bgColor,
-        borderRadius: 8,
+        borderRadius: dt.radius.md,
         overflow: 'hidden',
       }}
     >
@@ -256,8 +304,6 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
           ref={orbitRef}
           enableDamping
           dampingFactor={0.1}
-          minDistance={1}
-          maxDistance={100}
         />
         <CameraController
           targetPosition={cameraTarget}
@@ -265,9 +311,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
           orbitRef={orbitRef}
           onAnimationDone={handleAnimationDone}
         />
+        {modelRadius > 0 && (
+          <AutoFramer radius={modelRadius} orbitRef={orbitRef} />
+        )}
         {modelUrl && (
           <Suspense fallback={null}>
-            <Model url={modelUrl} wireframe={wireframe} visible={showOriginalModel} onLoaded={onLoaded} />
+            <Model url={modelUrl} wireframe={wireframe} visible={showOriginalModel} onLoaded={onLoaded} onBoundsReady={handleBoundsReady} />
           </Suspense>
         )}
         {dfamScene && dfamMode !== 'normal' && (
@@ -279,7 +328,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
             <meshStandardMaterial color={placeholderColor} wireframe={wireframe} />
           </mesh>
         )}
-        <gridHelper key={darkMode ? 'dark' : 'light'} args={[10, 10, gridColors[0], gridColors[1]]} />
+        <gridHelper key={`${darkMode}-${modelRadius}`} args={[modelRadius > 0 ? Math.ceil(modelRadius * 4 / 10) * 10 : 10, 10, gridColors[0], gridColors[1]]} />
       </Canvas>
 
       {!modelUrl && (
@@ -293,16 +342,12 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
             pointerEvents: 'none',
           }}
         >
-          <Spin size="default" />
-          <div style={{ marginTop: 8, color: darkMode ? '#666' : '#999', fontSize: 13 }}>
-            等待模型加载...
-          </div>
+          <TerminalCursor message="Awaiting model..." />
         </div>
       )}
 
       <ViewControls
         wireframe={wireframe}
-        darkMode={darkMode}
         dfamMode={dfamMode}
         dfamAvailable={dfamAvailable}
         onWireframeToggle={() => setInternalWireframe((v) => !v)}
@@ -329,15 +374,17 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
             position: 'absolute',
             top: 12,
             right: 12,
-            background: darkMode ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.85)',
-            borderRadius: 6,
+            background: dt.color.glassBg,
+            backdropFilter: 'blur(12px)',
+            borderRadius: dt.radius.sm,
             padding: '6px 12px',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
             fontSize: 12,
-            color: darkMode ? '#aaa' : '#666',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            fontFamily: dt.typography.fontMono,
+            color: dt.color.textSecondary,
+            boxShadow: dt.shadow.panel,
           }}
         >
           <Spin size="small" />
@@ -352,15 +399,17 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
             position: 'absolute',
             top: 12,
             right: 12,
-            background: darkMode ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.85)',
-            borderRadius: 6,
+            background: dt.color.glassBg,
+            backdropFilter: 'blur(12px)',
+            borderRadius: dt.radius.sm,
             padding: '6px 12px',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
             fontSize: 12,
-            color: darkMode ? '#aaa' : '#666',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            fontFamily: dt.typography.fontMono,
+            color: dt.color.textSecondary,
+            boxShadow: dt.shadow.panel,
           }}
         >
           <Spin size="small" />
@@ -375,12 +424,14 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
             position: 'absolute',
             top: 12,
             right: 12,
-            background: darkMode ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)',
-            borderRadius: 6,
+            background: dt.color.glassBg,
+            backdropFilter: 'blur(12px)',
+            borderRadius: dt.radius.sm,
             padding: '8px 12px',
             fontSize: 12,
-            color: previewTimedOut ? (darkMode ? '#faad14' : '#d48806') : '#ff4d4f',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            fontFamily: dt.typography.fontMono,
+            color: previewTimedOut ? dt.color.warning : dt.color.error,
+            boxShadow: dt.shadow.panel,
             maxWidth: 200,
           }}
         >

@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { Layout, Button, Drawer } from 'antd';
-import { LeftOutlined, RightOutlined } from '@ant-design/icons';
+import {
+  LeftOutlined,
+  RightOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+} from '@ant-design/icons';
 import { Outlet, useOutletContext } from 'react-router-dom';
 import TopNav from './TopNav.tsx';
-import { useTheme } from '../contexts/ThemeContext.tsx';
+import { useDesignTokens } from '../theme/useDesignTokens.ts';
+import Crosshair from '../components/decorative/Crosshair.tsx';
 
-const LEFT_WIDTH = 240;
-const RIGHT_WIDTH = 300;
 const MOBILE_BREAKPOINT = 768;
 const STORAGE_KEY_LEFT = 'cadpilot-panel-left';
 const STORAGE_KEY_RIGHT = 'cadpilot-panel-right';
@@ -33,7 +37,6 @@ export interface WorkbenchPanels {
   right?: ReactNode;
 }
 
-// 使用 Outlet context 传递面板内容
 export interface WorkbenchOutletContext {
   setPanels: (panels: WorkbenchPanels) => void;
   leftCollapsed: boolean;
@@ -70,7 +73,7 @@ function useMediaQuery(query: string): boolean {
 }
 
 export default function WorkbenchLayout() {
-  const { isDark } = useTheme();
+  const dt = useDesignTokens();
   const isMobile = useMediaQuery(`(max-width: ${MOBILE_BREAKPOINT}px)`);
 
   const [leftCollapsed, setLeftCollapsed] = useState(() =>
@@ -114,35 +117,13 @@ export default function WorkbenchLayout() {
     [setPanels, leftCollapsed, rightCollapsed],
   );
 
-  const panelBg = isDark ? '#1f1f1f' : '#ffffff';
-  const layoutBg = isDark ? '#141414' : '#f5f5f5';
-  const borderColor = isDark ? '#303030' : '#f0f0f0';
-
-  // 面板折叠按钮样式
-  const collapseButtonStyle = {
-    position: 'absolute' as const,
-    top: '50%',
-    transform: 'translateY(-50%)',
-    zIndex: 10,
-    width: 20,
-    height: 40,
-    padding: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 4,
-    fontSize: 12,
-  };
-
   if (isMobile) {
-    // 移动端：单列 + 底部抽屉
     return (
-      <Layout style={{ minHeight: '100vh', background: layoutBg }}>
+      <Layout style={{ minHeight: '100vh', background: dt.color.surface0 }}>
         <TopNav />
         <Layout.Content style={{ flex: 1, position: 'relative' }}>
           <Outlet context={outletContext} />
 
-          {/* 左面板浮动按钮 */}
           {panels.left && (
             <Button
               size="small"
@@ -156,7 +137,6 @@ export default function WorkbenchLayout() {
               }}
             />
           )}
-          {/* 右面板浮动按钮 */}
           {panels.right && (
             <Button
               size="small"
@@ -200,89 +180,127 @@ export default function WorkbenchLayout() {
   const hasLeftPanel = !!panels.left;
   const hasRightPanel = !!panels.right;
 
-  // 桌面端：三栏布局（无面板内容时自动全宽）
+  // 面板样式：浮动 HUD（磨砂玻璃）
+  const panelBase: React.CSSProperties = {
+    position: 'absolute',
+    top: 12,
+    bottom: 12,
+    zIndex: 20,
+    background: dt.color.glassBg,
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: `1px solid ${dt.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+    borderRadius: dt.radius.lg,
+    padding: dt.spacing.panelPadding,
+    overflow: 'auto',
+    boxShadow: dt.shadow.panel,
+    transition: `transform ${dt.motion.panelDuration} ${dt.motion.panelSlide}, opacity ${dt.motion.panelDuration} ${dt.motion.panelSlide}`,
+  };
+
+  // 折叠按钮样式
+  const collapseBtn: React.CSSProperties = {
+    position: 'absolute',
+    top: 8,
+    zIndex: 30,
+    width: 28,
+    height: 28,
+    padding: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 12,
+    borderRadius: dt.radius.sm,
+    opacity: 0.7,
+  };
+
   return (
-    <Layout style={{ minHeight: '100vh', background: layoutBg }}>
+    <Layout style={{ minHeight: '100vh', background: dt.color.surface0 }}>
       <TopNav />
       <div
         style={{
-          display: 'flex',
           flex: 1,
           overflow: 'hidden',
           position: 'relative',
         }}
       >
-        {/* 左面板（仅在有内容时渲染） */}
-        {hasLeftPanel && (
-          <>
-            <div
-              style={{
-                width: leftCollapsed ? 0 : LEFT_WIDTH,
-                minWidth: leftCollapsed ? 0 : LEFT_WIDTH,
-                background: panelBg,
-                borderRight: leftCollapsed ? 'none' : `1px solid ${borderColor}`,
-                overflow: leftCollapsed ? 'hidden' : 'auto',
-                transition: 'width 0.2s, min-width 0.2s',
-                position: 'relative',
-                padding: leftCollapsed ? 0 : 16,
-              }}
-            >
-              {!leftCollapsed && panels.left}
-            </div>
-
-            <Button
-              type="text"
-              size="small"
-              icon={leftCollapsed ? <RightOutlined /> : <LeftOutlined />}
-              onClick={toggleLeft}
-              style={{
-                ...collapseButtonStyle,
-                left: leftCollapsed ? 0 : LEFT_WIDTH - 10,
-              }}
-            />
-          </>
-        )}
-
-        {/* 中央区域 */}
+        {/* 中央区域（全画幅） */}
         <div
           style={{
-            flex: 1,
+            position: 'absolute',
+            inset: 0,
             overflow: 'hidden',
-            position: 'relative',
-            background: layoutBg,
           }}
         >
           <Outlet context={outletContext} />
         </div>
 
-        {/* 右面板（仅在有内容时渲染） */}
-        {hasRightPanel && (
+        {/* 左面板（浮动 HUD） */}
+        {hasLeftPanel && (
           <>
+            <div
+              className="hud-panel"
+              aria-hidden={leftCollapsed}
+              style={{
+                ...panelBase,
+                left: 12,
+                width: dt.layout.leftPanelWidth,
+                transform: leftCollapsed ? 'translateX(-110%)' : 'translateX(0)',
+                opacity: leftCollapsed ? 0 : 1,
+                pointerEvents: leftCollapsed ? 'none' : 'auto',
+              }}
+            >
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }}>
+                <Crosshair />
+              </div>
+              {panels.left}
+            </div>
+
             <Button
               type="text"
               size="small"
-              icon={rightCollapsed ? <LeftOutlined /> : <RightOutlined />}
-              onClick={toggleRight}
+              aria-label={leftCollapsed ? '展开左面板' : '折叠左面板'}
+              icon={leftCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={toggleLeft}
               style={{
-                ...collapseButtonStyle,
-                right: rightCollapsed ? 0 : RIGHT_WIDTH - 10,
+                ...collapseBtn,
+                left: leftCollapsed ? 12 : dt.layout.leftPanelWidth + 12 - 28 - 4,
               }}
             />
+          </>
+        )}
 
+        {/* 右面板（浮动 HUD） */}
+        {hasRightPanel && (
+          <>
             <div
+              className="hud-panel"
+              aria-hidden={rightCollapsed}
               style={{
-                width: rightCollapsed ? 0 : RIGHT_WIDTH,
-                minWidth: rightCollapsed ? 0 : RIGHT_WIDTH,
-                background: panelBg,
-                borderLeft: rightCollapsed ? 'none' : `1px solid ${borderColor}`,
-                overflow: rightCollapsed ? 'hidden' : 'auto',
-                transition: 'width 0.2s, min-width 0.2s',
-                position: 'relative',
-                padding: rightCollapsed ? 0 : 16,
+                ...panelBase,
+                right: 12,
+                width: dt.layout.rightPanelWidth,
+                transform: rightCollapsed ? 'translateX(110%)' : 'translateX(0)',
+                opacity: rightCollapsed ? 0 : 1,
+                pointerEvents: rightCollapsed ? 'none' : 'auto',
               }}
             >
-              {!rightCollapsed && panels.right}
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }}>
+                <Crosshair />
+              </div>
+              {panels.right}
             </div>
+
+            <Button
+              type="text"
+              size="small"
+              aria-label={rightCollapsed ? '展开右面板' : '折叠右面板'}
+              icon={rightCollapsed ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+              onClick={toggleRight}
+              style={{
+                ...collapseBtn,
+                right: rightCollapsed ? 12 : dt.layout.rightPanelWidth + 12 - 28 - 4,
+              }}
+            />
           </>
         )}
       </div>

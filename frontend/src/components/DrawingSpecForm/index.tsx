@@ -17,6 +17,7 @@ import {
   CloseOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import type { DrawingSpec, DrawingSpecFeature } from '../../types/generate.ts';
 
 const { Text, Title } = Typography;
@@ -50,6 +51,7 @@ export default function DrawingSpecForm({
   onConfirm,
   onCancel,
 }: DrawingSpecFormProps) {
+  const dt = useDesignTokens();
   const [form] = Form.useForm();
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [partType, setPartType] = useState(drawingSpec.part_type);
@@ -181,7 +183,7 @@ export default function DrawingSpecForm({
                 />
               ),
               children: (
-                <pre style={{ fontSize: 11, margin: 0, whiteSpace: 'pre-wrap' }}>
+                <pre style={{ fontSize: 11, margin: 0, whiteSpace: 'pre-wrap', fontFamily: dt.typography.fontMono }}>
                   {JSON.stringify(feat, null, 2)}
                 </pre>
               ),
@@ -193,19 +195,21 @@ export default function DrawingSpecForm({
       <Divider style={{ margin: '12px 0' }} />
 
       {/* 免责声明 */}
-      <Alert
-        type="warning"
-        message="AI 识别结果仅供参考，请核对关键参数"
-        style={{ marginBottom: 8, fontSize: 12 }}
-        showIcon
-      />
-      <Checkbox
-        checked={disclaimerAccepted}
-        onChange={(e) => setDisclaimerAccepted(e.target.checked)}
-        style={{ marginBottom: 12, fontSize: 12 }}
-      >
-        我已确认以上信息
-      </Checkbox>
+      <div className="caution-stripe">
+        <Alert
+          type="warning"
+          message="AI 识别结果仅供参考，请核对关键参数"
+          style={{ marginBottom: 8, fontSize: 12 }}
+          showIcon
+        />
+        <Checkbox
+          checked={disclaimerAccepted}
+          onChange={(e) => setDisclaimerAccepted(e.target.checked)}
+          style={{ marginBottom: 12, fontSize: 12 }}
+        >
+          我已确认以上信息
+        </Checkbox>
+      </div>
 
       {/* 操作按钮 */}
       <Space style={{ width: '100%', justifyContent: 'flex-end' }}>

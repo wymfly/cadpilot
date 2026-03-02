@@ -3,6 +3,7 @@ import { Layout, Button, Tooltip } from 'antd';
 import { SunOutlined, MoonOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext.tsx';
+import { useDesignTokens } from '../theme/useDesignTokens.ts';
 
 const { Header } = Layout;
 
@@ -35,7 +36,8 @@ function getActiveTab(pathname: string): string {
 export default function TopNav() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isDark, toggleTheme } = useTheme();
+  const { toggleTheme } = useTheme();
+  const dt = useDesignTokens();
 
   const activeTab = getActiveTab(location.pathname);
 
@@ -52,29 +54,33 @@ export default function TopNav() {
         display: 'flex',
         alignItems: 'center',
         padding: '0 24px',
-        height: 48,
-        lineHeight: '48px',
-        borderBottom: `1px solid ${isDark ? '#303030' : '#f0f0f0'}`,
-        background: isDark ? '#1f1f1f' : '#ffffff',
+        height: dt.layout.topNavHeight,
+        lineHeight: `${dt.layout.topNavHeight}px`,
+        borderBottom: `1px solid ${dt.color.border}`,
+        background: dt.color.surface1,
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
       }}
     >
-      {/* Logo */}
+      {/* Logo — JetBrains Mono + primary color */}
       <div
         style={{
+          fontFamily: dt.typography.fontMono,
           fontWeight: 700,
           fontSize: 16,
-          color: isDark ? '#4096ff' : '#1677ff',
+          color: dt.color.primary,
           marginRight: 32,
           cursor: 'pointer',
           whiteSpace: 'nowrap',
+          letterSpacing: '2px',
         }}
         onClick={() => navigate('/precision')}
       >
         CAD3Dify
       </div>
 
-      {/* Tab 导航 */}
-      <nav style={{ display: 'flex', gap: 4, flex: 1 }}>
+      {/* Tab 导航 — industrial uppercase */}
+      <nav style={{ display: 'flex', gap: 2, flex: 1 }}>
         {TABS.map((tab) => {
           const isActive = tab.key === activeTab;
           return (
@@ -82,19 +88,20 @@ export default function TopNav() {
               key={tab.key}
               onClick={() => handleTabClick(tab)}
               style={{
-                padding: '6px 16px',
+                padding: '6px 14px',
                 border: 'none',
-                borderRadius: 6,
+                borderRadius: 0,
                 cursor: 'pointer',
-                fontSize: 14,
-                fontWeight: isActive ? 600 : 400,
-                color: isActive
-                  ? isDark ? '#4096ff' : '#1677ff'
-                  : isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)',
-                background: isActive
-                  ? isDark ? 'rgba(64,150,255,0.1)' : 'rgba(22,119,255,0.06)'
-                  : 'transparent',
-                transition: 'all 0.2s',
+                fontSize: dt.typography.panelTitle.size,
+                fontWeight: dt.typography.panelTitle.weight,
+                fontFamily: dt.typography.fontUI,
+                textTransform: dt.typography.panelTitle.transform,
+                letterSpacing: dt.typography.panelTitle.letterSpacing,
+                color: isActive ? dt.color.primary : dt.color.textSecondary,
+                background: 'transparent',
+                borderBottom: isActive ? `2px solid ${dt.color.primary}` : '2px solid transparent',
+                transition: 'color 150ms, border-color 150ms',
+                lineHeight: `${dt.layout.topNavHeight - 14}px`,
               }}
             >
               {tab.label}
@@ -104,13 +111,13 @@ export default function TopNav() {
       </nav>
 
       {/* 主题切换 */}
-      <Tooltip title={isDark ? '切换亮色模式' : '切换暗色模式'}>
+      <Tooltip title={dt.isDark ? '切换亮色模式' : '切换暗色模式'}>
         <Button
           type="text"
-          icon={isDark ? <SunOutlined /> : <MoonOutlined />}
+          icon={dt.isDark ? <SunOutlined /> : <MoonOutlined />}
           onClick={toggleTheme}
           style={{
-            color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.65)',
+            color: dt.color.textSecondary,
           }}
         />
       </Tooltip>

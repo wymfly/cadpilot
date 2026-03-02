@@ -4,6 +4,7 @@ import {
   GatewayOutlined,
   HeatMapOutlined,
 } from '@ant-design/icons';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 export type DfamMode = 'normal' | 'wall_thickness' | 'overhang';
 
@@ -27,7 +28,6 @@ const DFAM_BUTTONS: { mode: DfamMode; label: string }[] = [
 
 interface ViewControlsProps {
   wireframe: boolean;
-  darkMode?: boolean;
   dfamMode?: DfamMode;
   dfamAvailable?: boolean;
   onWireframeToggle: () => void;
@@ -37,13 +37,13 @@ interface ViewControlsProps {
 
 export default function ViewControls({
   wireframe,
-  darkMode = false,
   dfamMode = 'normal',
   dfamAvailable,
   onWireframeToggle,
   onViewChange,
   onDfamModeChange,
 }: ViewControlsProps) {
+  const dt = useDesignTokens();
   return (
     <Space
       size={4}
@@ -52,10 +52,11 @@ export default function ViewControls({
         bottom: 12,
         left: '50%',
         transform: 'translateX(-50%)',
-        background: darkMode ? 'rgba(31,31,31,0.9)' : 'rgba(255,255,255,0.9)',
-        borderRadius: 6,
+        background: dt.color.glassBg,
+        backdropFilter: 'blur(12px)',
+        borderRadius: dt.radius.sm,
         padding: '4px 8px',
-        boxShadow: darkMode ? '0 2px 8px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.12)',
+        boxShadow: dt.shadow.panel,
         zIndex: 10,
       }}
     >
@@ -80,9 +81,9 @@ export default function ViewControls({
 
       {dfamAvailable && onDfamModeChange && (
         <>
-          <Divider type="vertical" style={{ margin: '0 2px', borderColor: darkMode ? '#555' : '#d9d9d9' }} />
+          <Divider type="vertical" style={{ margin: '0 2px', borderColor: dt.color.border }} />
           <Tooltip title="DfAM 热力图">
-            <HeatMapOutlined style={{ color: darkMode ? '#aaa' : '#666', fontSize: 14 }} />
+            <HeatMapOutlined style={{ color: dt.color.textSecondary, fontSize: 14 }} />
           </Tooltip>
           {DFAM_BUTTONS.map((btn) => (
             <Tooltip key={btn.mode} title={btn.label}>

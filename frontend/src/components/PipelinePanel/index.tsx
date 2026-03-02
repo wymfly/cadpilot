@@ -3,6 +3,7 @@ import {
   NodeIndexOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import PipelineDAG from '../PipelineDAG/index.tsx';
 import type { JobEvent } from '../../hooks/useJobEvents.ts';
 
@@ -20,10 +21,12 @@ export default function PipelinePanel({
   inputType,
   events,
 }: PipelinePanelProps) {
+  const dt = useDesignTokens();
   return (
     <Tabs
       defaultActiveKey="progress"
       size="small"
+      style={{ color: dt.color.textPrimary }}
       items={[
         {
           key: 'progress',

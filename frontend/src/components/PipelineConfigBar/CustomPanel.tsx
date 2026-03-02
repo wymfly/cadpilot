@@ -1,4 +1,5 @@
 import { Switch, Select, Space, Row, Col, Typography, Tag } from 'antd';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import type { PipelineNodeDescriptor, NodeLevelConfig } from '../../types/pipeline.ts';
 
 const { Text } = Typography;
@@ -27,6 +28,7 @@ function inferGroup(desc: PipelineNodeDescriptor): string {
 }
 
 export default function CustomPanel({ descriptors, config, onChange }: CustomPanelProps) {
+  const dt = useDesignTokens();
   // Group configurable nodes
   const groups: Record<string, PipelineNodeDescriptor[]> = {};
   for (const desc of descriptors) {
@@ -52,7 +54,7 @@ export default function CustomPanel({ descriptors, config, onChange }: CustomPan
     <div style={{ padding: '12px 0' }}>
       {Object.entries(groups).map(([group, nodes]) => (
         <div key={group} style={{ marginBottom: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8, color: '#595959' }}>
+          <Text strong style={{ display: 'block', marginBottom: 8, color: dt.color.textSecondary }}>
             {GROUP_LABELS[group] ?? group}
           </Text>
           <Row gutter={[16, 12]}>
@@ -62,7 +64,7 @@ export default function CustomPanel({ descriptors, config, onChange }: CustomPan
               const canToggle = !NON_TOGGLEABLE.has(desc.name);
 
               return (
-                <Col key={desc.name} xs={24} sm={12}>
+                <Col key={desc.name} span={24}>
                   <Space size={8} align="start" style={{ width: '100%' }}>
                     {canToggle && (
                       <Switch
@@ -77,7 +79,7 @@ export default function CustomPanel({ descriptors, config, onChange }: CustomPan
                           {desc.display_name}
                         </Text>
                         {desc.non_fatal && (
-                          <Tag color="orange" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>
+                          <Tag color="default" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>
                             可选
                           </Tag>
                         )}

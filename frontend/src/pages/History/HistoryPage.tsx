@@ -3,6 +3,7 @@ import { Card, Row, Col, Tag, Pagination, Select, Typography, Empty, Spin, messa
 import { ClockCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { listJobs, type PaginatedJobsResponse } from '../../services/api.ts';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -32,6 +33,7 @@ const TYPE_FILTER_OPTIONS = [
 
 export default function HistoryPage() {
   const navigate = useNavigate();
+  const dt = useDesignTokens();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<PaginatedJobsResponse | null>(null);
   const [page, setPage] = useState(1);
@@ -102,11 +104,11 @@ export default function HistoryPage() {
                       cover={
                         <div style={{
                           height: 120,
-                          background: '#f5f5f5',
+                          background: dt.color.surface2,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: '#bfbfbf',
+                          color: dt.color.textTertiary,
                           fontSize: 13,
                         }}>
                           3D 预览
