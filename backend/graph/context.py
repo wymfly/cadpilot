@@ -117,6 +117,7 @@ class NodeContext:
         self._new_assets: dict[str, dict[str, Any]] = {}
         self._new_data: dict[str, Any] = {}
         self._trace_entries: list[dict[str, Any]] = []
+        self._fallback_trace: dict[str, Any] | None = None
 
     # -- Legacy dict-like access (backward compat for CadJobState nodes) --
 
@@ -232,6 +233,77 @@ class NodeContext:
                 f"(runtime dependency missing)"
             )
         return instance
+
+    async def execute_with_fallback(self) -> Any:
+        """Execute strategy with fallback support.
+
+        Auto mode: independently iterates fallback_chain, calling
+        check_available() + execute() on each. First success returns.
+        Non-auto: delegates to get_strategy().execute(self).
+        """
+        strategy_name = self.config.strategy
+
+        if strategy_name != "auto":
+            strategy = self.get_strategy()
+            result = await strategy.execute(self)
+            self._fallback_trace = {
+                "fallback_triggered": False,
+                "strategy_used": strategy_name,
+            }
+            return result
+
+        # Auto mode: independent traversal
+        chain = self.descriptor.fallback_chain
+        strategies = self.descriptor.strategies
+
+        if not chain:
+            raise ValueError(
+                f"Node '{self.node_name}' has strategy='auto' but "
+                f"no fallback chain configured"
+            )
+
+        attempts: list[dict[str, Any]] = []
+        for name in chain:
+            if name not in strategies:
+                attempts.append({"name": name, "error": "not in strategies"})
+                continue
+
+            instance = strategies[name](config=self.config)
+
+            if not instance.check_available():
+                attempts.append({
+                    "name": name,
+                    "error": "unavailable (check returned False)",
+                })
+                continue
+
+            try:
+                result = await instance.execute(self)
+                attempts.append({"name": name, "result": "success"})
+                self._fallback_trace = {
+                    "fallback_triggered": len(attempts) > 1,
+                    "strategy_used": name,
+                    "strategies_attempted": attempts,
+                }
+                return result
+            except Exception as exc:
+                attempts.append({"name": name, "error": str(exc)})
+                logger.warning(
+                    "Strategy '%s' failed for node '%s': %s",
+                    name, self.node_name, exc,
+                )
+                continue
+
+        self._fallback_trace = {
+            "fallback_triggered": True,
+            "strategy_used": None,
+            "strategies_attempted": attempts,
+        }
+        reasons = "; ".join(f"{a['name']}: {a.get('error', '?')}" for a in attempts)
+        raise RuntimeError(
+            f"No strategy succeeded for '{self.node_name}' in auto mode. "
+            f"Attempted: {reasons}"
+        )
 
     # -- Event dispatch --
 

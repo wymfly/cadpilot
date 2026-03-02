@@ -123,6 +123,10 @@ class PipelineBuilder:
                     "assets_produced": list(diff.get("assets", {}).keys()),
                 }
 
+                # Merge fallback trace if present
+                if hasattr(ctx, '_fallback_trace') and ctx._fallback_trace:
+                    trace_entry.update(ctx._fallback_trace)
+
                 # Inject trace into diff
                 if "node_trace" not in diff:
                     diff["node_trace"] = []

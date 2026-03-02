@@ -395,3 +395,134 @@ class TestGetStrategyAutoMode:
 
         strategy = ctx.get_strategy()
         assert type(strategy).__name__ == "AlgoStrategy"
+
+
+# ---------------------------------------------------------------------------
+# execute_with_fallback() — execution layer
+# ---------------------------------------------------------------------------
+
+class TestExecuteWithFallback:
+    """Tests for execute_with_fallback() — execution layer."""
+
+    @pytest.mark.asyncio
+    async def test_auto_first_succeeds_no_fallback(self):
+        class AlgoStrat(NodeStrategy):
+            def __init__(self, config=None):
+                super().__init__(config)
+            async def execute(self, ctx):
+                return {"result": "algo"}
+
+        desc = _make_descriptor(
+            strategies={"algorithm": AlgoStrat},
+            fallback_chain=["algorithm"],
+        )
+        state = {"pipeline_config": {"test_node": {"strategy": "auto"}}}
+        ctx = NodeContext.from_state(state, desc)
+
+        result = await ctx.execute_with_fallback()
+        assert result == {"result": "algo"}
+        assert ctx._fallback_trace["fallback_triggered"] is False
+        assert ctx._fallback_trace["strategy_used"] == "algorithm"
+
+    @pytest.mark.asyncio
+    async def test_auto_fallback_on_execute_failure(self):
+        class FailAlgo(NodeStrategy):
+            def __init__(self, config=None):
+                super().__init__(config)
+            async def execute(self, ctx):
+                raise RuntimeError("algo failed")
+
+        class OkNeural(NodeStrategy):
+            def __init__(self, config=None):
+                super().__init__(config)
+            async def execute(self, ctx):
+                return {"result": "neural"}
+
+        desc = _make_descriptor(
+            strategies={"algorithm": FailAlgo, "neural": OkNeural},
+            fallback_chain=["algorithm", "neural"],
+        )
+        state = {"pipeline_config": {"test_node": {"strategy": "auto"}}}
+        ctx = NodeContext.from_state(state, desc)
+
+        result = await ctx.execute_with_fallback()
+        assert result == {"result": "neural"}
+        assert ctx._fallback_trace["fallback_triggered"] is True
+        attempts = ctx._fallback_trace["strategies_attempted"]
+        assert attempts[0]["name"] == "algorithm"
+        assert "algo failed" in attempts[0]["error"]
+        assert attempts[1]["name"] == "neural"
+        assert attempts[1]["result"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_auto_all_fail_raises(self):
+        class FailStrat(NodeStrategy):
+            def __init__(self, config=None):
+                super().__init__(config)
+            async def execute(self, ctx):
+                raise RuntimeError("fail")
+
+        class UnavailStrat(NodeStrategy):
+            def __init__(self, config=None):
+                super().__init__(config)
+            async def execute(self, ctx):
+                pass
+            def check_available(self):
+                return False
+
+        desc = _make_descriptor(
+            strategies={"a": FailStrat, "b": UnavailStrat},
+            fallback_chain=["a", "b"],
+        )
+        state = {"pipeline_config": {"test_node": {"strategy": "auto"}}}
+        ctx = NodeContext.from_state(state, desc)
+
+        with pytest.raises(RuntimeError, match="No strategy succeeded"):
+            await ctx.execute_with_fallback()
+
+        attempts = ctx._fallback_trace["strategies_attempted"]
+        assert len(attempts) == 2
+        assert "fail" in attempts[0]["error"]
+        assert "unavailable" in attempts[1]["error"]
+
+    @pytest.mark.asyncio
+    async def test_non_auto_delegates_directly(self):
+        class DirectStrat(NodeStrategy):
+            def __init__(self, config=None):
+                super().__init__(config)
+            async def execute(self, ctx):
+                return {"result": "direct"}
+
+        desc = _make_descriptor(strategies={"direct": DirectStrat})
+        state = {"pipeline_config": {"test_node": {"strategy": "direct"}}}
+        ctx = NodeContext.from_state(state, desc)
+
+        result = await ctx.execute_with_fallback()
+        assert result == {"result": "direct"}
+
+    @pytest.mark.asyncio
+    async def test_auto_skips_unavailable_then_succeeds(self):
+        class UnavailAlgo(NodeStrategy):
+            def __init__(self, config=None):
+                super().__init__(config)
+            async def execute(self, ctx):
+                return {"result": "algo"}
+            def check_available(self):
+                return False
+
+        class OkNeural(NodeStrategy):
+            def __init__(self, config=None):
+                super().__init__(config)
+            async def execute(self, ctx):
+                return {"result": "neural"}
+
+        desc = _make_descriptor(
+            strategies={"algorithm": UnavailAlgo, "neural": OkNeural},
+            fallback_chain=["algorithm", "neural"],
+        )
+        state = {"pipeline_config": {"test_node": {"strategy": "auto"}}}
+        ctx = NodeContext.from_state(state, desc)
+
+        result = await ctx.execute_with_fallback()
+        assert result == {"result": "neural"}
+        assert ctx._fallback_trace["fallback_triggered"] is True
