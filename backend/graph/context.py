@@ -102,6 +102,7 @@ class NodeContext:
         config: BaseNodeConfig,
         descriptor: NodeDescriptor,
         node_name: str,
+        raw_state: dict[str, Any] | None = None,
     ) -> None:
         self.job_id = job_id
         self.input_type = input_type
@@ -110,11 +111,23 @@ class NodeContext:
         self.config = config
         self.descriptor = descriptor
         self.node_name = node_name
+        self._state = raw_state or {}
 
         # Track incremental changes for to_state_diff()
         self._new_assets: dict[str, dict[str, Any]] = {}
         self._new_data: dict[str, Any] = {}
         self._trace_entries: list[dict[str, Any]] = []
+
+    # -- Legacy dict-like access (backward compat for CadJobState nodes) --
+
+    def __getitem__(self, key: str) -> Any:
+        return self._state[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._state
+
+    def get(self, key: str, default: Any = None) -> Any:  # noqa: D102
+        return self._state.get(key, default)
 
     # -- Factory --
 
@@ -137,6 +150,7 @@ class NodeContext:
             config=config,
             descriptor=desc,
             node_name=desc.name,
+            raw_state=state,
         )
 
     # -- Asset access --

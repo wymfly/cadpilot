@@ -105,10 +105,14 @@ class PipelineBuilder:
 
             try:
                 ctx = NodeContext.from_state(state, desc)
-                await desc.fn(ctx)
+                result = await desc.fn(ctx)
                 elapsed_ms = round((time.time() - t0) * 1000)
 
-                diff = ctx.to_state_diff()
+                # Legacy nodes return dicts; new-style nodes return None
+                if isinstance(result, dict):
+                    diff = result
+                else:
+                    diff = ctx.to_state_diff()
 
                 # Build trace entry
                 reasoning = diff.pop("_reasoning", None)

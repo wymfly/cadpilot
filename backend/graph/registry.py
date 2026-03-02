@@ -68,6 +68,10 @@ class NodeRegistry:
     def __contains__(self, name: str) -> bool:
         return name in self._nodes
 
+    def _remove(self, name: str) -> None:
+        """Remove a node (for testing only)."""
+        self._nodes.pop(name, None)
+
 
 # Module-level singleton
 registry = NodeRegistry()

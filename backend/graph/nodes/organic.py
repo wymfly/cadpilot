@@ -35,7 +35,7 @@ async def _safe_update_job(job_id: str, **kwargs: Any) -> None:
 
 
 @register_node(name="analyze_organic", display_name="有机形态分析",
-    requires=["organic_input"], produces=["organic_spec"], input_types=["organic"])
+    requires=["job_info"], produces=["organic_spec"], input_types=["organic"])
 async def analyze_organic_node(state: CadJobState) -> dict[str, Any]:
     """Build OrganicSpec via LLM, dispatch spec_ready event, pause for HITL."""
     job_id = state["job_id"]

@@ -3,7 +3,19 @@
 import pytest
 
 from backend.graph.descriptor import NodeDescriptor, NodeStrategy
-from backend.graph.registry import NodeRegistry, register_node
+from backend.graph.registry import NodeRegistry, register_node, registry
+
+
+# Cleanup test nodes registered to global registry
+_TEST_NODE_NAMES = ["_test_decorator_node", "_test_preserve", "_test_full_opts"]
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_global_registry():
+    """Remove test nodes from global registry after each test."""
+    yield
+    for name in _TEST_NODE_NAMES:
+        registry._remove(name)
 
 
 # ---------------------------------------------------------------------------
