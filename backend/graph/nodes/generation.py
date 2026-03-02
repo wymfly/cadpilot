@@ -9,8 +9,8 @@ from typing import Any
 
 from backend.core.spec_compiler import CompilationError, SpecCompiler
 from backend.graph.llm_utils import map_exception_to_failure_reason
-from backend.graph.decorators import timed_node
 from backend.graph.nodes.lifecycle import _safe_dispatch
+from backend.graph.registry import register_node
 from backend.graph.state import CadJobState
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,8 @@ def _run_generate_from_spec(
     )
 
 
-@timed_node("generate_step_text")
+@register_node(name="generate_step_text", display_name="文本→STEP生成",
+    requires=["confirmed_params"], produces=["step_model"], input_types=["text"])
 async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
     """Generate STEP from text intent via SpecCompiler (template-first, LLM-fallback)."""
     # Idempotent: skip if already generated
@@ -105,7 +106,8 @@ async def generate_step_text_node(state: CadJobState) -> dict[str, Any]:
     }
 
 
-@timed_node("generate_step_drawing")
+@register_node(name="generate_step_drawing", display_name="图纸→STEP生成",
+    requires=["confirmed_params"], produces=["step_model"], input_types=["drawing"])
 async def generate_step_drawing_node(state: CadJobState) -> dict[str, Any]:
     """Generate STEP from confirmed DrawingSpec via VL pipeline."""
     # Idempotent: skip if already generated

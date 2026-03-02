@@ -7,6 +7,7 @@ from typing import Any
 
 from langchain_core.callbacks import adispatch_custom_event
 
+from backend.graph.registry import register_node
 from backend.graph.state import CadJobState, STATE_TO_ORM_MAPPING
 from backend.models.job import create_job, update_job
 
@@ -34,6 +35,8 @@ async def _safe_dispatch(event_name: str, payload: dict[str, Any]) -> None:
 # to avoid circular import (decorators.py imports _safe_dispatch from here).
 
 
+@register_node(name="create_job", display_name="创建任务",
+    is_entry=True, produces=["job_info"])
 async def create_job_node(state: CadJobState) -> dict[str, Any]:
     """Create DB Job record and dispatch job.created event."""
     await create_job(
@@ -70,6 +73,10 @@ async def create_job_node(state: CadJobState) -> dict[str, Any]:
     }
 
 
+@register_node(name="confirm_with_user", display_name="用户确认",
+    supports_hitl=True,
+    requires=[["intent_spec", "drawing_spec", "organic_spec"]],
+    produces=["confirmed_params"])
 async def confirm_with_user_node(state: CadJobState) -> dict[str, Any]:
     """Process Command(resume=...) data after interrupt.
 
@@ -80,6 +87,12 @@ async def confirm_with_user_node(state: CadJobState) -> dict[str, Any]:
     return {"status": "confirmed", "_reasoning": {"confirmation": "user confirmed parameters"}}
 
 
+@register_node(
+    name="finalize",
+    display_name="完成",
+    is_terminal=True,
+    produces=[],
+)
 async def finalize_node(state: CadJobState) -> dict[str, Any]:
     """Write final state to DB and dispatch terminal event."""
     is_failed = state.get("error") is not None or state.get("status") == "failed"

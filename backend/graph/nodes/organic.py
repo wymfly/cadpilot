@@ -11,6 +11,7 @@ from backend.core.organic_spec_builder import OrganicSpecBuilder
 from backend.graph.llm_utils import map_exception_to_failure_reason
 from backend.graph.decorators import timed_node
 from backend.graph.nodes.lifecycle import _safe_dispatch
+from backend.graph.registry import register_node
 from backend.graph.state import CadJobState
 from backend.models.job import update_job as _update_job
 from backend.models.organic import OrganicConstraints, OrganicGenerateRequest
@@ -33,7 +34,8 @@ async def _safe_update_job(job_id: str, **kwargs: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-@timed_node("analyze_organic")
+@register_node(name="analyze_organic", display_name="有机形态分析",
+    requires=["organic_input"], produces=["organic_spec"], input_types=["organic"])
 async def analyze_organic_node(state: CadJobState) -> dict[str, Any]:
     """Build OrganicSpec via LLM, dispatch spec_ready event, pause for HITL."""
     job_id = state["job_id"]
@@ -107,7 +109,8 @@ async def analyze_organic_node(state: CadJobState) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@timed_node("generate_organic_mesh")
+@register_node(name="generate_organic_mesh", display_name="有机网格生成",
+    requires=["confirmed_params"], produces=["raw_mesh"], input_types=["organic"])
 async def generate_organic_mesh_node(state: CadJobState) -> dict[str, Any]:
     """Create MeshProvider, generate raw mesh, dispatch progress events."""
     job_id = state["job_id"]

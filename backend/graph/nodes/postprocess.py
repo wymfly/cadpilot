@@ -9,6 +9,7 @@ from typing import Any
 
 from backend.graph.decorators import timed_node
 from backend.graph.nodes.lifecycle import _safe_dispatch
+from backend.graph.registry import register_node
 from backend.graph.state import CadJobState
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,14 @@ def _run_printability_check(step_path: str) -> dict | None:
     return _orig(step_path)
 
 
+@register_node(
+    name="convert_preview",
+    display_name="生成3D预览",
+    requires=[["step_model"]],
+    produces=["preview_glb"],
+    non_fatal=True,
+    input_types=["text", "drawing"],
+)
 @timed_node("convert_preview")
 async def convert_preview_node(state: CadJobState) -> dict[str, Any]:
     """Convert STEP to GLB for 3D preview (non-fatal on failure)."""
@@ -58,6 +67,12 @@ async def convert_preview_node(state: CadJobState) -> dict[str, Any]:
     }
 
 
+@register_node(
+    name="check_printability",
+    display_name="可打印性检查",
+    requires=[["step_model", "watertight_mesh"]],
+    produces=["printability_report"],
+)
 @timed_node("check_printability")
 async def check_printability_node(state: CadJobState) -> dict[str, Any]:
     """Run DfAM printability analysis (non-fatal on failure)."""

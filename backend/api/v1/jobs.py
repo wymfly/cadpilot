@@ -136,6 +136,8 @@ def _job_to_detail(
     job: Job,
     corrections: list[CorrectionItem] | None = None,
     child_job_ids: list[str] | None = None,
+    *,
+    include_code: bool = True,
 ) -> JobDetailResponse:
     """将 Job Pydantic 模型转换为 API 响应。"""
     intent_data: dict[str, Any] | None = None
@@ -169,7 +171,7 @@ def _job_to_detail(
         drawing_spec_confirmed=job.drawing_spec_confirmed,
         image_path=job.image_path,
         organic_spec=job.organic_spec,
-        generated_code=job.generated_code,
+        generated_code=job.generated_code if include_code else None,
         parent_job_id=job.parent_job_id,
         child_job_ids=child_job_ids or [],
         recommendations=job.recommendations,
@@ -205,6 +207,20 @@ async def create_job_endpoint(body: CreateJobRequest, request: Request) -> Event
             code=ErrorCode.VALIDATION_FAILED,
             message="Fork is only supported for text jobs",
         )
+
+    # Verify parent job exists in DB
+    if body.parent_job_id:
+        from backend.db.database import async_session
+        from backend.db.repository import get_job as repo_get_job
+
+        async with async_session() as session:
+            parent = await repo_get_job(session, body.parent_job_id)
+        if parent is None:
+            raise APIError(
+                status_code=404,
+                code=ErrorCode.JOB_NOT_FOUND,
+                message=f"Parent job not found: {body.parent_job_id}",
+            )
 
     # Organic mode: feature gate + input validation
     if body.input_type == "organic":
@@ -242,14 +258,41 @@ async def create_job_endpoint(body: CreateJobRequest, request: Request) -> Event
     else:
         pc = PRESETS["balanced"]
 
-    initial_state: dict[str, Any] = {
-        "job_id": job_id,
-        "input_type": body.input_type,
-        "input_text": input_text,
-        "image_path": None,
-        "pipeline_config": pc.model_dump(),  # consumed by generation nodes in M2
-        "status": "pending",
-    }
+    # Build initial_state — new format when USE_NEW_BUILDER=1
+    import os
+
+    use_new = os.environ.get("USE_NEW_BUILDER", "0") == "1"
+
+    if use_new:
+        from backend.graph.compat import convert_legacy_pipeline_config, is_legacy_format
+        from backend.graph.presets import parse_pipeline_config
+
+        pc_dict = pc.model_dump()
+        if is_legacy_format(pc_dict):
+            new_pc = convert_legacy_pipeline_config(pc_dict)
+        else:
+            new_pc = parse_pipeline_config(dict(pc_dict))
+
+        initial_state: dict[str, Any] = {
+            "job_id": job_id,
+            "input_type": body.input_type,
+            "input_text": input_text,
+            "image_path": None,
+            "pipeline_config": new_pc,
+            "status": "pending",
+            "assets": {},
+            "data": {},
+            "node_trace": [],
+        }
+    else:
+        initial_state: dict[str, Any] = {  # type: ignore[no-redef]
+            "job_id": job_id,
+            "input_type": body.input_type,
+            "input_text": input_text,
+            "image_path": None,
+            "pipeline_config": pc.model_dump(),  # consumed by generation nodes in M2
+            "status": "pending",
+        }
 
     if body.parent_job_id:
         initial_state["parent_job_id"] = body.parent_job_id
@@ -347,7 +390,7 @@ async def list_jobs_endpoint(
     # 转换 ORM → Pydantic
     from backend.models.job import _orm_to_job
 
-    items = [_job_to_detail(_orm_to_job(j)) for j in orm_jobs]
+    items = [_job_to_detail(_orm_to_job(j), include_code=False) for j in orm_jobs]
     return JobListResponse(
         items=items,
         total=total,
@@ -593,11 +636,29 @@ async def confirm_job(job_id: str, body: ConfirmRequest, request: Request) -> Ev
     cad_graph = request.app.state.cad_graph
     config = {"configurable": {"thread_id": job_id}}
 
+    import os
+
+    use_new = os.environ.get("USE_NEW_BUILDER", "0") == "1"
     is_organic = job.input_type == "organic"
 
-    if is_organic:
-        # Organic: use confirmed_spec (dict[str, Any]) for string overrides
+    if use_new:
+        # New builder: wrap confirm data inside data dict for NodeContext
         resume_data: dict[str, Any] = {
+            "data": {
+                "confirmed_params": body.confirmed_params,
+                "confirmed_spec": body.confirmed_spec,
+                "disclaimer_accepted": body.disclaimer_accepted,
+            },
+        }
+        if is_organic and body.confirmed_spec:
+            spec_overrides = body.confirmed_spec
+            if "quality_mode" in spec_overrides:
+                resume_data["data"]["organic_quality_mode"] = spec_overrides["quality_mode"]
+            if "provider" in spec_overrides:
+                resume_data["data"]["organic_provider"] = spec_overrides["provider"]
+    elif is_organic:
+        # Organic: use confirmed_spec (dict[str, Any]) for string overrides
+        resume_data = {
             "disclaimer_accepted": body.disclaimer_accepted,
         }
         if body.confirmed_spec:
@@ -650,6 +711,20 @@ async def regenerate_job(job_id: str) -> RegenerateResponse:
     await create_job(new_job_id, input_type=job.input_type, input_text=job.input_text)
 
     return RegenerateResponse(job_id=new_job_id, cloned_from=job_id, status="created")
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/jobs/{job_id}/code — 生成代码
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{job_id}/code")
+async def get_job_code(job_id: str) -> dict[str, Any]:
+    """返回 Job 的生成代码（可能较大，独立端点减轻列表负载）。"""
+    job = await get_job(job_id)
+    if job is None:
+        raise JobNotFoundError(job_id)
+    return {"job_id": job_id, "generated_code": job.generated_code}
 
 
 # ---------------------------------------------------------------------------

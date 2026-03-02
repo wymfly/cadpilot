@@ -31,7 +31,7 @@ LLM_TIMEOUT_S = 60.0
 
 # Import _safe_dispatch from lifecycle (reuse pattern)
 from backend.graph.nodes.lifecycle import _safe_dispatch
-from backend.graph.decorators import timed_node
+from backend.graph.registry import register_node
 
 
 async def _parse_intent(text: str) -> dict:
@@ -64,7 +64,8 @@ def _run_analyze_vision(image_path: str) -> tuple:
     return spec_dict, reasoning
 
 
-@timed_node("analyze_intent")
+@register_node(name="analyze_intent", display_name="分析用户意图",
+    requires=["text_input"], produces=["intent_spec"], input_types=["text"])
 async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
     """Parse user text into IntentSpec via LLM (with timeout)."""
     try:
@@ -163,7 +164,8 @@ async def analyze_intent_node(state: CadJobState) -> dict[str, Any]:
     }
 
 
-@timed_node("analyze_vision")
+@register_node(name="analyze_vision", display_name="图纸分析",
+    requires=["drawing_input"], produces=["drawing_spec"], input_types=["drawing"])
 async def analyze_vision_node(state: CadJobState) -> dict[str, Any]:
     """Run VL model to extract DrawingSpec from uploaded image (with timeout)."""
     image_path = state.get("image_path")

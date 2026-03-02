@@ -118,7 +118,8 @@ class TestGenerateOrganicMeshNode:
         gen_state["raw_mesh_path"] = str(existing_mesh)
 
         result = await generate_organic_mesh_node(gen_state)
-        assert result == {}
+        assert "raw_mesh_path" not in result  # idempotent skip
+        assert result.get("_reasoning", {}).get("skip")
 
     @pytest.mark.asyncio
     async def test_provider_failure(self, gen_state):

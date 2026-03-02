@@ -7,11 +7,19 @@ import logging
 from typing import Any
 
 from backend.graph.decorators import timed_node
+from backend.graph.registry import register_node
 from backend.graph.state import CadJobState
 
 logger = logging.getLogger(__name__)
 
 
+@register_node(
+    name="analyze_dfam",
+    display_name="DfAM分析",
+    requires=[["step_model", "watertight_mesh"]],
+    produces=["dfam_glb", "dfam_stats"],
+    non_fatal=True,
+)
 @timed_node("analyze_dfam")
 async def analyze_dfam_node(state: CadJobState) -> dict[str, Any]:
     """Run vertex-level DfAM analysis and export heatmap GLB.

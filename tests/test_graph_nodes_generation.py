@@ -63,7 +63,8 @@ class TestGenerateStepTextNode:
             step_path=str(step_file),
         )
         result = await generate_step_text_node(state)
-        assert result == {}
+        assert "step_path" not in result  # idempotent skip
+        assert result.get("_reasoning", {}).get("skip")
 
     @pytest.mark.asyncio
     @patch("backend.graph.nodes.generation.SpecCompiler")
@@ -121,7 +122,8 @@ class TestGenerateStepDrawingNode:
             step_path=str(step_file),
         )
         result = await generate_step_drawing_node(state)
-        assert result == {}
+        assert "step_path" not in result  # idempotent skip
+        assert result.get("_reasoning", {}).get("skip")
 
     @pytest.mark.asyncio
     async def test_error_returns_failed(self) -> None:
