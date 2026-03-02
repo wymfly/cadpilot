@@ -13,6 +13,7 @@ import {
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import { getTemplate, createTemplate, updateTemplate } from '../../services/api.ts';
 import type { ParametricTemplate } from '../../types/template.ts';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -38,6 +39,7 @@ export default function TemplateEditor({
   onBack,
   onSave,
 }: TemplateEditorProps) {
+  const dt = useDesignTokens();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -170,7 +172,7 @@ export default function TemplateEditor({
             <TextArea
               rows={4}
               placeholder="每行一个约束表达式"
-              style={{ fontFamily: 'monospace' }}
+              style={{ fontFamily: dt.typography.fontMono }}
             />
           </Form.Item>
 

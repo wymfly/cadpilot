@@ -4,7 +4,7 @@ import { RocketOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/icons
 import { useOutletContext } from 'react-router-dom';
 import type { WorkbenchOutletContext } from '../../layouts/WorkbenchLayout.tsx';
 import { useOrganicWorkflowContext } from '../../contexts/OrganicWorkflowContext.tsx';
-import { useTheme } from '../../contexts/ThemeContext.tsx';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import OrganicInput from '../OrganicGenerate/OrganicInput.tsx';
 import ConstraintForm from '../OrganicGenerate/ConstraintForm.tsx';
 import QualitySelector from '../OrganicGenerate/QualitySelector.tsx';
@@ -35,7 +35,7 @@ function toWorkflowPhase(organicPhase: string): WorkflowPhase {
 
 export default function OrganicWorkbench() {
   const { setPanels } = useOutletContext<WorkbenchOutletContext>();
-  const { isDark } = useTheme();
+  const dt = useDesignTokens();
   const {
     workflow,
     startGenerate,
@@ -281,7 +281,7 @@ export default function OrganicWorkbench() {
             </Text>
             <div style={{ marginTop: 16 }}>
               <Title level={5}>示例</Title>
-              <ul style={{ paddingLeft: 16, color: '#666', fontSize: 13 }}>
+              <ul style={{ paddingLeft: 16, color: dt.color.textSecondary, fontSize: 13 }}>
                 <li>流线型花瓶，底部宽顶部窄</li>
                 <li>几何风格的桌面摆件</li>
                 <li>仿生学结构灯罩</li>
@@ -323,7 +323,7 @@ export default function OrganicWorkbench() {
       default:
         return null;
     }
-  }, [workflow.phase, workflow.printability, workflow]);
+  }, [workflow.phase, workflow.printability, workflow, dt.color.textSecondary]);
 
   // 注入面板内容到 WorkbenchLayout
   useEffect(() => {
@@ -333,7 +333,7 @@ export default function OrganicWorkbench() {
   // 中央 3D 预览区
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <Viewer3D modelUrl={workflow.modelUrl} darkMode={isDark} />
+      <Viewer3D modelUrl={workflow.modelUrl} darkMode={dt.isDark} />
     </div>
   );
 }

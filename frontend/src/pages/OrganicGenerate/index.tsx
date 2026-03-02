@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Row, Col, Card, Button, Typography, Descriptions, Tag } from 'antd';
 import { RocketOutlined, ReloadOutlined, CheckOutlined } from '@ant-design/icons';
 import { useOrganicWorkflowContext } from '../../contexts/OrganicWorkflowContext.tsx';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import Viewer3D from '../../components/Viewer3D/index.tsx';
 import OrganicInput from './OrganicInput.tsx';
 import ConstraintForm from './ConstraintForm.tsx';
@@ -27,6 +28,7 @@ export default function OrganicGenerate() {
     setProvider,
   } = useOrganicWorkflowContext();
 
+  const dt = useDesignTokens();
   const [prompt, setPrompt] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
 
@@ -94,7 +96,7 @@ export default function OrganicGenerate() {
             <Card
               title="AI 分析结果"
               size="small"
-              style={{ marginBottom: 16, borderColor: '#faad14' }}
+              style={{ marginBottom: 16, borderColor: dt.color.warning }}
               extra={
                 <Button
                   type="primary"

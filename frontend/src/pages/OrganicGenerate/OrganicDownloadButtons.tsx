@@ -11,7 +11,7 @@ export default function OrganicDownloadButtons({ modelUrl, stlUrl, threemfUrl }:
   if (!modelUrl && !stlUrl && !threemfUrl) return null;
 
   return (
-    <Space style={{ marginTop: 12 }}>
+    <Space wrap style={{ marginTop: 12 }}>
       {modelUrl && (
         <Button icon={<DownloadOutlined />} href={modelUrl} download="model.glb">
           GLB

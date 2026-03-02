@@ -15,6 +15,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import type { WorkbenchOutletContext } from '../../layouts/WorkbenchLayout.tsx';
 import { listJobs, type PaginatedJobsResponse } from '../../services/api.ts';
 import JobCard from '../../components/JobCard/index.tsx';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { Title, Text } = Typography;
 
@@ -149,6 +150,8 @@ export default function LibraryPage() {
     [keyword, statusFilter, typeFilter, data, filteredItems.length],
   );
 
+  const dt = useDesignTokens();
+
   // Right panel: help text
   const rightPanel = useMemo(
     () => (
@@ -159,7 +162,7 @@ export default function LibraryPage() {
         </Text>
         <div style={{ marginTop: 16 }}>
           <Title level={5}>提示</Title>
-          <ul style={{ paddingLeft: 16, color: '#666', fontSize: 13 }}>
+          <ul style={{ paddingLeft: 16, color: dt.color.textSecondary, fontSize: 13 }}>
             <li>使用左侧筛选器缩小范围</li>
             <li>点击卡片进入详情页</li>
             <li>已完成的模型可下载 STEP/STL/3MF</li>
@@ -168,7 +171,7 @@ export default function LibraryPage() {
         </div>
       </div>
     ),
-    [],
+    [dt.color.textSecondary],
   );
 
   useEffect(() => {

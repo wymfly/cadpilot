@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import ProfileSelector from './ProfileSelector.tsx';
 import IssueList from './IssueList.tsx';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import type { PrintabilityResult, ProfileKey } from '../../types/printability.ts';
 
 interface PrintReportProps {
@@ -23,6 +24,7 @@ export default function PrintReport({
   defaultProfile = 'fdm_standard',
   onLocateIssue,
 }: PrintReportProps) {
+  const dt = useDesignTokens();
   const [selectedProfile, setSelectedProfile] = useState<ProfileKey>(defaultProfile);
 
   const isMulti = useMemo(
@@ -38,7 +40,7 @@ export default function PrintReport({
   if (!currentResult) {
     return (
       <Card size="small" title="可打印性报告">
-        <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
+        <div style={{ textAlign: 'center', padding: 24, color: dt.color.textTertiary }}>
           暂无检查结果
         </div>
       </Card>
@@ -83,7 +85,7 @@ export default function PrintReport({
               value={currentResult.material_volume_cm3}
               precision={2}
               suffix="cm³"
-              valueStyle={{ fontSize: 16 }}
+              valueStyle={{ fontSize: 16, fontFamily: dt.typography.fontMono }}
             />
           </Col>
         )}
@@ -92,7 +94,7 @@ export default function PrintReport({
             <Statistic
               title="包围盒 (mm)"
               value={`${currentResult.bounding_box.x} × ${currentResult.bounding_box.y} × ${currentResult.bounding_box.z}`}
-              valueStyle={{ fontSize: 16 }}
+              valueStyle={{ fontSize: 16, fontFamily: dt.typography.fontMono }}
             />
           </Col>
         )}
@@ -108,7 +110,7 @@ export default function PrintReport({
               precision={1}
               suffix="g"
               prefix={<DollarOutlined />}
-              valueStyle={{ fontSize: 16 }}
+              valueStyle={{ fontSize: 16, fontFamily: dt.typography.fontMono }}
             />
           </Col>
           <Col span={8}>
@@ -117,7 +119,7 @@ export default function PrintReport({
               value={currentResult.material_estimate.filament_length_m}
               precision={2}
               suffix="m"
-              valueStyle={{ fontSize: 16 }}
+              valueStyle={{ fontSize: 16, fontFamily: dt.typography.fontMono }}
             />
           </Col>
           <Col span={8}>
@@ -126,7 +128,7 @@ export default function PrintReport({
               value={currentResult.material_estimate.cost_estimate_cny}
               precision={2}
               prefix="¥"
-              valueStyle={{ fontSize: 16 }}
+              valueStyle={{ fontSize: 16, fontFamily: dt.typography.fontMono }}
             />
           </Col>
         </Row>
@@ -141,7 +143,7 @@ export default function PrintReport({
               value={currentResult.time_estimate.total_minutes}
               suffix="分钟"
               prefix={<ClockCircleOutlined />}
-              valueStyle={{ fontSize: 16 }}
+              valueStyle={{ fontSize: 16, fontFamily: dt.typography.fontMono }}
             />
           </Col>
           <Col span={12}>
@@ -149,7 +151,7 @@ export default function PrintReport({
               title="层数"
               value={currentResult.time_estimate.layer_count}
               suffix="层"
-              valueStyle={{ fontSize: 16 }}
+              valueStyle={{ fontSize: 16, fontFamily: dt.typography.fontMono }}
             />
           </Col>
         </Row>
@@ -158,12 +160,12 @@ export default function PrintReport({
       {(errorCount > 0 || warnCount > 0) && (
         <Descriptions size="small" column={3} style={{ marginBottom: 8 }}>
           <Descriptions.Item label="错误">
-            <span style={{ color: errorCount > 0 ? '#ff4d4f' : '#52c41a' }}>
+            <span style={{ color: errorCount > 0 ? dt.color.error : dt.color.success, fontFamily: dt.typography.fontMono }}>
               {errorCount}
             </span>
           </Descriptions.Item>
           <Descriptions.Item label="警告">
-            <span style={{ color: warnCount > 0 ? '#faad14' : '#52c41a' }}>
+            <span style={{ color: warnCount > 0 ? dt.color.warning : dt.color.success, fontFamily: dt.typography.fontMono }}>
               {warnCount}
             </span>
           </Descriptions.Item>

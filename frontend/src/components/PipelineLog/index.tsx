@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Typography, Tag } from 'antd';
+import { Tag } from 'antd';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import type { JobEvent } from '../../hooks/useJobEvents.ts';
-
-const { Text } = Typography;
 
 const STATUS_COLORS: Record<string, string> = {
   created: 'default',
@@ -25,6 +24,7 @@ export default function PipelineLog({
   events,
   maxHeight = 400,
 }: PipelineLogProps) {
+  const dt = useDesignTokens();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,8 +33,16 @@ export default function PipelineLog({
 
   if (events.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
-        <Text type="secondary">等待管道事件...</Text>
+      <div
+        style={{
+          textAlign: 'center',
+          padding: 24,
+          color: dt.color.textTertiary,
+          fontFamily: dt.typography.fontMono,
+          fontSize: 12,
+        }}
+      >
+        等待管道事件...
       </div>
     );
   }
@@ -44,9 +52,12 @@ export default function PipelineLog({
       style={{
         maxHeight,
         overflow: 'auto',
-        fontFamily: 'monospace',
+        fontFamily: dt.typography.fontMono,
         fontSize: 12,
         lineHeight: 1.8,
+        background: dt.color.surface0,
+        borderRadius: dt.radius.sm,
+        padding: '8px 12px',
       }}
     >
       {events.map((event, idx) => {
@@ -61,23 +72,23 @@ export default function PipelineLog({
             key={idx}
             style={{
               padding: '2px 0',
-              borderBottom: '1px solid rgba(0,0,0,0.04)',
+              borderBottom: `1px solid ${dt.color.border}`,
             }}
           >
-            <Text type="secondary" style={{ fontSize: 11, marginRight: 6 }}>
+            <span style={{ fontSize: 11, marginRight: 6, color: dt.color.textTertiary }}>
               {time}
-            </Text>
+            </span>
             <Tag
               color={color}
               style={{ fontSize: 11, lineHeight: '16px', marginRight: 6 }}
             >
               {event.stage ?? event.status}
             </Tag>
-            <Text style={{ fontSize: 12 }}>{event.message}</Text>
+            <span style={{ fontSize: 12, color: dt.color.textPrimary }}>{event.message}</span>
             {event.progress != null && (
-              <Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>
+              <span style={{ fontSize: 11, marginLeft: 4, color: dt.color.textSecondary }}>
                 ({Math.round(event.progress * 100)}%)
-              </Text>
+              </span>
             )}
           </div>
         );

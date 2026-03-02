@@ -5,6 +5,7 @@ import {
   CloseCircleOutlined,
   AimOutlined,
 } from '@ant-design/icons';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import type { PrintIssue } from '../../types/printability.ts';
 
 const { Text } = Typography;
@@ -29,9 +30,10 @@ interface IssueListProps {
 }
 
 export default function IssueList({ issues, onLocateIssue }: IssueListProps) {
+  const dt = useDesignTokens();
   if (issues.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '12px 0', color: '#52c41a' }}>
+      <div style={{ textAlign: 'center', padding: '12px 0', color: dt.color.success }}>
         <CheckCircleOutlined style={{ fontSize: 20, marginRight: 8 }} />
         所有检查项通过
       </div>

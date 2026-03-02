@@ -1,6 +1,7 @@
 import { Button, InputNumber, Select, Space, Tooltip, Typography, Divider } from 'antd';
 import { PlusOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { OrganicConstraints, EngineeringCut, CutType, CutDirection } from '../../types/organic.ts';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { Text } = Typography;
 
@@ -25,7 +26,7 @@ function HelpTip({ title, children }: { title: string; children: React.ReactNode
       title={<div style={{ maxWidth: 280 }}><div style={{ fontWeight: 600, marginBottom: 4 }}>{title}</div>{children}</div>}
       placement="top"
     >
-      <QuestionCircleOutlined style={{ color: '#999', marginLeft: 4, cursor: 'help' }} />
+      <QuestionCircleOutlined style={{ color: 'inherit', marginLeft: 4, cursor: 'help' }} />
     </Tooltip>
   );
 }
@@ -37,6 +38,7 @@ interface ConstraintFormProps {
 }
 
 export default function ConstraintForm({ constraints, onChange, disabled }: ConstraintFormProps) {
+  const dt = useDesignTokens();
   const updateBBox = (index: number, value: number | null) => {
     if (value === null) {
       if (constraints.bounding_box) {
@@ -78,8 +80,8 @@ export default function ConstraintForm({ constraints, onChange, disabled }: Cons
         <Text strong>包围盒尺寸 (mm)</Text>
         <HelpTip title="包围盒尺寸">
           <div>限定生成模型的最大外形尺寸（宽 x 深 x 高），单位毫米。</div>
-          <div style={{ marginTop: 4, color: '#91caff' }}>适用场景: 需要控制模型实际打印大小时设置</div>
-          <div style={{ marginTop: 2, color: '#d9f7be' }}>默认: 留空则由 AI 根据描述自动推算</div>
+          <div style={{ marginTop: 4, color: dt.color.primary }}>适用场景: 需要控制模型实际打印大小时设置</div>
+          <div style={{ marginTop: 2, color: dt.color.success }}>默认: 留空则由 AI 根据描述自动推算</div>
         </HelpTip>
       </Space>
       <div style={{ display: 'flex', gap: 8, marginTop: 8, marginBottom: 16 }}>
@@ -127,8 +129,8 @@ export default function ConstraintForm({ constraints, onChange, disabled }: Cons
               <div><b>圆孔</b> — 打螺丝孔、定位孔等</div>
               <div><b>矩形槽</b> — 键槽、滑轨接口等</div>
             </div>
-            <div style={{ marginTop: 4, color: '#91caff' }}>适用场景: 模型需要和其他机械件配合时</div>
-            <div style={{ marginTop: 2, color: '#d9f7be' }}>默认: 无切割</div>
+            <div style={{ marginTop: 4, color: dt.color.primary }}>适用场景: 模型需要和其他机械件配合时</div>
+            <div style={{ marginTop: 2, color: dt.color.success }}>默认: 无切割</div>
           </HelpTip>
         </Space>
         <Button
@@ -146,7 +148,7 @@ export default function ConstraintForm({ constraints, onChange, disabled }: Cons
         <div
           key={index}
           style={{
-            border: '1px solid #f0f0f0',
+            border: `1px solid ${dt.color.border}`,
             borderRadius: 6,
             padding: 12,
             marginBottom: 8,

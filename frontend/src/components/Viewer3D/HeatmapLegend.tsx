@@ -1,4 +1,5 @@
 import { Typography } from 'antd';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { Text } = Typography;
 
@@ -24,6 +25,7 @@ export default function HeatmapLegend({
   verticesAtRisk,
   verticesAtRiskPercent,
 }: HeatmapLegendProps) {
+  const dt = useDesignTokens();
   const label = TYPE_LABELS[type] ?? type;
   const fmtVal = (v: number | null) => (v != null ? v.toFixed(2) : '—');
 
@@ -34,19 +36,21 @@ export default function HeatmapLegend({
         right: 16,
         top: '50%',
         transform: 'translateY(-50%)',
-        background: 'rgba(0,0,0,0.75)',
-        borderRadius: 8,
+        background: dt.color.glassBg,
+        backdropFilter: 'blur(12px)',
+        borderRadius: dt.radius.md,
         padding: '12px 14px',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+        boxShadow: dt.shadow.panel,
         zIndex: 10,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         gap: 6,
         minWidth: 72,
+        fontFamily: dt.typography.fontMono,
       }}
     >
-      <Text strong style={{ color: '#fff', fontSize: 12, marginBottom: 2 }}>
+      <Text strong style={{ color: dt.color.textPrimary, fontSize: 12, marginBottom: 2 }}>
         {label}分析
       </Text>
 
@@ -62,13 +66,13 @@ export default function HeatmapLegend({
             textAlign: 'right',
           }}
         >
-          <Text style={{ color: '#22c55e', fontSize: 10, lineHeight: 1 }}>
+          <Text style={{ color: dt.color.success, fontSize: 10, lineHeight: 1 }}>
             {fmtVal(max)}
           </Text>
-          <Text style={{ color: '#eab308', fontSize: 10, lineHeight: 1 }}>
+          <Text style={{ color: dt.color.warning, fontSize: 10, lineHeight: 1 }}>
             {threshold.toFixed(2)}
           </Text>
-          <Text style={{ color: '#dc2626', fontSize: 10, lineHeight: 1 }}>
+          <Text style={{ color: dt.color.error, fontSize: 10, lineHeight: 1 }}>
             {fmtVal(min)}
           </Text>
         </div>
@@ -80,13 +84,13 @@ export default function HeatmapLegend({
             height: 120,
             borderRadius: 3,
             background: 'linear-gradient(to top, #dc2626, #eab308 50%, #22c55e)',
-            border: '1px solid rgba(255,255,255,0.2)',
+            border: `1px solid ${dt.color.border}`,
           }}
         />
       </div>
 
       {/* Risk stats */}
-      <Text style={{ color: '#ffb3b3', fontSize: 11, textAlign: 'center', marginTop: 2 }}>
+      <Text style={{ color: dt.color.error, fontSize: 11, textAlign: 'center', marginTop: 2 }}>
         {verticesAtRiskPercent.toFixed(1)}% 超限 ({verticesAtRisk})
       </Text>
     </div>

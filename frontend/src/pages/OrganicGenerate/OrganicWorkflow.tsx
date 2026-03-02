@@ -19,6 +19,7 @@ import type {
   PostProcessStepInfo,
   PostProcessStepStatus,
 } from '../../types/organic.ts';
+import { useDesignTokens, type ResolvedColors } from '../../theme/useDesignTokens.ts';
 
 const { Text } = Typography;
 
@@ -314,29 +315,34 @@ export function useOrganicWorkflow() {
 // Post-processing sub-step status icon
 // ---------------------------------------------------------------------------
 
-const STEP_STATUS_CONFIG: Record<PostProcessStepStatus, {
+function getStepStatusConfig(c: ResolvedColors): Record<PostProcessStepStatus, {
   icon: React.ReactNode;
   color: string;
-}> = {
-  pending: { icon: <MinusCircleOutlined />, color: '#d9d9d9' },
-  running: { icon: <Spin size="small" />, color: '#1677ff' },
-  success: { icon: <CheckCircleOutlined />, color: '#52c41a' },
-  degraded: { icon: <ExclamationCircleOutlined />, color: '#faad14' },
-  skipped: { icon: <MinusCircleOutlined />, color: '#d9d9d9' },
-  failed: { icon: <CloseCircleOutlined />, color: '#ff4d4f' },
-};
+}> {
+  return {
+    pending: { icon: <MinusCircleOutlined />, color: c.border },
+    running: { icon: <Spin size="small" />, color: c.primary },
+    success: { icon: <CheckCircleOutlined />, color: c.success },
+    degraded: { icon: <ExclamationCircleOutlined />, color: c.warning },
+    skipped: { icon: <MinusCircleOutlined />, color: c.border },
+    failed: { icon: <CloseCircleOutlined />, color: c.error },
+  };
+}
 
 function PostProcessSubSteps({ steps }: { steps: PostProcessStepInfo[] }) {
+  const dt = useDesignTokens();
   const hasAnyActivity = steps.some((s) => s.status !== 'pending');
   if (!hasAnyActivity) return null;
 
+  const statusConfig = getStepStatusConfig(dt.color);
+
   return (
-    <div style={{ marginTop: 12, padding: '8px 12px', background: '#fafafa', borderRadius: 6 }}>
+    <div style={{ marginTop: 12, padding: '8px 12px', background: dt.color.surface2, borderRadius: 6 }}>
       <Text type="secondary" style={{ fontSize: 12, marginBottom: 6, display: 'block' }}>
         后处理详情
       </Text>
       {steps.map((s) => {
-        const config = STEP_STATUS_CONFIG[s.status];
+        const config = statusConfig[s.status];
         return (
           <div
             key={s.step}
@@ -345,7 +351,7 @@ function PostProcessSubSteps({ steps }: { steps: PostProcessStepInfo[] }) {
               alignItems: 'center',
               gap: 8,
               padding: '3px 0',
-              color: s.status === 'pending' ? '#bfbfbf' : undefined,
+              color: s.status === 'pending' ? dt.color.textTertiary : undefined,
             }}
           >
             <span style={{ color: config.color, fontSize: 14, display: 'flex', alignItems: 'center' }}>
@@ -354,7 +360,7 @@ function PostProcessSubSteps({ steps }: { steps: PostProcessStepInfo[] }) {
             <Text
               style={{
                 fontSize: 13,
-                color: s.status === 'pending' ? '#bfbfbf' : undefined,
+                color: s.status === 'pending' ? dt.color.textTertiary : undefined,
               }}
             >
               {s.label}

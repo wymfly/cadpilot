@@ -32,6 +32,7 @@ import type {
   ParamDefinition,
   ValidateResponse,
 } from '../../types/template.ts';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { Title, Text } = Typography;
 
@@ -114,6 +115,7 @@ export default function TemplateDetail({
   onBack,
   onEdit,
 }: TemplateDetailProps) {
+  const dt = useDesignTokens();
   const [template, setTemplate] = useState<ParametricTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -271,11 +273,12 @@ export default function TemplateDetail({
       >
         <pre
           style={{
-            background: '#f5f5f5',
+            background: dt.color.surface2,
             padding: 16,
             borderRadius: 6,
             overflow: 'auto',
             maxHeight: 400,
+            fontFamily: dt.typography.fontMono,
             fontSize: 13,
             lineHeight: 1.6,
             margin: 0,

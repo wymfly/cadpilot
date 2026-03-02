@@ -1,8 +1,10 @@
 import { memo } from 'react';
 import { BaseEdge, getStraightPath, type EdgeProps } from '@xyflow/react';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 function AnimatedEdge(props: EdgeProps) {
   const { sourceX, sourceY, targetX, targetY, style, ...rest } = props;
+  const dt = useDesignTokens();
   const [edgePath] = getStraightPath({
     sourceX,
     sourceY,
@@ -17,7 +19,7 @@ function AnimatedEdge(props: EdgeProps) {
       style={{
         ...style,
         strokeWidth: 2,
-        stroke: props.animated ? '#1677ff' : '#d9d9d9',
+        stroke: props.animated ? dt.color.primary : dt.color.border,
       }}
     />
   );

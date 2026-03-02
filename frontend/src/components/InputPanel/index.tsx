@@ -8,6 +8,7 @@ import {
   CameraOutlined,
 } from '@ant-design/icons';
 import type { UploadFile } from 'antd';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -28,6 +29,7 @@ export default function InputPanel({
   loading = false,
 }: InputPanelProps) {
   const [mode, setMode] = useState<InputMode>('text');
+  const dt = useDesignTokens();
   const [text, setText] = useState('');
   const [imageFile, setImageFile] = useState<UploadFile | null>(null);
 
@@ -92,7 +94,7 @@ export default function InputPanel({
               style={{
                 padding: 12,
                 borderRadius: 8,
-                border: '1px dashed #d9d9d9',
+                border: `1px dashed ${dt.color.border}`,
                 textAlign: 'center',
               }}
             >
@@ -130,10 +132,10 @@ export default function InputPanel({
               disabled={disabled}
             >
               <p>
-                <PictureOutlined style={{ fontSize: 32, color: '#999' }} />
+                <PictureOutlined style={{ fontSize: 32, color: dt.color.textTertiary }} />
               </p>
               <p>点击或拖拽上传工程图纸</p>
-              <p style={{ color: '#999', fontSize: 12 }}>
+              <p style={{ color: dt.color.textTertiary, fontSize: 12 }}>
                 支持 PNG、JPG 格式
               </p>
             </Upload.Dragger>

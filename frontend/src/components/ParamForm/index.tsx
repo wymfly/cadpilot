@@ -3,6 +3,7 @@ import { Form, Button, Card, Space, Typography, Tag, Empty } from 'antd';
 import { CheckOutlined, UndoOutlined, EyeOutlined, EyeInvisibleOutlined, SyncOutlined } from '@ant-design/icons';
 import ParamField from './ParamField.tsx';
 import ConstraintAlert from './ConstraintAlert.tsx';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 import type { ParamDefinition } from '../../types/template.ts';
 import type { ParamRecommendation, ConstraintViolation } from '../../types/standard.ts';
 import type { PreviewStatus } from '../../hooks/useParametricPreview.ts';
@@ -36,6 +37,7 @@ export default function ParamForm({
   loading = false,
   title = '参数确认',
 }: ParamFormProps) {
+  const dt = useDesignTokens();
   const recMap = useMemo(() => {
     const map: Record<string, ParamRecommendation> = {};
     for (const r of recommendations) {
@@ -109,13 +111,14 @@ export default function ParamForm({
       </Form>
 
       <div
+        className="caution-stripe"
         style={{
           display: 'flex',
           justifyContent: 'flex-end',
           gap: 8,
           marginTop: 16,
           paddingTop: 16,
-          borderTop: '1px solid #f0f0f0',
+          borderTop: `1px solid ${dt.color.border}`,
         }}
       >
         {onReset && (

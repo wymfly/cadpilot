@@ -13,7 +13,7 @@ export default function MeshStatsCard({ stats }: MeshStatsCardProps) {
 
   return (
     <Card size="small" title="网格统计" style={{ marginBottom: 16 }}>
-      <Descriptions column={2} size="small">
+      <Descriptions column={1} size="small">
         <Descriptions.Item label="顶点数">
           {stats.vertex_count.toLocaleString()}
         </Descriptions.Item>

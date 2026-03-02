@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ReactFlow, Background, Controls } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
 import NodeCard from './NodeCard.tsx';
 import AnimatedEdge from './AnimatedEdge.tsx';
@@ -133,8 +134,10 @@ export default function PipelineDAG({ inputType, events }: PipelineDAGProps) {
     [nodeStates],
   );
 
+  const dt = useDesignTokens();
+
   return (
-    <div style={{ height: 500, border: '1px solid #f0f0f0', borderRadius: 8 }}>
+    <div style={{ height: 500, border: `1px solid ${dt.color.border}`, borderRadius: dt.radius.md }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -143,8 +146,9 @@ export default function PipelineDAG({ inputType, events }: PipelineDAGProps) {
         onNodeClick={handleNodeClick}
         fitView
         proOptions={{ hideAttribution: true }}
+        style={{ background: dt.color.surface0 }}
       >
-        <Background />
+        <Background color={dt.color.border} />
         <Controls />
       </ReactFlow>
 
