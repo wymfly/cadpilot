@@ -16,8 +16,14 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
-def extract_geometry_from_step(step_path: str) -> dict[str, Any]:
+def extract_geometry_from_step(
+    step_path: str, *, run_vertex_analysis: bool = True,
+) -> dict[str, Any]:
     """Extract geometry_info from a STEP file using CadQuery/OCP.
+
+    When *run_vertex_analysis* is True, converts STEP to a temporary mesh
+    and runs VertexAnalyzer for accurate ``min_wall_thickness`` and
+    ``max_overhang_angle``.
 
     Returns dict with keys:
         bounding_box: {x, y, z} in mm
@@ -44,13 +50,35 @@ def extract_geometry_from_step(step_path: str) -> dict[str, Any]:
         "max_overhang_angle": None,
         "min_hole_diameter": None,
     }
+
+    if run_vertex_analysis:
+        stl_path = _step_to_temp_stl(step_path)
+        if stl_path:
+            _try_vertex_analysis(stl_path, geometry_info)
+
     return geometry_info
 
 
-def extract_geometry_from_mesh(mesh_path: str) -> dict[str, Any]:
+def _step_to_temp_stl(step_path: str) -> Optional[str]:
+    """Convert STEP to a temporary STL file for mesh analysis."""
+    try:
+        from backend.core.format_exporter import FormatExporter
+
+        exporter = FormatExporter()
+        return exporter._step_to_stl_temp(step_path, exporter._default_config())
+    except Exception as exc:
+        logger.warning("STEP → STL conversion failed: %s", exc)
+        return None
+
+
+def extract_geometry_from_mesh(
+    mesh_path: str, *, run_vertex_analysis: bool = True,
+) -> dict[str, Any]:
     """Extract geometry_info from a mesh file (GLB/STL) using trimesh.
 
-    min_wall_thickness is None for mesh files (computationally expensive).
+    When *run_vertex_analysis* is True, runs VertexAnalyzer to fill accurate
+    ``min_wall_thickness`` and ``max_overhang_angle``, and stores vertex-level
+    data in ``_vertex_analysis`` for region computation by PrintabilityChecker.
     """
     import trimesh  # noqa: E402 — lazy-loaded heavy dependency
 
@@ -73,7 +101,53 @@ def extract_geometry_from_mesh(mesh_path: str) -> dict[str, Any]:
         "max_overhang_angle": _estimate_max_overhang(mesh),
         "min_hole_diameter": None,
     }
+
+    if run_vertex_analysis:
+        _try_vertex_analysis(mesh_path, geometry_info)
+
     return geometry_info
+
+
+def _try_vertex_analysis(mesh_path: str, geometry_info: dict[str, Any]) -> None:
+    """Run VertexAnalyzer and fill geometry_info with accurate measurements.
+
+    On success, sets ``min_wall_thickness``, ``max_overhang_angle``, and
+    ``_vertex_analysis`` (vertices + risk arrays for region computation).
+    On failure, leaves geometry_info unchanged.
+    """
+    try:
+        import numpy as np
+
+        from backend.core.vertex_analyzer import VertexAnalyzer
+
+        analyzer = VertexAnalyzer()
+        result = analyzer.analyze(mesh_path)
+
+        valid_wall = result.wall_thickness[
+            result.wall_thickness < VertexAnalyzer.SENTINEL_THICKNESS
+        ]
+        if len(valid_wall) > 0:
+            geometry_info["min_wall_thickness"] = round(float(np.min(valid_wall)), 3)
+
+        geometry_info["max_overhang_angle"] = round(
+            float(np.max(result.overhang_angle)), 1
+        )
+
+        # Store vertex-level data for region computation by PrintabilityChecker.
+        # Mesh vertices + risk arrays let us compute centroid of at-risk vertices.
+        import trimesh
+
+        mesh = trimesh.load(mesh_path, force="mesh")
+        geometry_info["_vertex_analysis"] = {
+            "vertices": np.array(mesh.vertices),
+            "risk_wall": result.risk_wall,
+            "risk_overhang": result.risk_overhang,
+            "wall_thickness": result.wall_thickness,
+            "overhang_angle": result.overhang_angle,
+        }
+        logger.info("Vertex analysis enriched geometry_info for %s", mesh_path)
+    except Exception as exc:
+        logger.warning("Vertex analysis failed (non-fatal): %s", exc)
 
 
 def _estimate_max_overhang(mesh: Any) -> Optional[float]:

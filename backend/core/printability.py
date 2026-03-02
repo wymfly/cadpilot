@@ -114,6 +114,43 @@ PRESET_PROFILES: dict[str, PrintProfile] = {
 # ---------------------------------------------------------------------------
 
 
+def _compute_issue_region(
+    va: dict,
+    check_type: str,
+) -> Optional[dict]:
+    """Compute centroid + bounding sphere of at-risk vertices.
+
+    Args:
+        va: ``_vertex_analysis`` dict from geometry_extractor (vertices +
+            risk_wall/risk_overhang arrays).
+        check_type: ``"wall_thickness"`` or ``"overhang"``.
+
+    Returns:
+        ``{"center": [x,y,z], "radius": float}`` or ``None``.
+    """
+    try:
+        import numpy as np
+
+        vertices = va["vertices"]
+        risk = va["risk_wall"] if check_type == "wall_thickness" else va["risk_overhang"]
+        at_risk_mask = risk < 0.5
+        at_risk_verts = vertices[at_risk_mask]
+
+        if len(at_risk_verts) == 0:
+            return None
+
+        center = at_risk_verts.mean(axis=0)
+        distances = np.linalg.norm(at_risk_verts - center, axis=1)
+        radius = float(distances.max())
+
+        return {
+            "center": [round(float(c), 3) for c in center],
+            "radius": round(radius, 3),
+        }
+    except Exception:
+        return None
+
+
 class PrintabilityChecker:
     """Check pre-computed geometry info against a print profile.
 
@@ -138,7 +175,11 @@ class PrintabilityChecker:
         """Run all printability checks and return an aggregated result.
 
         Parameters:
-            geometry_info: Pre-computed geometry measurements.
+            geometry_info: Pre-computed geometry measurements.  When
+                ``_vertex_analysis`` is present (from VertexAnalyzer),
+                wall thickness and overhang issues include a ``region``
+                field with the centroid and bounding sphere of at-risk
+                vertices.
             profile: Profile name (string key into ``PRESET_PROFILES``) or
                 a ``PrintProfile`` instance.
 
@@ -147,6 +188,7 @@ class PrintabilityChecker:
                 preset profile name.
         """
         prof = self._resolve_profile(profile)
+        va = geometry_info.get("_vertex_analysis")
 
         issues: list[PrintIssue] = []
 
@@ -173,6 +215,8 @@ class PrintabilityChecker:
             ),
         ):
             if issue is not None:
+                if va and issue.check in ("wall_thickness", "overhang"):
+                    issue.region = _compute_issue_region(va, issue.check)
                 issues.append(issue)
 
         printable = all(i.severity != "error" for i in issues)

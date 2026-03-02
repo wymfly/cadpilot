@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, Suspense } from 'react';
+import { useState, useRef, useCallback, useEffect, Suspense, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useThree, useLoader } from '@react-three/fiber';
 import { OrbitControls, Center, Environment } from '@react-three/drei';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -8,6 +8,10 @@ import { createDfamMaterial, type DfamMeshMeta } from './DfamShader.ts';
 import HeatmapLegend from './HeatmapLegend.tsx';
 import ViewControls from './ViewControls.tsx';
 import type { DfamMode } from './ViewControls.tsx';
+
+export interface Viewer3DHandle {
+  focusOnRegion: (region: { center: number[]; radius: number }) => void;
+}
 
 interface Viewer3DProps {
   modelUrl: string | null;
@@ -68,14 +72,21 @@ function DfamOverlay({ group }: { group: THREE.Group }) {
 
 interface CameraControllerProps {
   targetPosition: [number, number, number] | null;
+  focusRegion: { center: number[]; radius: number } | null;
   onAnimationDone: () => void;
 }
 
-function CameraController({ targetPosition, onAnimationDone }: CameraControllerProps) {
+function CameraController({ targetPosition, focusRegion, onAnimationDone }: CameraControllerProps) {
   const { camera } = useThree();
 
-  if (targetPosition) {
-    // Scale position based on current distance to keep the model in view
+  if (focusRegion) {
+    const center = new THREE.Vector3(...focusRegion.center);
+    const viewDistance = Math.max(focusRegion.radius * 3, 2);
+    const direction = camera.position.clone().sub(new THREE.Vector3(0, 0, 0)).normalize();
+    camera.position.copy(center.clone().add(direction.multiplyScalar(viewDistance)));
+    camera.lookAt(center);
+    onAnimationDone();
+  } else if (targetPosition) {
     const currentDistance = camera.position.length();
     const targetVec = new THREE.Vector3(...targetPosition).normalize().multiplyScalar(currentDistance);
     camera.position.copy(targetVec);
@@ -86,7 +97,7 @@ function CameraController({ targetPosition, onAnimationDone }: CameraControllerP
   return null;
 }
 
-export default function Viewer3D({
+const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
   modelUrl,
   dfamGlbUrl,
   wireframe: externalWireframe,
@@ -96,9 +107,10 @@ export default function Viewer3D({
   previewTimedOut = false,
   onRetryPreview,
   onLoaded,
-}: Viewer3DProps) {
+}, ref) {
   const [internalWireframe, setInternalWireframe] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<[number, number, number] | null>(null);
+  const [focusRegion, setFocusRegion] = useState<{ center: number[]; radius: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // DfAM state
@@ -109,12 +121,19 @@ export default function Viewer3D({
 
   const wireframe = externalWireframe ?? internalWireframe;
 
+  useImperativeHandle(ref, () => ({
+    focusOnRegion(region: { center: number[]; radius: number }) {
+      setFocusRegion(region);
+    },
+  }), []);
+
   const handleViewChange = useCallback((position: [number, number, number]) => {
     setCameraTarget(position);
   }, []);
 
   const handleAnimationDone = useCallback(() => {
     setCameraTarget(null);
+    setFocusRegion(null);
   }, []);
 
   // Load DfAM GLB when switching away from 'normal'
@@ -220,6 +239,7 @@ export default function Viewer3D({
         />
         <CameraController
           targetPosition={cameraTarget}
+          focusRegion={focusRegion}
           onAnimationDone={handleAnimationDone}
         />
         {modelUrl && (
@@ -368,4 +388,6 @@ export default function Viewer3D({
       )}
     </div>
   );
-}
+});
+
+export default Viewer3D;

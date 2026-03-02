@@ -15,11 +15,13 @@ interface PrintReportProps {
   /** Printability results keyed by profile name, or a single result. */
   results: Record<string, PrintabilityResult> | PrintabilityResult;
   defaultProfile?: ProfileKey;
+  onLocateIssue?: (region: { center: number[]; radius: number }) => void;
 }
 
 export default function PrintReport({
   results,
   defaultProfile = 'fdm_standard',
+  onLocateIssue,
 }: PrintReportProps) {
   const [selectedProfile, setSelectedProfile] = useState<ProfileKey>(defaultProfile);
 
@@ -171,7 +173,7 @@ export default function PrintReport({
         </Descriptions>
       )}
 
-      <IssueList issues={currentResult.issues} />
+      <IssueList issues={currentResult.issues} onLocateIssue={onLocateIssue} />
     </Card>
   );
 }

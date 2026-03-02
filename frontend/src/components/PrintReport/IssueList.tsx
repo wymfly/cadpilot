@@ -1,8 +1,9 @@
-import { List, Tag, Typography } from 'antd';
+import { List, Tag, Typography, Button, Tooltip } from 'antd';
 import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   CloseCircleOutlined,
+  AimOutlined,
 } from '@ant-design/icons';
 import type { PrintIssue } from '../../types/printability.ts';
 
@@ -24,9 +25,10 @@ const CHECK_LABELS: Record<string, string> = {
 
 interface IssueListProps {
   issues: PrintIssue[];
+  onLocateIssue?: (region: { center: number[]; radius: number }) => void;
 }
 
-export default function IssueList({ issues }: IssueListProps) {
+export default function IssueList({ issues, onLocateIssue }: IssueListProps) {
   if (issues.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '12px 0', color: '#52c41a' }}>
@@ -43,7 +45,20 @@ export default function IssueList({ issues }: IssueListProps) {
       renderItem={(issue) => {
         const cfg = SEVERITY_CONFIG[issue.severity] ?? SEVERITY_CONFIG.info;
         return (
-          <List.Item>
+          <List.Item
+            extra={
+              issue.region && onLocateIssue ? (
+                <Tooltip title="在 3D 视图中定位">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<AimOutlined />}
+                    onClick={() => onLocateIssue(issue.region!)}
+                  />
+                </Tooltip>
+              ) : undefined
+            }
+          >
             <List.Item.Meta
               avatar={cfg.icon}
               title={

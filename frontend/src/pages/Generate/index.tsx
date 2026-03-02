@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Typography, Row, Col, Button, Space } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import PipelineConfigBar from '../../components/PipelineConfigBar/index.tsx';
 import Viewer3D from '../../components/Viewer3D/index.tsx';
+import type { Viewer3DHandle } from '../../components/Viewer3D/index.tsx';
 import ParamForm from '../../components/ParamForm/index.tsx';
 import PipelinePanel from '../../components/PipelinePanel/index.tsx';
 import ChatInput from './ChatInput.tsx';
@@ -27,6 +28,8 @@ export default function Generate() {
     pipelineConfig,
     setPipelineConfig,
   } = useGenerateWorkflowContext();
+
+  const viewerRef = useRef<Viewer3DHandle>(null);
 
   const [paramValues, setParamValues] = useState<
     Record<string, number | string | boolean>
@@ -148,7 +151,10 @@ export default function Generate() {
 
             {/* Printability report (shown when completed with printability data) */}
             {workflow.phase === 'completed' && workflow.printability && (
-              <PrintReport results={workflow.printability} />
+              <PrintReport
+                results={workflow.printability}
+                onLocateIssue={(region) => viewerRef.current?.focusOnRegion(region)}
+              />
             )}
 
             {/* Parameter confirmation form (shown during confirming phase) */}
@@ -179,7 +185,7 @@ export default function Generate() {
         {/* Right panel: 3D preview */}
         <Col xs={24} lg={14}>
           <div style={{ height: 600 }}>
-            <Viewer3D modelUrl={viewerModelUrl} />
+            <Viewer3D ref={viewerRef} modelUrl={viewerModelUrl} dfamGlbUrl={workflow.dfamGlbUrl} />
           </div>
         </Col>
       </Row>

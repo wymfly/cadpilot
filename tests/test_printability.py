@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from backend.core.printability import (
@@ -328,3 +329,77 @@ class TestMissingFields:
         geo = {"volume_cm3": 42.5}
         result = checker.check(geo, "fdm_standard")
         assert result.material_volume_cm3 == 42.5
+
+
+# ---------------------------------------------------------------------------
+# 11. Vertex analysis region computation
+# ---------------------------------------------------------------------------
+
+
+class TestVertexAnalysisRegion:
+    """When _vertex_analysis is present, wall/overhang issues get a region."""
+
+    @staticmethod
+    def _make_vertex_analysis(
+        n: int = 100,
+        wall_risk_low_pct: float = 0.3,
+        overhang_risk_low_pct: float = 0.2,
+    ) -> dict:
+        """Create mock vertex analysis data with some at-risk vertices."""
+        rng = np.random.RandomState(42)
+        vertices = rng.rand(n, 3) * 100  # random vertices in [0, 100]
+        risk_wall = np.ones(n, dtype=np.float64)
+        risk_overhang = np.ones(n, dtype=np.float64)
+
+        # Make some vertices at risk (risk < 0.5)
+        n_wall_risk = int(n * wall_risk_low_pct)
+        n_oh_risk = int(n * overhang_risk_low_pct)
+        risk_wall[:n_wall_risk] = rng.rand(n_wall_risk) * 0.3
+        risk_overhang[:n_oh_risk] = rng.rand(n_oh_risk) * 0.3
+
+        return {
+            "vertices": vertices,
+            "risk_wall": risk_wall,
+            "risk_overhang": risk_overhang,
+            "wall_thickness": np.ones(n) * 2.0,
+            "overhang_angle": np.ones(n) * 30.0,
+        }
+
+    def test_wall_issue_has_region(self, checker: PrintabilityChecker) -> None:
+        va = self._make_vertex_analysis()
+        geo = _full_geometry(wall=0.5)
+        geo["_vertex_analysis"] = va
+        result = checker.check(geo, "fdm_standard")
+        wall_issues = [i for i in result.issues if i.check == "wall_thickness"]
+        assert len(wall_issues) == 1
+        assert wall_issues[0].region is not None
+        assert "center" in wall_issues[0].region
+        assert "radius" in wall_issues[0].region
+        assert len(wall_issues[0].region["center"]) == 3
+
+    def test_overhang_issue_has_region(self, checker: PrintabilityChecker) -> None:
+        va = self._make_vertex_analysis()
+        geo = _full_geometry(overhang=60.0)
+        geo["_vertex_analysis"] = va
+        result = checker.check(geo, "fdm_standard")
+        oh_issues = [i for i in result.issues if i.check == "overhang"]
+        assert len(oh_issues) == 1
+        assert oh_issues[0].region is not None
+        assert oh_issues[0].region["radius"] > 0
+
+    def test_no_vertex_analysis_no_region(self, checker: PrintabilityChecker) -> None:
+        geo = _full_geometry(wall=0.5)
+        result = checker.check(geo, "fdm_standard")
+        wall_issues = [i for i in result.issues if i.check == "wall_thickness"]
+        assert len(wall_issues) == 1
+        assert wall_issues[0].region is None
+
+    def test_hole_issue_no_region(self, checker: PrintabilityChecker) -> None:
+        """Region is only computed for wall_thickness and overhang."""
+        va = self._make_vertex_analysis()
+        geo = _full_geometry(hole=1.0)
+        geo["_vertex_analysis"] = va
+        result = checker.check(geo, "fdm_standard")
+        hole_issues = [i for i in result.issues if i.check == "hole_diameter"]
+        assert len(hole_issues) == 1
+        assert hole_issues[0].region is None
