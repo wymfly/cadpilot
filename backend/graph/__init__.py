@@ -1,8 +1,8 @@
 """LangGraph CAD Job orchestration.
 
 Supports two builder modes:
-- Legacy (default): hand-coded StateGraph in builder_legacy.py
-- New (USE_NEW_BUILDER=1): dynamic graph from @register_node in builder_new.py
+- New (default): dynamic graph from @register_node in builder_new.py
+- Legacy (USE_NEW_BUILDER=0): hand-coded StateGraph in builder_legacy.py
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ __all__ = ["build_graph", "get_compiled_graph"]
 def __getattr__(name: str):
     """Lazy import to avoid eagerly loading langgraph at module import time."""
     if name in __all__:
-        if os.environ.get("USE_NEW_BUILDER") == "1":
+        if os.environ.get("USE_NEW_BUILDER", "1") == "1":
             from backend.graph import builder_new
 
             if name == "get_compiled_graph":
