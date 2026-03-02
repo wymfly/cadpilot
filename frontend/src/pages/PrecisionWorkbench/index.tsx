@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button, Typography, Empty } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useOutletContext } from 'react-router-dom';
@@ -10,10 +10,11 @@ import InputPanel from '../../components/InputPanel/index.tsx';
 import DrawingSpecForm from '../../components/DrawingSpecForm/index.tsx';
 import ParamForm from '../../components/ParamForm/index.tsx';
 import PipelineProgress from '../../components/PipelineProgress/index.tsx';
-import PipelineLog from '../../components/PipelineLog/index.tsx';
+import PipelinePanel from '../../components/PipelinePanel/index.tsx';
+import PipelineConfigBar from '../../components/PipelineConfigBar/index.tsx';
 import DownloadPanel from '../../components/DownloadPanel/index.tsx';
 import PrintReport from '../../components/PrintReport/index.tsx';
-import Viewer3D from '../../components/Viewer3D/index.tsx';
+import Viewer3D, { type Viewer3DHandle } from '../../components/Viewer3D/index.tsx';
 import { useJobEvents } from '../../hooks/useJobEvents.ts';
 
 const { Text, Title } = Typography;
@@ -29,7 +30,10 @@ export default function PrecisionWorkbench() {
     confirmDrawingSpec,
     reset,
     pipelineConfig,
+    setPipelineConfig,
   } = useGenerateWorkflowContext();
+
+  const viewerRef = useRef<Viewer3DHandle>(null);
 
   const [paramValues, setParamValues] = useState<
     Record<string, number | string | boolean>
@@ -112,12 +116,18 @@ export default function PrecisionWorkbench() {
 
       case 'parsing':
         return (
-          <PipelineProgress
-            phase={workflow.phase}
-            message={workflow.message}
-            startTime={startTime ?? undefined}
-            lastActiveStep={lastActiveStep}
-            onActiveStepChange={handleActiveStepChange}
+          <PipelinePanel
+            progressView={
+              <PipelineProgress
+                phase={workflow.phase}
+                message={workflow.message}
+                startTime={startTime ?? undefined}
+                lastActiveStep={lastActiveStep}
+                onActiveStepChange={handleActiveStepChange}
+              />
+            }
+            inputType={workflow.inputType}
+            events={sseEvents}
           />
         );
 
@@ -155,12 +165,18 @@ export default function PrecisionWorkbench() {
       case 'generating':
       case 'refining':
         return (
-          <PipelineProgress
-            phase={workflow.phase}
-            message={workflow.message}
-            startTime={startTime ?? undefined}
-            lastActiveStep={lastActiveStep}
-            onActiveStepChange={handleActiveStepChange}
+          <PipelinePanel
+            progressView={
+              <PipelineProgress
+                phase={workflow.phase}
+                message={workflow.message}
+                startTime={startTime ?? undefined}
+                lastActiveStep={lastActiveStep}
+                onActiveStepChange={handleActiveStepChange}
+              />
+            }
+            inputType={workflow.inputType}
+            events={sseEvents}
           />
         );
 
@@ -175,12 +191,18 @@ export default function PrecisionWorkbench() {
       case 'failed':
         return (
           <div>
-            <PipelineProgress
-              phase={workflow.phase}
-              message={workflow.message}
-              error={workflow.error}
-              lastActiveStep={lastActiveStep}
-              onActiveStepChange={handleActiveStepChange}
+            <PipelinePanel
+              progressView={
+                <PipelineProgress
+                  phase={workflow.phase}
+                  message={workflow.message}
+                  error={workflow.error}
+                  lastActiveStep={lastActiveStep}
+                  onActiveStepChange={handleActiveStepChange}
+                />
+              }
+              inputType={workflow.inputType}
+              events={sseEvents}
             />
             <Button
               type="primary"
@@ -217,6 +239,8 @@ export default function PrecisionWorkbench() {
     retryPreview,
     lastActiveStep,
     handleActiveStepChange,
+    sseEvents,
+    workflow.inputType,
   ]);
 
   // === 右面板内容（按管道阶段自动切换）===
@@ -225,6 +249,7 @@ export default function PrecisionWorkbench() {
       case 'idle':
         return (
           <div>
+            <PipelineConfigBar value={pipelineConfig} onChange={setPipelineConfig} />
             <Title level={5}>快速入门</Title>
             <Text type="secondary" style={{ fontSize: 13 }}>
               在左侧面板输入零件描述或上传工程图纸，AI 将自动分析并生成 3D CAD 模型。
@@ -253,12 +278,7 @@ export default function PrecisionWorkbench() {
       case 'parsing':
       case 'generating':
       case 'refining':
-        return (
-          <div>
-            <Title level={5}>管道日志</Title>
-            <PipelineLog events={sseEvents} />
-          </div>
-        );
+        return null;
 
       case 'confirming':
         return (
@@ -273,7 +293,10 @@ export default function PrecisionWorkbench() {
 
       case 'completed':
         return workflow.printability ? (
-          <PrintReport results={workflow.printability} />
+          <PrintReport
+            results={workflow.printability}
+            onLocateIssue={(region) => viewerRef.current?.focusOnRegion(region)}
+          />
         ) : (
           <div>
             <Title level={5}>生成完成</Title>
@@ -294,7 +317,7 @@ export default function PrecisionWorkbench() {
       default:
         return null;
     }
-  }, [workflow.phase, workflow.printability, sseEvents]);
+  }, [workflow.phase, workflow.printability, pipelineConfig, setPipelineConfig]);
 
   // 注入面板内容到 WorkbenchLayout
   useEffect(() => {
@@ -305,7 +328,9 @@ export default function PrecisionWorkbench() {
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <Viewer3D
+        ref={viewerRef}
         modelUrl={viewerModelUrl}
+        dfamGlbUrl={workflow.dfamGlbUrl}
         darkMode={isDark}
         previewLoading={previewStatus.loading}
         previewError={previewStatus.error}
