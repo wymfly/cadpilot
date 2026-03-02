@@ -7,7 +7,10 @@ from backend.graph.registry import NodeRegistry, register_node, registry
 
 
 # Cleanup test nodes registered to global registry
-_TEST_NODE_NAMES = ["_test_decorator_node", "_test_preserve", "_test_full_opts"]
+_TEST_NODE_NAMES = [
+    "_test_decorator_node", "_test_preserve", "_test_full_opts",
+    "_test_fb_valid", "_test_fb_invalid", "_test_fb_none",
+]
 
 
 @pytest.fixture(autouse=True)
@@ -174,3 +177,48 @@ class TestDiscoverNodes:
         reset_discovery()
         # Should not raise even if nodes use heavy deps (stubbed by conftest)
         discover_nodes()
+
+
+class TestRegisterNodeFallbackChain:
+    def test_register_with_valid_fallback_chain(self):
+        """fallback_chain names must all exist in strategies."""
+        class StratA(NodeStrategy):
+            async def execute(self, ctx): pass
+        class StratB(NodeStrategy):
+            async def execute(self, ctx): pass
+
+        @register_node(
+            name="_test_fb_valid",
+            display_name="Test FB",
+            strategies={"a": StratA, "b": StratB},
+            fallback_chain=["a", "b"],
+        )
+        async def node_fn(ctx): pass
+
+        desc = node_fn._node_descriptor
+        assert desc.fallback_chain == ["a", "b"]
+        # cleanup
+        registry._remove("_test_fb_valid")
+
+    def test_register_with_invalid_fallback_chain_raises(self):
+        """fallback_chain with nonexistent strategy name raises ValueError."""
+        class StratA(NodeStrategy):
+            async def execute(self, ctx): pass
+
+        with pytest.raises(ValueError, match="nonexistent"):
+            @register_node(
+                name="_test_fb_invalid",
+                display_name="Test FB",
+                strategies={"a": StratA},
+                fallback_chain=["a", "nonexistent"],
+            )
+            async def node_fn(ctx): pass
+
+    def test_register_without_fallback_chain(self):
+        """No fallback_chain → empty list."""
+        @register_node(name="_test_fb_none", display_name="Test")
+        async def node_fn(ctx): pass
+
+        desc = node_fn._node_descriptor
+        assert desc.fallback_chain == []
+        registry._remove("_test_fb_none")

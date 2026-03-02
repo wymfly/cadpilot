@@ -27,6 +27,7 @@ class NodeDescriptor:
     config_model: type[BaseModel] | None = None
     strategies: dict[str, type[NodeStrategy]] = field(default_factory=dict)
     default_strategy: str | None = None
+    fallback_chain: list[str] = field(default_factory=list)
 
     # Topology flags
     is_entry: bool = False

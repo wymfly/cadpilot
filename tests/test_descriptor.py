@@ -131,3 +131,26 @@ class TestNodeStrategy:
 
         s = UnavailableStrategy()
         assert s.check_available() is False
+
+
+class TestFallbackChain:
+    def test_descriptor_default_empty_fallback_chain(self):
+        """NodeDescriptor.fallback_chain defaults to empty list."""
+        async def noop(ctx): pass
+        desc = NodeDescriptor(name="t", display_name="T", fn=noop)
+        assert desc.fallback_chain == []
+
+    def test_descriptor_with_fallback_chain(self):
+        async def noop(ctx): pass
+
+        class StratA(NodeStrategy):
+            async def execute(self, ctx): pass
+        class StratB(NodeStrategy):
+            async def execute(self, ctx): pass
+
+        desc = NodeDescriptor(
+            name="t", display_name="T", fn=noop,
+            strategies={"a": StratA, "b": StratB},
+            fallback_chain=["a", "b"],
+        )
+        assert desc.fallback_chain == ["a", "b"]

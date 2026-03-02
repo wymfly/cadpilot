@@ -89,6 +89,7 @@ def register_node(
     config_model: type[BaseModel] | None = None,
     strategies: dict[str, type[NodeStrategy]] | None = None,
     default_strategy: str | None = None,
+    fallback_chain: list[str] | None = None,
     is_entry: bool = False,
     is_terminal: bool = False,
     supports_hitl: bool = False,
@@ -99,6 +100,16 @@ def register_node(
     """Decorator that registers an async node function into the global registry."""
 
     def decorator(fn: Callable[..., Awaitable[None]]) -> Callable[..., Awaitable[None]]:
+        chain = fallback_chain or []
+        strats = strategies or {}
+        if chain:
+            invalid = [n for n in chain if n not in strats]
+            if invalid:
+                raise ValueError(
+                    f"fallback_chain contains unknown strategy names: {invalid}. "
+                    f"Available strategies: {list(strats.keys())}"
+                )
+
         desc = NodeDescriptor(
             name=name,
             display_name=display_name,
@@ -107,8 +118,9 @@ def register_node(
             produces=produces or [],
             input_types=input_types or ["text", "drawing", "organic"],
             config_model=config_model,
-            strategies=strategies or {},
+            strategies=strats,
             default_strategy=default_strategy,
+            fallback_chain=chain,
             is_entry=is_entry,
             is_terminal=is_terminal,
             supports_hitl=supports_hitl,
