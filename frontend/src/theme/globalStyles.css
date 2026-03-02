@@ -1,0 +1,130 @@
+/* ==========================================================================
+   CAD3Dify Industrial Design System — Global Styles
+   ========================================================================== */
+
+/* --- Fonts ---------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* --- CSS Variables -------------------------------------------------------- */
+:root {
+  --panel-blur: 12px;
+  --motion-panel-slide: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-panel-duration: 180ms;
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* --- Base ----------------------------------------------------------------- */
+body {
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Industrial Scrollbar ------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2D323A;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3D434D;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2D323A transparent;
+}
+
+/* --- Keyframe Animations -------------------------------------------------- */
+
+/* Laser scan line: moves top → bottom */
+@keyframes laserScan {
+  0% {
+    top: 0;
+    opacity: 0.8;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+/* Terminal cursor blink */
+@keyframes terminalBlink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Crosshair pulse (subtle) */
+@keyframes crosshairPulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* LED node pulse */
+@keyframes ledPulse {
+  0%, 100% {
+    box-shadow: 0 0 4px currentColor;
+  }
+  50% {
+    box-shadow: 0 0 8px currentColor, 0 0 16px currentColor;
+  }
+}
+
+/* --- Utility Classes ------------------------------------------------------ */
+
+/* HUD Panel — glassmorphism container */
+.hud-panel {
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Caution stripe — industrial warning pattern */
+.caution-stripe {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 6px,
+    rgba(255, 179, 0, 0.08) 6px,
+    rgba(255, 179, 0, 0.08) 12px
+  );
+  border-left: 3px solid rgba(255, 179, 0, 0.5);
+  padding: 12px 16px;
+  border-radius: 0 8px 8px 0;
+}
+
+/* Monospace data readout */
+.data-readout {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Panel title — industrial uppercase */
+.panel-title {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}

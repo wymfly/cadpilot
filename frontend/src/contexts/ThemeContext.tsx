@@ -6,8 +6,9 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { ConfigProvider, theme as antdTheme } from 'antd';
+import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
+import { getAntdThemeConfig } from '../theme/antdThemeConfig.ts';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -31,18 +32,6 @@ function getInitialTheme(): ThemeMode {
   return 'light';
 }
 
-const LIGHT_TOKENS = {
-  colorPrimary: '#1677ff',
-  colorBgContainer: '#ffffff',
-  colorBgLayout: '#f5f5f5',
-};
-
-const DARK_TOKENS = {
-  colorPrimary: '#4096ff',
-  colorBgContainer: '#1f1f1f',
-  colorBgLayout: '#141414',
-};
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>(getInitialTheme);
 
@@ -65,13 +54,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [mode, toggleTheme, isDark],
   );
 
-  const themeConfig = useMemo(
-    () => ({
-      algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-      token: isDark ? DARK_TOKENS : LIGHT_TOKENS,
-    }),
-    [isDark],
-  );
+  const themeConfig = useMemo(() => getAntdThemeConfig(isDark), [isDark]);
 
   return (
     <ThemeContext.Provider value={contextValue}>
