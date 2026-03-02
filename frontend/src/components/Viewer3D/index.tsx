@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { Spin } from 'antd';
 import { useDesignTokens } from '../../theme/useDesignTokens.ts';
+import TerminalCursor from '../decorative/TerminalCursor.tsx';
 import { createDfamMaterial, type DfamMeshMeta } from './DfamShader.ts';
 import HeatmapLegend from './HeatmapLegend.tsx';
 import ViewControls from './ViewControls.tsx';
@@ -341,10 +342,7 @@ const Viewer3D = forwardRef<Viewer3DHandle, Viewer3DProps>(function Viewer3D({
             pointerEvents: 'none',
           }}
         >
-          <Spin size="default" />
-          <div style={{ marginTop: 8, color: dt.color.textTertiary, fontSize: 13, fontFamily: dt.typography.fontMono }}>
-            等待模型加载...
-          </div>
+          <TerminalCursor message="Awaiting model..." />
         </div>
       )}
 

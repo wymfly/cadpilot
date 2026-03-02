@@ -9,6 +9,7 @@ import {
 import { Outlet, useOutletContext } from 'react-router-dom';
 import TopNav from './TopNav.tsx';
 import { useDesignTokens } from '../theme/useDesignTokens.ts';
+import Crosshair from '../components/decorative/Crosshair.tsx';
 
 const MOBILE_BREAKPOINT = 768;
 const STORAGE_KEY_LEFT = 'cadpilot-panel-left';
@@ -247,6 +248,7 @@ export default function WorkbenchLayout() {
                 pointerEvents: leftCollapsed ? 'none' : 'auto',
               }}
             >
+              <Crosshair />
               {panels.left}
             </div>
 
@@ -277,6 +279,7 @@ export default function WorkbenchLayout() {
                 pointerEvents: rightCollapsed ? 'none' : 'auto',
               }}
             >
+              <Crosshair />
               {panels.right}
             </div>
 

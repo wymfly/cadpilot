@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Tag } from 'antd';
 import { useDesignTokens } from '../../theme/useDesignTokens.ts';
+import TerminalCursor from '../decorative/TerminalCursor.tsx';
 import type { JobEvent } from '../../hooks/useJobEvents.ts';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -35,14 +36,12 @@ export default function PipelineLog({
     return (
       <div
         style={{
-          textAlign: 'center',
+          display: 'flex',
+          justifyContent: 'center',
           padding: 24,
-          color: dt.color.textTertiary,
-          fontFamily: dt.typography.fontMono,
-          fontSize: 12,
         }}
       >
-        等待管道事件...
+        <TerminalCursor message="Waiting for pipeline events..." />
       </div>
     );
   }
