@@ -224,8 +224,12 @@ class TestOrganicPipelineE2E:
         assert "scaled_mesh" in scale.produces
         assert "scaled_mesh" in assemble.requires
         assert "final_mesh" in assemble.produces
-        # slice_to_gcode uses OR dependency
-        assert ["final_mesh", "scaled_mesh", "watertight_mesh"] in slicer.requires
+        # slice_to_gcode uses OR dependency (includes Phase 3 optimized meshes)
+        or_group = slicer.requires[0]
+        assert isinstance(or_group, list)
+        assert "final_mesh" in or_group
+        assert "scaled_mesh" in or_group
+        assert "watertight_mesh" in or_group
 
     @pytest.mark.asyncio
     async def test_skip_propagation(self) -> None:
