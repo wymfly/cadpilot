@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from cadpilot.knowledge.part_types import (
+from backend.knowledge.part_types import (
     BaseBodySpec,
     BoreSpec,
     DimensionLayer,
     DrawingSpec,
     PartType,
 )
-from cadpilot.v2.modeling_strategist import ModelingContext, ModelingStrategist
+from backend.core.modeling_strategist import ModelingContext, ModelingStrategist
 
 
 # ---------------------------------------------------------------------------
@@ -75,28 +75,28 @@ def _make_plate_spec() -> DrawingSpec:
 
 class TestFeatureExtraction:
     def test_revolve_method(self) -> None:
-        from cadpilot.v2.modeling_strategist import _extract_features_from_spec
+        from backend.core.modeling_strategist import _extract_features_from_spec
 
         spec = _make_flange_spec()
         features = _extract_features_from_spec(spec)
         assert "revolve" in features
 
     def test_bore_adds_bore_tag(self) -> None:
-        from cadpilot.v2.modeling_strategist import _extract_features_from_spec
+        from backend.core.modeling_strategist import _extract_features_from_spec
 
         spec = _make_flange_spec()
         features = _extract_features_from_spec(spec)
         assert "bore" in features
 
     def test_hole_pattern_feature_type(self) -> None:
-        from cadpilot.v2.modeling_strategist import _extract_features_from_spec
+        from backend.core.modeling_strategist import _extract_features_from_spec
 
         spec = _make_flange_spec()
         features = _extract_features_from_spec(spec)
         assert "hole_pattern" in features
 
     def test_gear_teeth_feature(self) -> None:
-        from cadpilot.v2.modeling_strategist import _extract_features_from_spec
+        from backend.core.modeling_strategist import _extract_features_from_spec
 
         spec = _make_gear_spec()
         features = _extract_features_from_spec(spec)
@@ -104,7 +104,7 @@ class TestFeatureExtraction:
         assert "keyway" in features
 
     def test_no_bore_no_bore_tag(self) -> None:
-        from cadpilot.v2.modeling_strategist import _extract_features_from_spec
+        from backend.core.modeling_strategist import _extract_features_from_spec
 
         spec = DrawingSpec(
             part_type=PartType.GENERAL,
@@ -122,29 +122,29 @@ class TestFeatureExtraction:
 
 class TestJaccard:
     def test_identical_sets(self) -> None:
-        from cadpilot.v2.modeling_strategist import _jaccard
+        from backend.core.modeling_strategist import _jaccard
 
         assert _jaccard({"a", "b"}, {"a", "b"}) == pytest.approx(1.0)
 
     def test_disjoint_sets(self) -> None:
-        from cadpilot.v2.modeling_strategist import _jaccard
+        from backend.core.modeling_strategist import _jaccard
 
         assert _jaccard({"a"}, {"b"}) == pytest.approx(0.0)
 
     def test_partial_overlap(self) -> None:
-        from cadpilot.v2.modeling_strategist import _jaccard
+        from backend.core.modeling_strategist import _jaccard
 
         result = _jaccard({"a", "b", "c"}, {"b", "c", "d"})
         # intersection=2, union=4 → 0.5
         assert result == pytest.approx(0.5)
 
     def test_empty_sets(self) -> None:
-        from cadpilot.v2.modeling_strategist import _jaccard
+        from backend.core.modeling_strategist import _jaccard
 
         assert _jaccard(set(), set()) == pytest.approx(0.0)
 
     def test_one_empty(self) -> None:
-        from cadpilot.v2.modeling_strategist import _jaccard
+        from backend.core.modeling_strategist import _jaccard
 
         assert _jaccard({"a"}, set()) == pytest.approx(0.0)
 

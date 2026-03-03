@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from cadpilot.knowledge.examples import EXAMPLES_BY_TYPE, get_tagged_examples
-from cadpilot.knowledge.part_types import PartType
+from backend.knowledge.examples import EXAMPLES_BY_TYPE, get_tagged_examples
+from backend.knowledge.part_types import PartType
 
 
 # ---------------------------------------------------------------------------

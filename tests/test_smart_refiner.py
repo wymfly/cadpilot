@@ -4,14 +4,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cadpilot.knowledge.part_types import (
+from backend.knowledge.part_types import (
     BaseBodySpec,
     BoreSpec,
     DimensionLayer,
     DrawingSpec,
     PartType,
 )
-from cadpilot.v2.smart_refiner import SmartRefiner
+from backend.core.smart_refiner import SmartRefiner
 
 
 def _make_spec() -> DrawingSpec:
@@ -130,7 +130,7 @@ class TestSmartRefinerGuard:
         refiner.fix_chain.invoke.assert_called_once()
         assert result == "fixed_code_vl"
 
-    @patch("cadpilot.v2.smart_refiner._get_bbox_from_step")
+    @patch("backend.core.smart_refiner._get_bbox_from_step")
     def test_bbox_fail_vl_still_runs(self, mock_bbox):
         """Layer 2: bbox validation fails → VL still runs (zero-risk mode)."""
         mock_bbox.return_value = (50.0, 50.0, 10.0)  # way off from 100×100×30
@@ -152,7 +152,7 @@ class TestSmartRefinerGuard:
         refiner.fix_chain.invoke.assert_called_once()
         assert result == "bbox_fixed"
 
-    @patch("cadpilot.v2.smart_refiner._get_bbox_from_step")
+    @patch("backend.core.smart_refiner._get_bbox_from_step")
     def test_bbox_pass_reaches_vl(self, mock_bbox):
         """Layer 2: bbox passes → proceeds to VL."""
         mock_bbox.return_value = (100.0, 100.0, 30.0)  # matches spec

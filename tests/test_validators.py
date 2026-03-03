@@ -6,14 +6,14 @@ import textwrap
 
 import pytest
 
-from cadpilot.knowledge.part_types import (
+from backend.knowledge.part_types import (
     BaseBodySpec,
     BoreSpec,
     DimensionLayer,
     DrawingSpec,
     PartType,
 )
-from cadpilot.v2.validators import (
+from backend.core.validators import (
     BBoxResult,
     ValidationResult,
     collect_spec_values,
@@ -275,7 +275,7 @@ class TestBoundingBox:
 # STEP geometry validation
 # ---------------------------------------------------------------------------
 
-from cadpilot.v2.validators import validate_step_geometry, GeometryResult
+from backend.core.validators import validate_step_geometry, GeometryResult
 
 
 class TestValidateStepGeometry:

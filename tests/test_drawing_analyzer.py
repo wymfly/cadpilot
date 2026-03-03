@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cadpilot.v2.drawing_analyzer import _parse_drawing_spec
+from backend.core.drawing_analyzer import _parse_drawing_spec
 
 
 class TestParseDrawingSpecCoT:

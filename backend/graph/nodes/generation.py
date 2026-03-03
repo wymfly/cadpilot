@@ -35,7 +35,7 @@ def _run_generate_from_spec(
     # Pipeline expects DrawingSpec model, not a plain dict.
     spec_obj = drawing_spec
     if isinstance(drawing_spec, dict):
-        from cadpilot.knowledge.part_types import DrawingSpec
+        from backend.knowledge.part_types import DrawingSpec
         spec_obj = DrawingSpec(**drawing_spec)
 
     return generate_step_from_spec(

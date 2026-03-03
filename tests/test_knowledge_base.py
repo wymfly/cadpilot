@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import pytest
 
-from cadpilot.knowledge.examples import (
+from backend.knowledge.examples import (
     EXAMPLES_BY_TYPE,
     TaggedExample,
     get_examples,
     get_tagged_examples,
 )
-from cadpilot.knowledge.examples.bracket import BRACKET_EXAMPLES
-from cadpilot.knowledge.examples.gear import GEAR_EXAMPLES
-from cadpilot.knowledge.examples.general import GENERAL_EXAMPLES
-from cadpilot.knowledge.examples.housing import HOUSING_EXAMPLES
-from cadpilot.knowledge.examples.plate import PLATE_EXAMPLES
-from cadpilot.knowledge.examples.rotational import ROTATIONAL_EXAMPLES
-from cadpilot.knowledge.part_types import PartType
+from backend.knowledge.examples.bracket import BRACKET_EXAMPLES
+from backend.knowledge.examples.gear import GEAR_EXAMPLES
+from backend.knowledge.examples.general import GENERAL_EXAMPLES
+from backend.knowledge.examples.housing import HOUSING_EXAMPLES
+from backend.knowledge.examples.plate import PLATE_EXAMPLES
+from backend.knowledge.examples.rotational import ROTATIONAL_EXAMPLES
+from backend.knowledge.part_types import PartType
 
 # ---------------------------------------------------------------------------
 # TaggedExample dataclass

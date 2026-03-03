@@ -16,7 +16,7 @@ import json
 
 import pytest
 
-from cadpilot.knowledge.part_types import (
+from backend.knowledge.part_types import (
     BaseBodySpec,
     BoreSpec,
     ChamferSpec,
@@ -359,7 +359,7 @@ class TestToPromptText:
 
 class TestExtractFeaturesWithTypedFeature:
     def test_extracts_typed_feature_types(self) -> None:
-        from cadpilot.v2.modeling_strategist import _extract_features_from_spec
+        from backend.core.modeling_strategist import _extract_features_from_spec
 
         spec = DrawingSpec(
             part_type=PartType.ROTATIONAL_STEPPED,
@@ -380,7 +380,7 @@ class TestExtractFeaturesWithTypedFeature:
         assert "fillet" in features
 
     def test_extracts_dict_fallback_feature_types(self) -> None:
-        from cadpilot.v2.modeling_strategist import _extract_features_from_spec
+        from backend.core.modeling_strategist import _extract_features_from_spec
 
         spec = DrawingSpec(
             part_type=PartType.GEAR,
@@ -396,7 +396,7 @@ class TestExtractFeaturesWithTypedFeature:
         assert "keyway" in features
 
     def test_extracts_mixed_features(self) -> None:
-        from cadpilot.v2.modeling_strategist import _extract_features_from_spec
+        from backend.core.modeling_strategist import _extract_features_from_spec
 
         spec = DrawingSpec(
             part_type=PartType.BRACKET,

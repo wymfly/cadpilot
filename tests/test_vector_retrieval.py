@@ -23,7 +23,7 @@ from backend.knowledge.part_types import (
     Feature,
     PartType,
 )
-from cadpilot.v2.modeling_strategist import ModelingContext, ModelingStrategist
+from backend.core.modeling_strategist import ModelingContext, ModelingStrategist
 
 
 # ---------------------------------------------------------------------------
