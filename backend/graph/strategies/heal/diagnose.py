@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+import numpy as np
 import trimesh
 
 
@@ -41,8 +42,6 @@ def diagnose(mesh: trimesh.Trimesh) -> MeshDiagnosis:
     # If faces changed, the original had orientation issues — either
     # inconsistent winding or inward-facing normals (negative volume).
     try:
-        import numpy as np
-
         test_mesh = mesh.copy()
         original_faces = mesh.faces.copy()
         trimesh.repair.fix_normals(test_mesh)
@@ -59,26 +58,17 @@ def diagnose(mesh: trimesh.Trimesh) -> MeshDiagnosis:
 
     # Non-watertight → has holes or non-manifold geometry
     if not is_wt:
-        # Count boundary edges (edges appearing in only one face)
-        edges = mesh.edges_sorted
-        from collections import Counter
-
-        edge_counts = Counter(map(tuple, edges))
-        boundary_count = sum(1 for c in edge_counts.values() if c == 1)
-        non_manifold_count = sum(1 for c in edge_counts.values() if c > 2)
+        # Count boundary/non-manifold edges using numpy (fast for large meshes)
+        unique_edges, counts = np.unique(
+            mesh.edges_sorted, axis=0, return_counts=True
+        )
+        boundary_count = int(np.sum(counts == 1))
+        non_manifold_count = int(np.sum(counts > 2))
 
         if non_manifold_count > 0:
             issues.append(f"{non_manifold_count} non-manifold edges")
         if boundary_count > 0:
             issues.append(f"{boundary_count} boundary edges (holes)")
-
-    # Determine level
-    if not is_wt:
-        edges = mesh.edges_sorted
-        from collections import Counter
-
-        edge_counts = Counter(map(tuple, edges))
-        non_manifold_count = sum(1 for c in edge_counts.values() if c > 2)
 
         # Severe heuristics:
         # 1. High ratio of non-manifold edges → likely self-intersection
@@ -132,5 +122,5 @@ def validate_repair(mesh: trimesh.Trimesh) -> bool:
         if (areas < 1e-10).any():
             return False
     except Exception:
-        pass
+        return False
     return True

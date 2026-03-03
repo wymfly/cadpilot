@@ -25,7 +25,11 @@ class MeshHealerConfig(NeuralStrategyConfig):
 
     @model_validator(mode="after")
     def _validate_neural_config(self) -> "MeshHealerConfig":
-        """Ensure neural endpoint is set when strategy requires it."""
+        """Ensure neural config is consistent with strategy choice."""
+        if self.strategy == "neural" and not self.neural_enabled:
+            raise ValueError(
+                "strategy='neural' requires neural_enabled=True"
+            )
         if self.strategy in ("neural", "auto") and self.neural_enabled:
             if not self.neural_endpoint:
                 raise ValueError(

@@ -125,13 +125,13 @@ class TestMeshHealerNode:
         mock_exec.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_raises_without_raw_mesh(self) -> None:
-        """Strategy raises ValueError when no raw mesh is available."""
+    async def test_skips_when_no_raw_mesh(self) -> None:
+        """Node skips gracefully when no raw mesh is available (upstream failed)."""
         from backend.graph.nodes.mesh_healer import mesh_healer_node
 
         ctx = _make_ctx("mesh_healer", data={})
-        with pytest.raises((ValueError, KeyError)):
-            await mesh_healer_node(ctx)
+        await mesh_healer_node(ctx)
+        assert ctx.get_data("mesh_healer_status") == "skipped_no_input"
 
 
 class TestMeshScaleNode:

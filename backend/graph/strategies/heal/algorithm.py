@@ -39,9 +39,8 @@ class AlgorithmHealStrategy(NodeStrategy):
             if mesh_path is None:
                 raise ValueError("No raw mesh found in assets or data")
         mesh = trimesh.load(mesh_path, force="mesh")
-        if isinstance(mesh, trimesh.Scene):
-            meshes = list(mesh.geometry.values())
-            mesh = trimesh.util.concatenate(meshes) if meshes else trimesh.Trimesh()
+
+        self._voxel_resolution = getattr(ctx.config, "voxel_resolution", 128)
 
         await ctx.dispatch_progress(1, 4, "诊断网格缺陷")
 
@@ -72,6 +71,9 @@ class AlgorithmHealStrategy(NodeStrategy):
         - Non-auto mode: error propagates to user
         - Auto mode: execute_with_fallback() catches it and tries neural
         """
+        if diag.level == "clean":
+            return mesh
+
         levels = {
             "mild": [self._level1_trimesh, self._level2_pymeshfix, self._level3_meshlib],
             "moderate": [self._level2_pymeshfix, self._level3_meshlib],
@@ -151,8 +153,7 @@ class AlgorithmHealStrategy(NodeStrategy):
             raise ValueError("PyMeshLab returned empty mesh")
         return trimesh.Trimesh(vertices=verts, faces=faces)
 
-    @staticmethod
-    def _level3_meshlib(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    def _level3_meshlib(self, mesh: trimesh.Trimesh) -> trimesh.Trimesh:
         """Level 3: MeshLib voxelization rebuild."""
         try:
             import meshlib.mrmeshpy as mr
@@ -170,7 +171,7 @@ class AlgorithmHealStrategy(NodeStrategy):
         mr_mesh.topology.setTriangles(mr.trianglesFromNumpyArray(faces_flat))
 
         # Voxelize and reconstruct
-        voxel_size = getattr(AlgorithmHealStrategy, '_voxel_resolution', 128)
+        voxel_size = self._voxel_resolution
         bbox = mesh.bounding_box.extents
         max_dim = float(max(bbox))
         voxel_edge = max_dim / voxel_size if voxel_size > 0 else max_dim / 128

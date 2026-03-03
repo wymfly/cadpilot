@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import numpy as np
 import pytest
 import trimesh
@@ -52,6 +54,28 @@ class TestMeshDiagnosis:
         assert result.level in ("moderate", "severe")
         assert len(result.issues) > 0
 
+    def test_severe_high_non_manifold_ratio(self):
+        """大量 non-manifold 边 → diagnosed as severe。"""
+        from backend.graph.strategies.heal.diagnose import diagnose
+
+        # 构造含 non-manifold 边的退化 mesh:
+        # 多个三角形共享同一条边（> 2 个面共享）
+        verts = np.array([
+            [0, 0, 0], [1, 0, 0], [0, 1, 0],
+            [0, 0, 1], [1, 0, 1], [0, 1, 1],
+        ], dtype=float)
+        # 三个面共享边 (0,1)，制造 non-manifold
+        faces = np.array([
+            [0, 1, 2],
+            [0, 1, 3],
+            [0, 1, 4],
+        ])
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+        result = diagnose(mesh)
+        # 非水密 mesh，至少应为 moderate 或 severe
+        assert result.level in ("moderate", "severe")
+        assert any("non-manifold" in i for i in result.issues)
+
     def test_level_is_valid_literal(self):
         from backend.graph.strategies.heal.diagnose import diagnose
 
@@ -84,9 +108,6 @@ class TestValidateRepair:
         assert validate_repair(mesh) is False
 
 
-from unittest.mock import patch, MagicMock, AsyncMock
-
-
 class TestAlgorithmHealStrategy:
     """AlgorithmHealStrategy 升级链测试。"""
 
@@ -101,7 +122,7 @@ class TestAlgorithmHealStrategy:
             use_data_path: If True, simulate upstream contract where raw_mesh
                 is in state data (raw_mesh_path) instead of asset registry.
         """
-        import tempfile, os
+        import tempfile
         tmp = tempfile.NamedTemporaryFile(suffix=".glb", delete=False)
         mesh.export(tmp.name)
         tmp.close()
@@ -442,6 +463,16 @@ class TestMeshHealerConfig:
                 neural_endpoint=None,
             )
 
+    def test_neural_strategy_requires_neural_enabled(self):
+        from backend.graph.configs.mesh_healer import MeshHealerConfig
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="neural_enabled"):
+            MeshHealerConfig(
+                strategy="neural",
+                neural_enabled=False,
+            )
+
     def test_auto_strategy_with_neural_enabled_requires_endpoint(self):
         from backend.graph.configs.mesh_healer import MeshHealerConfig
         from pydantic import ValidationError
@@ -621,7 +652,7 @@ class TestFallbackIntegration:
             "pipeline_config": {"test_neural_disabled": {"strategy": "auto"}},
             "node_trace": [],
         }
-        result = await wrapped(state)
+        await wrapped(state)
         assert not neural_called
 
     @pytest.mark.asyncio

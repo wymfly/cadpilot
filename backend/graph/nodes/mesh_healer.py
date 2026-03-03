@@ -38,6 +38,15 @@ async def mesh_healer_node(ctx: NodeContext) -> None:
     For auto mode, uses ctx.execute_with_fallback() which tries
     algorithm first, falls back to neural if algorithm fails.
     """
+    # Guard: skip if upstream failed (no mesh to heal)
+    try:
+        ctx.get_asset("raw_mesh")
+    except KeyError:
+        if not ctx.get_data("raw_mesh_path"):
+            logger.info("mesh_healer: no raw mesh available, skipping")
+            ctx.put_data("mesh_healer_status", "skipped_no_input")
+            return
+
     if ctx.config.strategy == "auto":
         await ctx.execute_with_fallback()
     else:
@@ -46,7 +55,7 @@ async def mesh_healer_node(ctx: NodeContext) -> None:
 
     # Optional retopo sub-step
     config = ctx.config
-    if getattr(config, "retopo_enabled", False):
+    if config.retopo_enabled:
         await _maybe_retopo(ctx, config)
 
 

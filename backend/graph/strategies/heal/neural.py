@@ -47,7 +47,11 @@ class NeuralHealStrategy(NeuralStrategy):
 
         await ctx.dispatch_progress(2, 3, "Neural 修复完成")
 
-        repaired_path = response["mesh_uri"]
+        repaired_path = response.get("mesh_uri")
+        if not repaired_path:
+            raise ValueError(
+                f"Neural repair service returned no mesh_uri: {response}"
+            )
         metrics = response.get("metrics", {})
 
         ctx.put_asset(
