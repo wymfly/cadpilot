@@ -406,3 +406,49 @@ class TestNeuralHealStrategy:
         from backend.graph.strategies.neural import NeuralStrategy
 
         assert issubclass(NeuralHealStrategy, NeuralStrategy)
+
+
+class TestMeshHealerConfig:
+    def test_default_values(self):
+        from backend.graph.configs.mesh_healer import MeshHealerConfig
+
+        cfg = MeshHealerConfig()
+        assert cfg.strategy == "algorithm"
+        assert cfg.neural_enabled is False
+        assert cfg.voxel_resolution == 128
+        assert cfg.retopo_threshold == 100000
+
+    def test_inherits_neural_strategy_config(self):
+        from backend.graph.configs.mesh_healer import MeshHealerConfig
+        from backend.graph.configs.neural import NeuralStrategyConfig
+
+        assert issubclass(MeshHealerConfig, NeuralStrategyConfig)
+
+    def test_strategy_literal_rejects_invalid(self):
+        from backend.graph.configs.mesh_healer import MeshHealerConfig
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            MeshHealerConfig(strategy="invalid")
+
+    def test_neural_strategy_requires_endpoint(self):
+        from backend.graph.configs.mesh_healer import MeshHealerConfig
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            MeshHealerConfig(
+                strategy="neural",
+                neural_enabled=True,
+                neural_endpoint=None,
+            )
+
+    def test_auto_strategy_with_neural_enabled_requires_endpoint(self):
+        from backend.graph.configs.mesh_healer import MeshHealerConfig
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            MeshHealerConfig(
+                strategy="auto",
+                neural_enabled=True,
+                neural_endpoint=None,
+            )
