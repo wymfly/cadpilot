@@ -66,41 +66,6 @@ def _score_geometry(
     return compiled, volume_ok, bbox_ok, topology_ok
 
 
-# ======================================================================
-# HITL Pipeline Split (D8): analyze_vision_spec + generate_step_from_spec
-# ======================================================================
-
-
-def analyze_vision_spec(
-    image_filepath: str,
-) -> tuple[DrawingSpec | None, str | None]:
-    """Stage 1 only: VL drawing analysis → DrawingSpec for HITL review.
-
-    First half of the HITL pipeline split (D8).
-    Returns (spec, reasoning) where spec is None if analysis failed.
-    """
-    image_data = ImageData.load_from_file(image_filepath)
-
-    logger.info("Stage 1: Analyzing drawing with VL model...")
-    analyzer = DrawingAnalyzerChain()
-    analyzer_result = analyzer.invoke(image_data)
-    spec = analyzer_result["result"]
-    reasoning = analyzer_result.get("reasoning")
-
-    if spec is None:
-        logger.error("Drawing analysis failed")
-        return None, None
-
-    # OCR fusion: supplement VL dimensions with OCR-extracted numeric values
-    import base64
-
-    raw_bytes = base64.b64decode(image_data.data)
-    spec = fuse_ocr_with_spec(spec, raw_bytes)
-
-    logger.info(f"Drawing spec: {spec.part_type}, dims={spec.overall_dimensions}")
-    return spec, reasoning
-
-
 def generate_step_from_spec(
     image_filepath: str,
     drawing_spec: DrawingSpec,
@@ -486,7 +451,7 @@ def generate_step_from_spec(
 
 
 # ======================================================================
-# Pipeline entry point (calls analyze_vision_spec + generate_step_from_spec)
+# Pipeline entry point (legacy non-HITL wrapper)
 # ======================================================================
 
 
@@ -498,10 +463,11 @@ def analyze_and_generate_step(
     on_progress: Callable | None = None,
     config: PipelineConfig | None = None,
 ):
-    """Pipeline: analyze + generate.
+    """End-to-end pipeline: analyze → generate → refine.
 
-    Combines analyze_vision_spec() and generate_step_from_spec() for
-    non-HITL usage. For HITL flow, call them separately.
+    .. deprecated::
+        TODO: migrate to LangGraph graph invocation (invoke CadJobStateGraph).
+        Kept for CLI/benchmark backwards compatibility. Uses legacy Chain classes.
 
     Args:
         image_filepath: 输入图片路径
@@ -511,11 +477,25 @@ def analyze_and_generate_step(
         on_progress: 进度回调 on_progress(stage: str, data: dict)
         config: 管道配置，None 则使用 balanced 预设
     """
-    spec, reasoning = analyze_vision_spec(image_filepath)
+    import base64
+
+    image_data = ImageData.load_from_file(image_filepath)
+
+    logger.info("Stage 1: Analyzing drawing with VL model...")
+    analyzer = DrawingAnalyzerChain()
+    analyzer_result = analyzer.invoke(image_data)
+    spec = analyzer_result["result"]
+    reasoning = analyzer_result.get("reasoning")
 
     if spec is None:
         logger.error("Drawing analysis failed")
         return None
+
+    # OCR fusion: supplement VL dimensions with OCR-extracted numeric values
+    raw_bytes = base64.b64decode(image_data.data)
+    spec = fuse_ocr_with_spec(spec, raw_bytes)
+
+    logger.info(f"Drawing spec: {spec.part_type}, dims={spec.overall_dimensions}")
 
     if on_spec_ready:
         try:
