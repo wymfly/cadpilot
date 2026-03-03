@@ -180,3 +180,137 @@ class TestAlgorithmHealStrategy:
         strategy = AlgorithmHealStrategy()
         await strategy.execute(ctx)
         assert ctx.dispatch_progress.await_count >= 2  # 至少: diagnose + repair
+
+
+class TestEscalationChain:
+    """升级链行为：低级失败→升级到高级；工具不可用→跳过。"""
+
+    def _make_mock_ctx(self, mesh_path: str) -> MagicMock:
+        ctx = MagicMock()
+        ctx.get_asset.return_value = MagicMock(path=mesh_path)
+        ctx.put_asset = MagicMock()
+        ctx.put_data = MagicMock()
+        ctx.dispatch_progress = AsyncMock()
+        ctx.job_id = "test-job"
+        ctx.node_name = "mesh_healer"
+        ctx.config = MagicMock()
+        ctx.config.voxel_resolution = 128
+        ctx.config.retopo_threshold = 100000
+        return ctx
+
+    @pytest.mark.asyncio
+    async def test_level2_used_when_level1_insufficient(self):
+        """Level 1 修复后仍非水密 → 自动升级到 Level 2。"""
+        from backend.graph.strategies.heal.algorithm import AlgorithmHealStrategy
+
+        # 创建一个 normals 翻转的 mesh — diagnose 为 mild，chain 从 level1 开始
+        box = trimesh.primitives.Box().to_mesh()
+        flipped = trimesh.Trimesh(vertices=box.vertices, faces=np.fliplr(box.faces))
+
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(suffix=".glb", delete=False)
+        flipped.export(tmp.name)
+        tmp.close()
+
+        ctx = self._make_mock_ctx(tmp.name)
+        strategy = AlgorithmHealStrategy()
+
+        # Mock level1 to return non-watertight mesh (insufficient repair)
+        bad_mesh = trimesh.Trimesh(
+            vertices=box.vertices, faces=box.faces[:-1]
+        )
+        fixed = trimesh.primitives.Box().to_mesh()
+
+        with patch.object(strategy, "_level1_trimesh", return_value=bad_mesh):
+            with patch.object(strategy, "_level2_pymeshfix", return_value=fixed) as mock_l2:
+                await strategy.execute(ctx)
+                mock_l2.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_skip_level2_when_pymeshfix_unavailable(self):
+        """PyMeshFix import 失败 → 跳过 Level 2，尝试 Level 3。"""
+        from backend.graph.strategies.heal.algorithm import AlgorithmHealStrategy
+        from backend.graph.strategies.heal.diagnose import MeshDiagnosis
+
+        box = trimesh.primitives.Box().to_mesh()
+        mesh = trimesh.Trimesh(vertices=box.vertices, faces=box.faces[:-1])
+        diag = MeshDiagnosis(level="moderate", issues=["holes"])
+
+        strategy = AlgorithmHealStrategy()
+        good_mesh = trimesh.primitives.Box().to_mesh()
+
+        with patch.object(strategy, "_level2_pymeshfix",
+                          side_effect=ImportError("pymeshfix not found")):
+            with patch.object(strategy, "_level3_meshlib",
+                              return_value=good_mesh):
+                result = strategy._escalate(mesh, diag)
+                assert result.is_watertight
+
+    def test_all_levels_exhausted_raises(self):
+        """所有修复级别均失败 → 抛 RuntimeError。"""
+        from backend.graph.strategies.heal.algorithm import AlgorithmHealStrategy
+        from backend.graph.strategies.heal.diagnose import MeshDiagnosis
+
+        box = trimesh.primitives.Box().to_mesh()
+        mesh = trimesh.Trimesh(vertices=box.vertices, faces=box.faces[:-1])
+        diag = MeshDiagnosis(level="moderate", issues=["holes"])
+
+        strategy = AlgorithmHealStrategy()
+
+        with patch.object(strategy, "_level2_pymeshfix",
+                          side_effect=RuntimeError("fail")):
+            with patch.object(strategy, "_level3_meshlib",
+                              side_effect=RuntimeError("fail")):
+                with pytest.raises(RuntimeError, match="All algorithm repair levels exhausted"):
+                    strategy._escalate(mesh, diag)
+
+    def test_escalation_chain_order_severe_starts_at_level3(self):
+        """severe 直接从 Level 3 开始，不调用 Level 1/2。"""
+        from backend.graph.strategies.heal.algorithm import AlgorithmHealStrategy
+        from backend.graph.strategies.heal.diagnose import MeshDiagnosis
+
+        strategy = AlgorithmHealStrategy()
+        good_mesh = trimesh.primitives.Box().to_mesh()
+
+        l1_called = False
+        l2_called = False
+
+        def track_l1(mesh):
+            nonlocal l1_called
+            l1_called = True
+
+        def track_l2(mesh):
+            nonlocal l2_called
+            l2_called = True
+
+        with patch.object(strategy, "_level1_trimesh", side_effect=track_l1):
+            with patch.object(strategy, "_level2_pymeshfix", side_effect=track_l2):
+                with patch.object(strategy, "_level3_meshlib", return_value=good_mesh):
+                    strategy._escalate(
+                        good_mesh,
+                        MeshDiagnosis(level="severe", issues=["self-intersection"]),
+                    )
+        assert not l1_called, "Level 1 should NOT be called for severe"
+        assert not l2_called, "Level 2 should NOT be called for severe"
+
+    def test_escalation_chain_order_mild_starts_at_level1(self):
+        """mild 从 Level 1 开始。"""
+        from backend.graph.strategies.heal.algorithm import AlgorithmHealStrategy
+        from backend.graph.strategies.heal.diagnose import MeshDiagnosis
+
+        strategy = AlgorithmHealStrategy()
+        good_mesh = trimesh.primitives.Box().to_mesh()
+
+        l2_called = False
+
+        def track_l2(mesh):
+            nonlocal l2_called
+            l2_called = True
+
+        with patch.object(strategy, "_level1_trimesh", return_value=good_mesh):
+            with patch.object(strategy, "_level2_pymeshfix", side_effect=track_l2):
+                strategy._escalate(
+                    good_mesh,
+                    MeshDiagnosis(level="mild", issues=["inconsistent orientation"]),
+                )
+        assert not l2_called, "Level 2 should NOT be called when Level 1 succeeds"
