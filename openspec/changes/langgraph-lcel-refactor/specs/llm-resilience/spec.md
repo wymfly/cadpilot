@@ -32,7 +32,7 @@ The system SHALL wrap every LLM call in a LCEL chain with `.with_retry(stop_afte
 #### Scenario: Fallback also fails
 - **WHEN** both primary and fallback LLM chains fail
 - **THEN** the LCEL chain raises an exception
-- **AND** the enclosing `asyncio.wait_for` block catches it as a node error
+- **AND** the enclosing `try...except Exception` block in the node function catches it (note: `asyncio.wait_for` only catches `TimeoutError`; non-timeout LCEL exceptions are caught by the generic exception handler)
 - **AND** the node returns `{"status": "failed", "error": str(exc), "failure_reason": "generation_error"}`
 
 ### Requirement: asyncio.wait_for enforces absolute timeout per node (tiered)
