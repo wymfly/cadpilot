@@ -57,6 +57,6 @@ def convert_mesh(
     # Different format → trimesh load/export
     import trimesh
 
-    mesh = trimesh.load(str(input_path))
+    mesh = trimesh.load(str(input_path), force="mesh")
     mesh.export(str(output_path))
     return output_path

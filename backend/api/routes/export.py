@@ -78,7 +78,9 @@ async def export_asset(
 
     # Handle file:// URI scheme
     if entry.path.startswith("file://"):
-        asset_path = Path(entry.path[7:])
+        from urllib.parse import unquote
+
+        asset_path = Path(unquote(entry.path[7:]))
 
     if not asset_path.exists():
         raise HTTPException(
@@ -91,15 +93,17 @@ async def export_asset(
         return FileResponse(path=str(asset_path), filename=asset_path.name)
 
     # Format conversion
+    tmp_dir = tempfile.mkdtemp()
     try:
-        tmp_dir = tempfile.mkdtemp()
         converted = await asyncio.to_thread(
             convert_mesh, asset_path, format, Path(tmp_dir),
         )
     except ValueError as exc:
-        # Clean up tmp_dir on error
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
 
     # Schedule cleanup after response is sent
     background_tasks.add_task(shutil.rmtree, tmp_dir)

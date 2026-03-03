@@ -10,6 +10,7 @@ Execution order:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import tempfile
 from pathlib import Path
@@ -66,8 +67,47 @@ async def mesh_scale_node(ctx: NodeContext) -> None:
         )
         return
 
-    # Load mesh from file
-    mesh = _load_mesh(trimesh, watertight.path)
+    # Load mesh and perform transformations in thread (CPU-intensive)
+    mesh, scale_factor, final_extents, output_path = await asyncio.to_thread(
+        _scale_mesh_sync, trimesh, watertight.path, target_bbox, ctx.job_id,
+    )
+    metadata = {
+        "scaled": True,
+        "scale_factor": round(float(scale_factor), 6),
+        "target_bounding_box": {
+            "x": target_bbox[0],
+            "y": target_bbox[1],
+            "z": target_bbox[2],
+        },
+        "bounding_box": {
+            "x": round(float(final_extents[0]), 2),
+            "y": round(float(final_extents[1]), 2),
+            "z": round(float(final_extents[2]), 2),
+        },
+    }
+
+    ctx.put_data("mesh_scale_status", "scaled")
+    ctx.put_asset("scaled_mesh", output_path, "mesh", metadata=metadata)
+    logger.info(
+        "mesh_scale: done — factor=%.4f, extents=(%.1f, %.1f, %.1f)",
+        scale_factor,
+        *final_extents,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _scale_mesh_sync(
+    trimesh_mod: object,
+    mesh_path: str,
+    target_bbox: tuple[float, float, float],
+    job_id: str,
+) -> tuple[object, float, object, str]:
+    """Synchronous mesh scaling — runs in thread to avoid blocking event loop."""
+    mesh = _load_mesh(trimesh_mod, mesh_path)
 
     # Step 1: Uniform scale
     scale_factor = _compute_uniform_scale(mesh, target_bbox)
@@ -96,38 +136,9 @@ async def mesh_scale_node(ctx: NodeContext) -> None:
             -centroid[1],
         )
 
-    # Export scaled mesh to file
-    output_path = _export_mesh(mesh, ctx.job_id)
-
-    # Compute final bounding box for metadata
+    output_path = _export_mesh(mesh, job_id)
     final_extents = mesh.bounding_box.extents
-    metadata = {
-        "scaled": True,
-        "scale_factor": round(float(scale_factor), 6),
-        "target_bounding_box": {
-            "x": target_bbox[0],
-            "y": target_bbox[1],
-            "z": target_bbox[2],
-        },
-        "bounding_box": {
-            "x": round(float(final_extents[0]), 2),
-            "y": round(float(final_extents[1]), 2),
-            "z": round(float(final_extents[2]), 2),
-        },
-    }
-
-    ctx.put_data("mesh_scale_status", "scaled")
-    ctx.put_asset("scaled_mesh", output_path, "mesh", metadata=metadata)
-    logger.info(
-        "mesh_scale: done — factor=%.4f, extents=(%.1f, %.1f, %.1f)",
-        scale_factor,
-        *final_extents,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
+    return mesh, scale_factor, final_extents, output_path
 
 
 def _get_target_bbox(ctx: NodeContext) -> tuple[float, float, float] | None:

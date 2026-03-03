@@ -43,10 +43,25 @@ class Tripo3DGenerateStrategy(NodeStrategy):
         spec = _build_organic_spec(prompt_en)
         image_bytes = reference_image if isinstance(reference_image, bytes) else None
 
+        # Bridge provider's sync on_progress callback to async dispatch_progress.
+        # provider.generate() may poll status in a sync loop; the callback runs
+        # on the provider's thread so we use run_coroutine_threadsafe.
+        import asyncio as _aio
+
+        _loop = _aio.get_running_loop()
+
+        def _on_progress(msg: str, pct: float) -> None:
+            _aio.run_coroutine_threadsafe(
+                ctx.dispatch_progress(
+                    max(1, int(pct * 2)), 3, f"Tripo3D: {msg}",
+                ),
+                _loop,
+            )
+
         result_path: Path = await provider.generate(
             spec=spec,
             reference_image=image_bytes,
-            on_progress=lambda msg, pct: None,
+            on_progress=_on_progress,
         )
 
         await ctx.dispatch_progress(2, 3, "Tripo3D 生成完成")

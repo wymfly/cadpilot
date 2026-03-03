@@ -106,7 +106,7 @@ class TestConvertMesh:
             result = convert_mesh(src, "stl", out_dir)
 
         assert result == out_dir / "mesh.stl"
-        mock_trimesh.load.assert_called_once_with(str(src))
+        mock_trimesh.load.assert_called_once_with(str(src), force="mesh")
         mock_mesh.export.assert_called_once_with(str(out_dir / "mesh.stl"))
 
     def test_convert_stl_to_glb(self, tmp_path: Path) -> None:

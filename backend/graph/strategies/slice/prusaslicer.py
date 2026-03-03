@@ -104,6 +104,7 @@ class PrusaSlicerStrategy(NodeStrategy):
             )
         except asyncio.TimeoutError:
             proc.kill()
+            await proc.wait()  # Reap child to prevent zombie
             raise RuntimeError(
                 f"PrusaSlicer timed out after {config.timeout}s"
             )

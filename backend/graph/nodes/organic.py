@@ -154,9 +154,15 @@ async def generate_organic_mesh_node(state: CadJobState) -> dict[str, Any]:
     elif provider_name == "hunyuan3d":
         provider = HunyuanProvider(api_key=_settings.hunyuan3d_api_key, output_dir=_output_dir)
     else:
-        # Default to Tripo3D (AutoProvider has been removed;
-        # new pipeline uses strategy-based fallback in generate_raw_mesh)
-        provider = TripoProvider(api_key=_settings.tripo3d_api_key, output_dir=_output_dir)
+        # "auto" or unrecognized → Tripo first, Hunyuan fallback
+        # (replaces removed AutoProvider; new pipeline uses strategy-based
+        # fallback in generate_raw_mesh)
+        if _settings.tripo3d_api_key:
+            provider = TripoProvider(api_key=_settings.tripo3d_api_key, output_dir=_output_dir)
+        elif _settings.hunyuan3d_api_key:
+            provider = HunyuanProvider(api_key=_settings.hunyuan3d_api_key, output_dir=_output_dir)
+        else:
+            provider = TripoProvider(api_key=_settings.tripo3d_api_key, output_dir=_output_dir)
 
     # Bridge sync on_progress callback to dispatch keepalive SSE events.
     # provider.generate() may run sync loops internally; use sync dispatch.

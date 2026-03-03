@@ -167,29 +167,27 @@ class Manifold3DStrategy(NodeStrategy):
 
     @staticmethod
     def _force_voxelize(mesh: Any, resolution: int) -> Any:
-        """Voxelize mesh using manifold3d for manifold repair.
+        """Voxelize mesh for manifold repair using resolution-based pitch.
 
-        Uses manifold3d's voxelization to reconstruct a watertight mesh
-        from a potentially non-manifold input.
+        Uses trimesh voxelization at the given resolution to reconstruct a
+        watertight mesh from a potentially non-manifold input. Higher
+        resolution preserves more detail but is slower.
         """
-        import manifold3d
-
         try:
-            m3d_mesh = manifold3d.Mesh(
-                vert_properties=np.array(mesh.vertices, dtype=np.float32),
-                tri_verts=np.array(mesh.faces, dtype=np.uint32),
-            )
-            manifold_obj = manifold3d.Manifold.from_mesh(m3d_mesh)
+            # Compute voxel pitch from resolution and mesh extent
+            max_extent = float(max(mesh.bounding_box.extents))
+            if max_extent < 1e-10:
+                return mesh  # degenerate mesh
+            pitch = max_extent / resolution
 
-            result_data = manifold_obj.to_mesh()
-            verts = np.asarray(result_data.vert_properties)
-            faces = np.asarray(result_data.tri_verts)
+            voxelized = mesh.voxelized(pitch=pitch)
+            repaired = voxelized.marching_cubes
 
-            if len(verts) == 0 or verts.ndim < 2:
+            if len(repaired.vertices) == 0:
                 return mesh  # return original on failure
 
-            return trimesh.Trimesh(vertices=verts[:, :3], faces=faces)
-        except Exception as exc:
+            return repaired
+        except (ValueError, AttributeError, RuntimeError) as exc:
             logger.warning("Voxelization failed at resolution %d: %s", resolution, exc)
             return mesh  # return original on failure
 
