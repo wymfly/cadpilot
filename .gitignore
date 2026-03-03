@@ -41,3 +41,4 @@ temp.*
 output.*
 scripts/output.*
 scripts/temp.*
+.worktrees/
