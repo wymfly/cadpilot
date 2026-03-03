@@ -158,7 +158,15 @@ async def _orchestrate_drawing_generation(state: dict, config: dict) -> dict:
 
         if best_tmp is not None:
             # Move winning temp file to real step_path (avoid redundant re-execution)
-            shutil.move(best_tmp, step_path)
+            try:
+                shutil.move(best_tmp, step_path)
+            except OSError:
+                # Move failed — clean up orphaned temp file
+                try:
+                    os.unlink(best_tmp)
+                except OSError:
+                    pass
+                raise
             code = Template(best_raw).safe_substitute(output_filename=step_path)
             initial_score = best_score
         else:
