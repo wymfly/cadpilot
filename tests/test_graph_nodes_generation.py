@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -104,10 +104,16 @@ class TestGenerateStepDrawingNode:
             image_path="/tmp/test.jpg",
             confirmed_spec={"part_type": "rotational"},
         )
-        with patch("backend.graph.nodes.generation._run_generate_from_spec") as mock_gen:
-            result = await generate_step_drawing_node(state)
+        mock_orch = AsyncMock(return_value={"step_path": "/tmp/model.step", "generated_code": "x=1"})
+        with (
+            patch("backend.graph.nodes.generation._orchestrate_drawing_generation", mock_orch),
+            patch("backend.graph.nodes.generation._safe_dispatch", new_callable=AsyncMock),
+            patch("pathlib.Path.mkdir"),
+            patch("pathlib.Path.write_text"),
+        ):
+            result = await generate_step_drawing_node(state, config={})
 
-        mock_gen.assert_called_once()
+        mock_orch.assert_awaited_once()
         assert result["status"] == "generating"
         assert "step_path" in result
 
@@ -134,11 +140,13 @@ class TestGenerateStepDrawingNode:
             image_path="/tmp/test.jpg",
             confirmed_spec={"part_type": "rotational"},
         )
-        with patch(
-            "backend.graph.nodes.generation._run_generate_from_spec",
-            side_effect=RuntimeError("CadQuery execution failed"),
+        mock_orch = AsyncMock(side_effect=RuntimeError("CadQuery execution failed"))
+        with (
+            patch("backend.graph.nodes.generation._orchestrate_drawing_generation", mock_orch),
+            patch("backend.graph.nodes.generation._safe_dispatch", new_callable=AsyncMock),
+            patch("pathlib.Path.mkdir"),
         ):
-            result = await generate_step_drawing_node(state)
+            result = await generate_step_drawing_node(state, config={})
 
         assert result["status"] == "failed"
         assert result["failure_reason"] == "generation_error"

@@ -179,15 +179,14 @@ class TestDrawingNodeCodePersistence:
 
         with (
             patch(
-                "backend.graph.nodes.generation._run_generate_from_spec",
-                return_value=code,
+                "backend.graph.nodes.generation._orchestrate_drawing_generation",
+                return_value={"step_path": "/tmp/model.step", "generated_code": code},
             ),
             patch("backend.graph.nodes.generation._safe_dispatch", new_callable=AsyncMock),
             patch("pathlib.Path.mkdir"),
             patch("pathlib.Path.write_text"),
-            patch("pathlib.Path.exists", return_value=False),
         ):
-            result = await generate_step_drawing_node(state)
+            result = await generate_step_drawing_node(state, config={})
 
         assert result.get("generated_code") == code
 
@@ -204,14 +203,13 @@ class TestDrawingNodeCodePersistence:
 
         with (
             patch(
-                "backend.graph.nodes.generation._run_generate_from_spec",
-                return_value=None,
+                "backend.graph.nodes.generation._orchestrate_drawing_generation",
+                return_value={"step_path": "/tmp/model.step", "generated_code": None},
             ),
             patch("backend.graph.nodes.generation._safe_dispatch", new_callable=AsyncMock),
             patch("pathlib.Path.mkdir"),
-            patch("pathlib.Path.exists", return_value=False),
         ):
-            result = await generate_step_drawing_node(state)
+            result = await generate_step_drawing_node(state, config={})
 
         assert result.get("generated_code") is None
 
@@ -336,6 +334,35 @@ class TestForkValidation:
 
 
 # ---------------------------------------------------------------------------
+# parent_job_id existence validation
+# ---------------------------------------------------------------------------
+
+class TestParentJobIdValidation:
+    @pytest.mark.asyncio
+    async def test_nonexistent_parent_raises_error(self) -> None:
+        """create_job_endpoint should raise 404 for nonexistent parent_job_id."""
+        from unittest.mock import MagicMock
+
+        from backend.api.v1.errors import APIError
+        from backend.api.v1.jobs import CreateJobRequest, create_job_endpoint
+
+        body = CreateJobRequest(
+            input_type="text", text="hello", parent_job_id="nonexistent-parent",
+        )
+        mock_request = MagicMock()
+
+        # Mock DB session returning None for the parent job
+        mock_session = AsyncMock()
+        mock_session.get = AsyncMock(return_value=None)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("backend.db.database.async_session", return_value=mock_session):
+            with pytest.raises(APIError, match="Parent job not found"):
+                await create_job_endpoint(body, mock_request)
+
+
+# ---------------------------------------------------------------------------
 # API response model has new fields
 # ---------------------------------------------------------------------------
 
@@ -359,6 +386,71 @@ class TestJobDetailResponseFields:
             input_text="x", created_at="2026-01-01",
         )
         assert resp.child_job_ids == []
+
+
+# ---------------------------------------------------------------------------
+# _job_to_detail include_code parameter
+# ---------------------------------------------------------------------------
+
+class TestJobToDetailIncludeCode:
+    def test_include_code_true_by_default(self) -> None:
+        from backend.api.v1.jobs import _job_to_detail
+        from backend.models.job import Job, JobStatus
+
+        job = Job(
+            job_id="j1", status=JobStatus.COMPLETED, input_type="text",
+            input_text="x", created_at="2026-01-01",
+            generated_code="import cadquery",
+        )
+        detail = _job_to_detail(job)
+        assert detail.generated_code == "import cadquery"
+
+    def test_include_code_false_excludes(self) -> None:
+        from backend.api.v1.jobs import _job_to_detail
+        from backend.models.job import Job, JobStatus
+
+        job = Job(
+            job_id="j2", status=JobStatus.COMPLETED, input_type="text",
+            input_text="x", created_at="2026-01-01",
+            generated_code="import cadquery",
+        )
+        detail = _job_to_detail(job, include_code=False)
+        assert detail.generated_code is None
+
+
+# ---------------------------------------------------------------------------
+# GET /jobs/{job_id}/code endpoint
+# ---------------------------------------------------------------------------
+
+class TestGetJobCodeEndpoint:
+    def test_code_endpoint_exists(self) -> None:
+        from backend.api.v1.jobs import get_job_code
+        assert callable(get_job_code)
+
+    @pytest.mark.asyncio
+    async def test_code_endpoint_returns_code(self) -> None:
+        from backend.api.v1.jobs import get_job_code
+        from backend.models.job import Job, JobStatus
+
+        mock_job = Job(
+            job_id="j-code-1", status=JobStatus.COMPLETED, input_type="text",
+            input_text="x", created_at="2026-01-01",
+            generated_code="import cadquery as cq",
+        )
+
+        with patch("backend.api.v1.jobs.get_job", new_callable=AsyncMock, return_value=mock_job):
+            result = await get_job_code("j-code-1")
+        assert result["job_id"] == "j-code-1"
+        assert result["generated_code"] == "import cadquery as cq"
+
+    @pytest.mark.asyncio
+    async def test_code_endpoint_not_found(self) -> None:
+        from backend.api.v1.errors import APIError
+        from backend.api.v1.jobs import get_job_code
+
+        with patch("backend.api.v1.jobs.get_job", new_callable=AsyncMock, return_value=None):
+            with pytest.raises(APIError):
+                await get_job_code("nonexistent")
 
 
 # ---------------------------------------------------------------------------

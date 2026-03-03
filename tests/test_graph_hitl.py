@@ -257,7 +257,7 @@ class TestHitlDrawingPath:
                 return_value=mock_chain,
             ),
             patch("backend.graph.nodes.analysis.ImageData") as mock_image_cls,
-            patch("backend.graph.nodes.generation._run_generate_from_spec"),
+            patch("backend.graph.nodes.generation._orchestrate_drawing_generation", return_value={"step_path": "/tmp/model.step", "generated_code": "x=1"}),
             patch(
                 "backend.graph.nodes.postprocess._convert_step_to_glb",
                 return_value="/tmp/model.glb",
