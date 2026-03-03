@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
@@ -124,6 +125,77 @@ class TestScipyOrientStrategy:
         # 3x3 rotation submatrix should have determinant ≈ 1
         det = np.linalg.det(rotation[:3, :3])
         assert abs(det - 1.0) < 1e-6
+
+
+class TestOrientationOptimizerNode:
+    """Node-level tests for orientation_optimizer."""
+
+    @pytest.fixture
+    def mock_ctx(self, tmp_path):
+        """Create a mock NodeContext with a box mesh."""
+        mesh = _make_box_mesh(10, 10, 100)  # Tall box
+        mesh_path = str(tmp_path / "test.glb")
+        mesh.export(mesh_path)
+
+        ctx = MagicMock()
+        ctx.job_id = "test-orient-001"
+        ctx.config = MagicMock()
+        ctx.config.strategy = "basic"
+        ctx.config.weight_support_area = 0.4
+        ctx.config.weight_height = 0.3
+        ctx.config.weight_stability = 0.3
+
+        asset = MagicMock()
+        asset.path = mesh_path
+        ctx.get_asset.return_value = asset
+        ctx.has_asset.return_value = True
+        ctx.dispatch_progress = AsyncMock()
+
+        return ctx
+
+    @pytest.mark.asyncio
+    async def test_node_registers_strategy(self):
+        """Node should be registered with basic and scipy strategies."""
+        from backend.graph.nodes.orientation_optimizer import \
+            orientation_optimizer_node
+
+        desc = orientation_optimizer_node._node_descriptor
+        assert "basic" in desc.strategies
+        assert "scipy" in desc.strategies
+        assert desc.fallback_chain == ["scipy", "basic"]
+
+    @pytest.mark.asyncio
+    async def test_node_no_input_skips(self):
+        """No final_mesh → skip gracefully."""
+        from backend.graph.nodes.orientation_optimizer import \
+            orientation_optimizer_node
+
+        ctx = MagicMock()
+        ctx.has_asset.return_value = False
+        ctx.config = MagicMock()
+        ctx.config.strategy = "basic"
+
+        await orientation_optimizer_node(ctx)
+        ctx.put_data.assert_called_with(
+            "orientation_optimizer_status", "skipped_no_input"
+        )
+
+    @pytest.mark.asyncio
+    async def test_basic_strategy_produces_oriented_mesh(self, mock_ctx):
+        """Basic strategy should register oriented_mesh asset."""
+        from backend.graph.configs.orientation_optimizer import \
+            OrientationOptimizerConfig
+        from backend.graph.strategies.orient.basic import BasicOrientStrategy
+
+        cfg = OrientationOptimizerConfig()
+        strategy = BasicOrientStrategy(config=cfg)
+
+        await strategy.execute(mock_ctx)
+
+        mock_ctx.put_asset.assert_called_once()
+        call_args = mock_ctx.put_asset.call_args
+        assert call_args[0][0] == "oriented_mesh"
+        assert call_args[0][2] == "mesh"
 
 
 def _make_box_mesh(x: float, y: float, z: float):
