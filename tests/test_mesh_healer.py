@@ -452,3 +452,35 @@ class TestMeshHealerConfig:
                 neural_enabled=True,
                 neural_endpoint=None,
             )
+
+
+class TestMeshHealerNode:
+    def test_node_registered_with_strategies(self):
+        """mesh_healer 注册了 algorithm + neural 两种策略。"""
+        from backend.graph.registry import registry
+        import backend.graph.discovery as disc
+
+        disc._discovered = False
+        disc.discover_nodes()
+
+        desc = registry.get("mesh_healer")
+        assert desc is not None
+        assert desc.name == "mesh_healer"
+        assert "algorithm" in desc.strategies
+        assert "neural" in desc.strategies
+        assert desc.default_strategy == "algorithm"
+        assert desc.fallback_chain == ["algorithm", "neural"]
+        assert "raw_mesh" in desc.requires
+        assert "watertight_mesh" in desc.produces
+        assert desc.input_types == ["organic"]
+
+    def test_config_model_is_mesh_healer_config(self):
+        from backend.graph.registry import registry
+        from backend.graph.configs.mesh_healer import MeshHealerConfig
+        import backend.graph.discovery as disc
+
+        disc._discovered = False
+        disc.discover_nodes()
+
+        desc = registry.get("mesh_healer")
+        assert desc.config_model is MeshHealerConfig
