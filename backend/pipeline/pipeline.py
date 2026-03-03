@@ -81,14 +81,14 @@ def analyze_vision_spec(
     """
     image_data = ImageData.load_from_file(image_filepath)
 
-    logger.info("[V2] Stage 1: Analyzing drawing with VL model...")
+    logger.info("Stage 1: Analyzing drawing with VL model...")
     analyzer = DrawingAnalyzerChain()
     analyzer_result = analyzer.invoke(image_data)
     spec = analyzer_result["result"]
     reasoning = analyzer_result.get("reasoning")
 
     if spec is None:
-        logger.error("[V2] Drawing analysis failed")
+        logger.error("Drawing analysis failed")
         return None, None
 
     # OCR fusion: supplement VL dimensions with OCR-extracted numeric values
@@ -97,7 +97,7 @@ def analyze_vision_spec(
     raw_bytes = base64.b64decode(image_data.data)
     spec = fuse_ocr_with_spec(spec, raw_bytes)
 
-    logger.info(f"[V2] Drawing spec: {spec.part_type}, dims={spec.overall_dimensions}")
+    logger.info(f"Drawing spec: {spec.part_type}, dims={spec.overall_dimensions}")
     return spec, reasoning
 
 
@@ -129,16 +129,16 @@ def generate_step_from_spec(
     # ================================================================
     # 阶段 1.5: 选择建模策略
     # ================================================================
-    logger.info("[V2] Stage 1.5: Selecting modeling strategy...")
+    logger.info("Stage 1.5: Selecting modeling strategy...")
     strategist = ModelingStrategist()
     context = strategist.select(spec)
-    logger.info(f"[V2] Strategy selected for {spec.part_type}, {len(context.examples)} examples")
+    logger.info(f"Strategy selected for {spec.part_type}, {len(context.examples)} examples")
 
     # ---- API 白名单注入（Stage 2 增强） ----
     if config.api_whitelist:
         whitelist_section = get_whitelist_prompt_section()
         context.strategy = context.strategy + "\n\n" + whitelist_section
-        logger.info("[V2] API whitelist injected into modeling strategy")
+        logger.info("API whitelist injected into modeling strategy")
 
     # ================================================================
     # 阶段 2: Coder 生成代码（支持 Best-of-N）
@@ -148,22 +148,22 @@ def generate_step_from_spec(
     if config.best_of_n > 1:
         # ---- Best-of-N 多路生成 ----
         logger.info(
-            f"[V2] Stage 2: Best-of-N generation (N={config.best_of_n})..."
+            f"Stage 2: Best-of-N generation (N={config.best_of_n})..."
         )
         candidates: list[dict] = []
 
         for candidate_idx in range(config.best_of_n):
             logger.info(
-                f"[V2] Candidate {candidate_idx + 1}/{config.best_of_n}: generating..."
+                f"Candidate {candidate_idx + 1}/{config.best_of_n}: generating..."
             )
             try:
                 gen_result = generator.invoke(context)["result"]
             except Exception as e:
-                logger.error(f"[V2] Candidate {candidate_idx + 1}: generation failed — {e}")
+                logger.error(f"Candidate {candidate_idx + 1}: generation failed — {e}")
                 continue
 
             if gen_result is None:
-                logger.warning(f"[V2] Candidate {candidate_idx + 1}: no code returned")
+                logger.warning(f"Candidate {candidate_idx + 1}: no code returned")
                 continue
 
             candidate_code = Template(gen_result).safe_substitute(
@@ -175,7 +175,7 @@ def generate_step_from_spec(
                 ast_result = ast_pre_check(candidate_code)
                 if not ast_result.passed:
                     logger.warning(
-                        f"[V2] Candidate {candidate_idx + 1}: AST pre-check failed — "
+                        f"Candidate {candidate_idx + 1}: AST pre-check failed — "
                         f"{ast_result.errors}"
                     )
                     candidates.append({
@@ -199,7 +199,7 @@ def generate_step_from_spec(
                 logger.debug(exec_output)
             except Exception as e:
                 logger.error(
-                    f"[V2] Candidate {candidate_idx + 1}: execution failed — {e}"
+                    f"Candidate {candidate_idx + 1}: execution failed — {e}"
                 )
                 candidates.append({
                     "code": candidate_code,
@@ -225,7 +225,7 @@ def generate_step_from_spec(
                 topology_ok=topology_ok,
             )
             logger.info(
-                f"[V2] Candidate {candidate_idx + 1}: score={cand_score} "
+                f"Candidate {candidate_idx + 1}: score={cand_score} "
                 f"(compiled={compiled}, vol={volume_ok}, bbox={bbox_ok}, topo={topology_ok})"
             )
             candidates.append({
@@ -243,12 +243,12 @@ def generate_step_from_spec(
         # 选最优
         best = select_best(candidates)
         if best is None or best["score"] == 0:
-            logger.error("[V2] All candidates failed, aborting")
+            logger.error("All candidates failed, aborting")
             return None
 
         code = best["code"]
         logger.info(
-            f"[V2] Best candidate: #{best['index'] + 1} with score={best['score']}"
+            f"Best candidate: #{best['index'] + 1} with score={best['score']}"
         )
 
         # 重新执行最优候选（确保 STEP 文件是该候选的输出）
@@ -256,33 +256,33 @@ def generate_step_from_spec(
             try:
                 execute_python_code(code, model_type="qwen-coder", only_execute=False)
             except Exception as e:
-                logger.error(f"[V2] Re-execution of best candidate failed: {e}")
+                logger.error(f"Re-execution of best candidate failed: {e}")
                 return None
 
     else:
         # ---- 单路生成 ----
-        logger.info("[V2] Stage 2: Generating CadQuery code with Coder model...")
+        logger.info("Stage 2: Generating CadQuery code with Coder model...")
         result = generator.invoke(context)["result"]
 
         if result is None:
-            logger.error("[V2] Code generation failed")
+            logger.error("Code generation failed")
             return None
 
         code = Template(result).safe_substitute(output_filename=output_filepath)
-        logger.info("[V2] Code generation complete.")
+        logger.info("Code generation complete.")
         logger.debug(f"Generated code:\n{code}")
 
         # AST 预检（单路模式）
         if config.ast_pre_check:
             ast_result = ast_pre_check(code)
             if not ast_result.passed:
-                logger.error(f"[V2] AST pre-check failed: {ast_result.errors}")
+                logger.error(f"AST pre-check failed: {ast_result.errors}")
                 # 不阻断——仍尝试执行，因为 AST 检查可能误报
                 for w in ast_result.warnings:
-                    logger.warning(f"[V2] AST warning: {w}")
+                    logger.warning(f"AST warning: {w}")
 
         # 阶段 3: 执行代码
-        logger.info("[V2] Executing generated code...")
+        logger.info("Executing generated code...")
         output = execute_python_code(code, model_type="qwen-coder", only_execute=False)
         logger.debug(output)
 
@@ -292,10 +292,10 @@ def generate_step_from_spec(
     geo = validate_step_geometry(output_filepath)
     if geo.is_valid:
         logger.info(
-            f"[V2] Geometry valid — volume={geo.volume:.1f}, bbox={geo.bbox}"
+            f"Geometry valid — volume={geo.volume:.1f}, bbox={geo.bbox}"
         )
     else:
-        logger.error(f"[V2] Generated geometry invalid: {geo.error}")
+        logger.error(f"Generated geometry invalid: {geo.error}")
 
     if on_progress:
         on_progress("geometry", {
@@ -325,10 +325,10 @@ def generate_step_from_spec(
             topology_ok=topology_ok,
         )
         rollback_tracker.save(code, float(initial_score))
-        logger.info(f"[V2] Rollback tracker initialized with score={initial_score}")
+        logger.info(f"Rollback tracker initialized with score={initial_score}")
 
     for i in range(effective_refinements):
-        logger.info(f"[V2] Stage 4: Smart refinement round {i+1}/{effective_refinements}...")
+        logger.info(f"Stage 4: Smart refinement round {i+1}/{effective_refinements}...")
 
         # ---- 渲染（单视角或多视角） ----
         rendered_image: ImageData | None = None
@@ -348,13 +348,13 @@ def generate_step_from_spec(
                     elif rendered_images:
                         rendered_image = next(iter(rendered_images.values()))
                     else:
-                        logger.error("[V2] No multi-view images rendered")
+                        logger.error("No multi-view images rendered")
                         continue
                     logger.info(
-                        f"[V2] Multi-view rendered: {list(rendered_images.keys())}"
+                        f"Multi-view rendered: {list(rendered_images.keys())}"
                     )
             except Exception as e:
-                logger.error(f"[V2] Multi-view rendering failed: {e}")
+                logger.error(f"Multi-view rendering failed: {e}")
                 # 降级到单视角
                 rendered_images = None
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
@@ -362,7 +362,7 @@ def generate_step_from_spec(
                         render_and_export_image(output_filepath, f.name)
                         rendered_image = ImageData.load_from_file(f.name)
                     except Exception as e2:
-                        logger.error(f"[V2] Single-view fallback also failed: {e2}")
+                        logger.error(f"Single-view fallback also failed: {e2}")
                         continue
         else:
             # 单视角渲染
@@ -370,7 +370,7 @@ def generate_step_from_spec(
                 try:
                     render_and_export_image(output_filepath, f.name)
                 except Exception as e:
-                    logger.error(f"[V2] Rendering failed: {e}")
+                    logger.error(f"Rendering failed: {e}")
                     continue
                 rendered_image = ImageData.load_from_file(f.name)
 
@@ -386,7 +386,7 @@ def generate_step_from_spec(
         )
 
         if refined_code is None:
-            logger.info(f"[V2] Refinement round {i+1}: PASS — no changes needed")
+            logger.info(f"Refinement round {i+1}: PASS — no changes needed")
             if on_progress:
                 on_progress("refinement_round", {
                     "round": i + 1, "total": effective_refinements, "status": "PASS",
@@ -394,14 +394,14 @@ def generate_step_from_spec(
             break
 
         new_code = Template(refined_code).safe_substitute(output_filename=output_filepath)
-        logger.info(f"[V2] Refinement round {i+1}: applying fixes...")
+        logger.info(f"Refinement round {i+1}: applying fixes...")
         logger.debug(f"Refined code:\n{new_code}")
 
         try:
             output = execute_python_code(new_code, model_type="qwen-coder", only_execute=False)
             logger.debug(output)
         except Exception as e:
-            logger.error(f"[V2] Execution failed after refinement: {e}")
+            logger.error(f"Execution failed after refinement: {e}")
             if on_progress:
                 on_progress("refinement_round", {
                     "round": i + 1, "total": effective_refinements, "status": "error",
@@ -424,14 +424,14 @@ def generate_step_from_spec(
             )
             if should_rollback and prev_code is not None:
                 logger.warning(
-                    f"[V2] Refinement round {i+1}: ROLLBACK — score degraded"
+                    f"Refinement round {i+1}: ROLLBACK — score degraded"
                 )
                 code = prev_code
                 # 重新执行回滚代码以恢复 STEP 文件
                 try:
                     execute_python_code(code, model_type="qwen-coder", only_execute=False)
                 except Exception as e:
-                    logger.error(f"[V2] Rollback re-execution failed: {e}")
+                    logger.error(f"Rollback re-execution failed: {e}")
                 if on_progress:
                     on_progress("refinement_round", {
                         "round": i + 1,
@@ -453,22 +453,22 @@ def generate_step_from_spec(
 
     # 截面分析（post-refinement）
     if config.cross_section_check:
-        logger.info("[V2] Stage 5: Running cross-section analysis...")
+        logger.info("Stage 5: Running cross-section analysis...")
         try:
             cs_result = cross_section_analysis(output_filepath, spec)
             if cs_result.error:
-                logger.warning(f"[V2] Cross-section error: {cs_result.error}")
+                logger.warning(f"Cross-section error: {cs_result.error}")
             else:
                 all_ok = all(s.within_tolerance for s in cs_result.sections)
                 logger.info(
-                    f"[V2] Cross-section analysis: {len(cs_result.sections)} layers, "
+                    f"Cross-section analysis: {len(cs_result.sections)} layers, "
                     f"all_ok={all_ok}"
                 )
                 if not all_ok:
                     for s in cs_result.sections:
                         if not s.within_tolerance:
                             logger.warning(
-                                f"[V2] Section at z={s.height:.1f}: "
+                                f"Section at z={s.height:.1f}: "
                                 f"expected d={s.expected_diameter:.1f}, "
                                 f"measured d={s.measured_diameter:.1f} "
                                 f"(deviation={s.deviation_pct:.1f}%)"
@@ -479,14 +479,14 @@ def generate_step_from_spec(
                         "all_ok": all_ok,
                     })
         except Exception as e:
-            logger.warning(f"[V2] Cross-section analysis failed: {e}")
+            logger.warning(f"Cross-section analysis failed: {e}")
 
-    logger.info(f"[V2] Pipeline complete. Output: {output_filepath}")
+    logger.info(f"Pipeline complete. Output: {output_filepath}")
     return code
 
 
 # ======================================================================
-# V2 pipeline entry point (calls analyze_vision_spec + generate_step_from_spec)
+# Pipeline entry point (calls analyze_vision_spec + generate_step_from_spec)
 # ======================================================================
 
 
@@ -498,7 +498,7 @@ def analyze_and_generate_step(
     on_progress: Callable | None = None,
     config: PipelineConfig | None = None,
 ):
-    """V2 pipeline: analyze + generate (backward compatible).
+    """Pipeline: analyze + generate.
 
     Combines analyze_vision_spec() and generate_step_from_spec() for
     non-HITL usage. For HITL flow, call them separately.

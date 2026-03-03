@@ -1,6 +1,6 @@
-"""PipelineBridge: V2 管道回调 → SSE 事件队列的桥接层。
+"""PipelineBridge: 管道回调 → SSE 事件队列的桥接层。
 
-将 generate_step_v2 的 on_spec_ready / on_progress 回调映射为
+将 analyze_and_generate_step 的 on_spec_ready / on_progress 回调映射为
 结构化 SSE 事件，通过 queue.Queue 供 SSE endpoint 消费。
 
 使用 stdlib queue.Queue（线程安全），而非 asyncio.Queue，
@@ -22,12 +22,12 @@ _STAGE_TO_EVENT: dict[str, str] = {
 
 
 class PipelineBridge:
-    """将 V2 管道回调转换为 SSE 事件并放入队列。
+    """将管道回调转换为 SSE 事件并放入队列。
 
     用法::
 
         bridge = PipelineBridge(job_id="abc-123")
-        generate_step_v2(
+        analyze_and_generate_step(
             ...,
             on_spec_ready=bridge.on_spec_ready,
             on_progress=bridge.on_progress,

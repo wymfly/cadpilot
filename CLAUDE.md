@@ -10,10 +10,11 @@
 
 ## 当前状态
 
-**V2（生产）**：2D 工程图纸 → CadQuery 代码 → STEP 文件，Streamlit 前端
-**V3（规划）**：自然语言 + 参数表 → 工业级 3D 打印文件，前后端分离架构
+LangGraph 双管道架构：
+- **精密管道（precision）**：2D 工程图纸 → CadQuery 代码 → STEP 文件
+- **有机管道（organic）**：自然语言描述 → 3D 生成模型 → 网格修复 → 3D 打印文件
 
-V3 设计文档：`openspec/changes/2026-02-26-v3-text-to-printable/`
+前后端分离：FastAPI 后端 + React + Three.js 前端
 
 ---
 
@@ -26,38 +27,31 @@ V3 设计文档：`openspec/changes/2026-02-26-v3-text-to-printable/`
 | LLM 框架 | LangChain 0.3.18+ |
 | LLM 后端 | Qwen-VL-Max（读图）、Qwen-Coder-Plus（代码）、GPT-5、Claude、Gemini |
 | 数据验证 | Pydantic v2 |
-| Web UI | Streamlit 1.37.1（V2）→ React + Three.js（V3） |
-| 后端 | 无（V2 单体）→ FastAPI :8780（V3） |
+| Web UI | React + Three.js |
+| 后端 | FastAPI :8780 |
 | 包管理 | uv（pyproject.toml + uv.lock） |
 
 ---
 
 ## 架构
 
-### V2 管道（当前）
-
-```
-图纸(PNG/JPG)
-  → Stage 1: DrawingAnalyzerChain (qwen-vl-max, temp=0.1) → DrawingSpec
-  → Stage 1.5: ModelingStrategist (规则引擎) → 策略 + few-shot 示例
-  → Stage 2: CodeGeneratorChain (qwen-coder-plus, temp=0.3) → CadQuery 代码
-  → Stage 3: execute_python_code (ReAct) → STEP 文件
-  → Stage 3.5: validate_step_geometry → 几何验证
-  → Stage 4: SmartRefiner (最多 3 轮, 零风险模式)
-      ├─ Layer 1: 静态参数校验（仅诊断）
-      ├─ Layer 2: 包围盒校验（仅诊断）
-      └─ Layer 3: VL 对比（唯一裁判）→ Coder 修复
-```
-
-### V3 目标架构（见 openspec）
+### LangGraph 双管道
 
 ```
 用户输入 (自然语言/参数表/图片)
-  → Phase 1: IntentParser → IntentSpec
-  → Phase 2: 参数补全 + 用户确认 → PreciseSpec
-  → Phase 3: ParametricTemplate / LLM fallback → STEP
-  → Phase 4: PrintabilityChecker → 可打印性报告
-  → Phase 5: STEP + STL/3MF + 参数化源码
+  → routing_node: 意图解析 + 管道路由
+  ├─ precision 管道（工程图纸）:
+  │    → analysis_node: DrawingAnalyzerChain → DrawingSpec
+  │    → HITL interrupt: 用户确认/修正
+  │    → generate_node: 策略选择 + CadQuery 代码生成 + 执行 + SmartRefiner
+  │    → printability_node: 可打印性检查
+  └─ organic 管道（自然语言描述）:
+       → analysis_node: IntentParser → OrganicSpec
+       → HITL interrupt: 用户确认参数
+       → generate_raw_mesh_node: 3D 生成模型（Hunyuan3D/Tripo3D/SPAR3D/TRELLIS）
+       → mesh_repair_node: 网格修复 + 流形化
+       → mesh_scale_node: 尺寸缩放 + 对齐
+       → printability_node: 可打印性检查
 ```
 
 ### 零件类型（7 种）
@@ -77,50 +71,43 @@ V3 设计文档：`openspec/changes/2026-02-26-v3-text-to-printable/`
 ## 项目结构
 
 ```
-cadpilot/                    # 核心库
-├── __init__.py              # 公共 API：generate_step_v2, generate_step_from_2d_cad_image
-├── pipeline.py              # V1/V2 管道主函数
-├── agents.py                # ReAct 代码执行代理
-├── chat_models.py           # MODEL_TYPE + ChatModelParameters
-├── image.py                 # ImageData（Base64 图像处理）
-├── render.py                # STEP → SVG → PNG 渲染
-├── v1/                      # 经典管道（fallback）
-│   ├── cad_code_generator.py
-│   └── cad_code_refiner.py
-├── v2/                      # 增强管道（当前重点）
+backend/                     # 后端（FastAPI + LangGraph）
+├── main.py                  # FastAPI 入口
+├── config.py                # 全局配置
+├── api/v1/                  # REST API 路由
+├── core/                    # 核心业务逻辑
 │   ├── drawing_analyzer.py  # VL 图纸分析 → DrawingSpec
 │   ├── modeling_strategist.py  # 策略选择 + 示例检索
 │   ├── code_generator.py    # CadQuery 代码生成
 │   ├── smart_refiner.py     # 三层防线智能改进
 │   └── validators.py        # 参数 + 几何校验
-└── knowledge/               # 知识库
-    ├── part_types.py        # DrawingSpec, PartType, BaseBodySpec
-    ├── modeling_strategies.py  # 7 种零件建模策略
-    └── examples/            # 20 个 few-shot 代码示例
-        ├── _base.py         # TaggedExample
-        └── {rotational,plate,bracket,...}.py
+├── graph/                   # LangGraph 管道编排
+│   ├── builder.py           # 图构建器
+│   ├── nodes/               # 管道节点（analysis, generate, mesh_repair 等）
+│   ├── strategies/          # 节点策略（Hunyuan3D, Tripo3D 等）
+│   ├── registry.py          # 节点注册表
+│   └── context.py           # NodeContext
+├── infra/                   # 基础设施（agents, image, render）
+├── knowledge/               # 知识库
+│   ├── part_types.py        # DrawingSpec, PartType, BaseBodySpec
+│   ├── modeling_strategies.py  # 7 种零件建模策略
+│   └── examples/            # few-shot 代码示例
+├── models/                  # 数据模型
+├── db/                      # 数据库（SQLAlchemy + aiosqlite）
+└── pipeline/                # 管道辅助（sse_bridge 等）
 
-scripts/                     # 应用入口
-├── app.py                   # Streamlit Web UI (:8501)
+frontend/                    # 前端（React + Three.js）
+
+scripts/                     # 脚本
+├── start.sh                 # 启动后端 + 前端
 └── cli.py                   # CLI 工具
 
 tests/                       # pytest 单元测试
-├── conftest.py              # MetaPathFinder stub（重型包 mock）
-├── test_drawing_analyzer.py
-├── test_knowledge_base.py
-├── test_modeling_strategist.py
-├── test_smart_refiner.py
-└── test_validators.py
 
 docs/                        # 文档
-├── V2-CURRENT-CAPABILITIES.md
 └── plans/                   # 设计文档 + 优化方案
 
 openspec/                    # OpenSpec 设计规范
-└── changes/2026-02-26-v3-text-to-printable/
-    ├── proposal.md          # 需求提案
-    ├── design.md            # 技术设计（6 ADR）
-    └── tasks.md             # 44 个任务（6 Phase）
 
 sample_data/                 # 示例工程图纸
 ```
@@ -196,14 +183,11 @@ uv run uvicorn backend.main:app --port 8780
 ## 启动服务
 
 ```bash
-# V3 前后端（推荐）
-./scripts/start-v3.sh          # 启动后端 + 前端
-./scripts/start-v3.sh backend  # 仅后端 (:8780)
-./scripts/start-v3.sh frontend # 仅前端 (:3001)
-./scripts/start-v3.sh stop     # 停止所有
-
-# V2 Streamlit（旧版）
-./start.sh qwen
+# 前后端
+./scripts/start.sh          # 启动后端 + 前端
+./scripts/start.sh backend  # 仅后端 (:8780)
+./scripts/start.sh frontend # 仅前端 (:3001)
+./scripts/start.sh stop     # 停止所有
 
 # CLI 生成
 uv run python scripts/cli.py sample_data/g1-3.jpg --output_filepath output.step
@@ -251,10 +235,6 @@ DashScope 端点通过 `OPENAI_API_BASE=https://dashscope.aliyuncs.com/compatibl
 - 新增建模策略：`knowledge/modeling_strategies.py` 中添加对应 PartType
 - Jaccard 相似度用于示例匹配，标签设计影响匹配质量
 
-### V1 → V2 降级
-- Stage 1 解析失败时自动降级到 V1 管道（`generate_step_from_2d_cad_image`）
-- 保持 V1 代码可用
-
 ### 测试 Stub 机制
 - `conftest.py` 的 `MetaPathFinder` 拦截 langchain/cadquery/matplotlib 等重型包
 - 测试中不需要实际安装 CadQuery 或 GPU 依赖
@@ -264,9 +244,8 @@ DashScope 端点通过 `OPENAI_API_BASE=https://dashscope.aliyuncs.com/compatibl
 
 ## 参考文档
 
-- `docs/V2-CURRENT-CAPABILITIES.md` — V2 完整能力说明
 - `docs/plans/2026-02-26-v2-quality-improvement-directions.md` — 质量优化方向（13 方案）
-- `docs/plans/2026-02-26-v3-tech-research.md` — V3 技术调研（8 个对标项目）
-- `openspec/changes/2026-02-26-v3-text-to-printable/proposal.md` — V3 需求提案
-- `openspec/changes/2026-02-26-v3-text-to-printable/design.md` — V3 技术设计（6 ADR + 模块设计）
-- `openspec/changes/2026-02-26-v3-text-to-printable/tasks.md` — V3 任务分解（44 任务，6 Phase）
+- `docs/plans/2026-02-26-v3-tech-research.md` — 技术调研（8 个对标项目）
+- `openspec/changes/2026-02-26-v3-text-to-printable/proposal.md` — 需求提案
+- `openspec/changes/2026-02-26-v3-text-to-printable/design.md` — 技术设计（6 ADR + 模块设计）
+- `openspec/changes/2026-02-26-v3-text-to-printable/tasks.md` — 任务分解（44 任务，6 Phase）

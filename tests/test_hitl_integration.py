@@ -1,8 +1,8 @@
-"""Tests for Task #3: 后端管道集成。
+"""Tests for HITL integration: PipelineBridge, SSE events, confirm flow.
 
 覆盖：
 - PipelineBridge printability_checked 事件
-- V1 Preview 端点路由
+- Preview 端点路由
 - HITL 确认 + 用户修正收集
 - SSE 事件队列串联
 """

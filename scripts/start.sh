@@ -1,12 +1,12 @@
 #!/bin/bash
-# CAD3Dify V3 启动脚本
+# CAD3Dify 启动脚本
 # 使用 uv 虚拟环境启动后端 + 前端开发服务器
 #
 # 用法:
-#   ./scripts/start-v3.sh          # 启动后端 + 前端
-#   ./scripts/start-v3.sh backend  # 仅启动后端
-#   ./scripts/start-v3.sh frontend # 仅启动前端
-#   ./scripts/start-v3.sh stop     # 停止所有服务
+#   ./scripts/start.sh          # 启动后端 + 前端
+#   ./scripts/start.sh backend  # 仅启动后端
+#   ./scripts/start.sh frontend # 仅启动前端
+#   ./scripts/start.sh stop     # 停止所有服务
 
 set -e
 cd "$(dirname "$0")/.."
@@ -103,7 +103,7 @@ case "$MODE" in
         echo "✅ 后端: http://localhost:$BACKEND_PORT"
         echo "✅ 前端: http://localhost:$FRONTEND_PORT"
         echo ""
-        echo "按 Ctrl+C 停止，或运行 ./scripts/start-v3.sh stop"
+        echo "按 Ctrl+C 停止，或运行 ./scripts/start.sh stop"
         wait
         ;;
 esac

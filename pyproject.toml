@@ -7,7 +7,6 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
-    # V2 existing (pinned to 0.3.x — V2 code uses langchain.chains etc.)
     "langchain>=0.3.18,<1.0",
     "langchain-core>=0.3.0,<1.0",
     "langchain-openai>=0.2.0,<1.0",
@@ -17,14 +16,13 @@ dependencies = [
     "rlpycairo>=0.3.0",
     "loguru>=0.7.2",
     "langchainhub>=0.1.15",
-    "streamlit>=1.37.1",
+
     "numpy>=1.26.4",
     "python-dotenv>=1.0.1",
     "langchain-anthropic>=0.3.0,<1.0",
     "matplotlib>=3.9.2",
     "langchain-google-genai>=2.0.7,<3.0",
     "opencv-python>=4.10.0.84",
-    # V3 new
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "sse-starlette>=2.2.0",
@@ -75,4 +73,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["cadpilot", "backend"]
+packages = ["backend"]
