@@ -143,45 +143,45 @@ async def generate_organic_mesh_node(state: CadJobState) -> dict[str, Any]:
 
     await _safe_update_job(job_id, status="generating")
 
-    # Instantiate provider with config from Settings.
-    from backend.config import Settings as _Settings
+    try:
+        # Instantiate provider with config from Settings.
+        from backend.config import Settings as _Settings
 
-    _settings = _Settings()
-    _output_dir = Path("outputs") / "organic"
+        _settings = _Settings()
+        _output_dir = Path("outputs") / "organic"
 
-    if provider_name == "tripo3d":
-        provider = TripoProvider(api_key=_settings.tripo3d_api_key, output_dir=_output_dir)
-    elif provider_name == "hunyuan3d":
-        provider = HunyuanProvider(api_key=_settings.hunyuan3d_api_key, output_dir=_output_dir)
-    else:
-        # "auto" or unrecognized → Tripo first, Hunyuan fallback
-        # (replaces removed AutoProvider; new pipeline uses strategy-based
-        # fallback in generate_raw_mesh)
-        if _settings.tripo3d_api_key:
+        if provider_name == "tripo3d":
             provider = TripoProvider(api_key=_settings.tripo3d_api_key, output_dir=_output_dir)
-        elif _settings.hunyuan3d_api_key:
+        elif provider_name == "hunyuan3d":
             provider = HunyuanProvider(api_key=_settings.hunyuan3d_api_key, output_dir=_output_dir)
         else:
-            raise RuntimeError(
-                "No mesh generation API key configured. "
-                "Set tripo3d_api_key or hunyuan3d_api_key in settings."
+            # "auto" or unrecognized → Tripo first, Hunyuan fallback
+            # (replaces removed AutoProvider; new pipeline uses strategy-based
+            # fallback in generate_raw_mesh)
+            if _settings.tripo3d_api_key:
+                provider = TripoProvider(api_key=_settings.tripo3d_api_key, output_dir=_output_dir)
+            elif _settings.hunyuan3d_api_key:
+                provider = HunyuanProvider(api_key=_settings.hunyuan3d_api_key, output_dir=_output_dir)
+            else:
+                raise RuntimeError(
+                    "No mesh generation API key configured. "
+                    "Set tripo3d_api_key or hunyuan3d_api_key in settings."
+                )
+
+        # Bridge sync on_progress callback to dispatch keepalive SSE events.
+        # provider.generate() may run sync loops internally; use sync dispatch.
+        loop = asyncio.get_running_loop()
+
+        def _on_progress(stage: str, progress: float) -> None:
+            """Sync callback safe to call from provider's internal thread."""
+            asyncio.run_coroutine_threadsafe(
+                _safe_dispatch("job.generating", {
+                    "job_id": job_id, "stage": stage, "progress": progress,
+                    "status": "generating",
+                }),
+                loop,
             )
 
-    # Bridge sync on_progress callback to dispatch keepalive SSE events.
-    # provider.generate() may run sync loops internally; use sync dispatch.
-    loop = asyncio.get_running_loop()
-
-    def _on_progress(stage: str, progress: float) -> None:
-        """Sync callback safe to call from provider's internal thread."""
-        asyncio.run_coroutine_threadsafe(
-            _safe_dispatch("job.generating", {
-                "job_id": job_id, "stage": stage, "progress": progress,
-                "status": "generating",
-            }),
-            loop,
-        )
-
-    try:
         result_path = await provider.generate(
             spec, reference_image=reference_image_bytes, on_progress=_on_progress,
         )

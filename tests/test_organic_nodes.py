@@ -144,6 +144,19 @@ class TestGenerateOrganicMeshNode:
         assert "API error" in result["error"]
 
     @pytest.mark.asyncio
+    async def test_auto_no_api_key_returns_failed(self, gen_state):
+        """Auto provider with no API keys configured returns failed status."""
+        mock_settings = MagicMock()
+        mock_settings.tripo3d_api_key = None
+        mock_settings.hunyuan3d_api_key = None
+
+        with patch("backend.config.Settings", return_value=mock_settings):
+            result = await generate_organic_mesh_node(gen_state)
+
+        assert result["status"] == "failed"
+        assert "No mesh generation API key configured" in result["error"]
+
+    @pytest.mark.asyncio
     async def test_tripo_provider_selection(self, gen_state):
         gen_state["organic_provider"] = "tripo3d"
         mock_provider = AsyncMock()

@@ -106,7 +106,7 @@ class PrusaSlicerStrategy(NodeStrategy):
             proc.kill()
             try:
                 await asyncio.wait_for(proc.wait(), timeout=5)
-            except asyncio.TimeoutError:
+            except Exception:
                 pass  # Best-effort reap; OS will clean up
             raise RuntimeError(
                 f"PrusaSlicer timed out after {config.timeout}s"
