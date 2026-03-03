@@ -1,0 +1,1 @@
+"""Thermal simulation strategies."""
