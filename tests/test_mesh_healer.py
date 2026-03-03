@@ -314,3 +314,95 @@ class TestEscalationChain:
                     MeshDiagnosis(level="mild", issues=["inconsistent orientation"]),
                 )
         assert not l2_called, "Level 2 should NOT be called when Level 1 succeeds"
+
+
+class TestNeuralHealStrategy:
+    """NeuralHealStrategy HTTP 调用测试。"""
+
+    @pytest.mark.asyncio
+    async def test_calls_repair_endpoint(self):
+        from backend.graph.strategies.heal.neural import NeuralHealStrategy
+
+        strategy = NeuralHealStrategy(config=MagicMock(
+            neural_enabled=True,
+            neural_endpoint="http://gpu:8090",
+            neural_timeout=60,
+            health_check_path="/health",
+        ))
+
+        ctx = MagicMock()
+        ctx.get_asset.return_value = MagicMock(path="/tmp/raw.glb")
+        ctx.put_asset = MagicMock()
+        ctx.dispatch_progress = AsyncMock()
+
+        mock_response = {
+            "mesh_uri": "/tmp/repaired.obj",
+            "metrics": {"is_watertight": True, "holes_filled": 3},
+        }
+
+        with patch.object(strategy, "_post", new_callable=AsyncMock,
+                          return_value=mock_response):
+            await strategy.execute(ctx)
+
+        ctx.put_asset.assert_called_once_with(
+            "watertight_mesh",
+            "/tmp/repaired.obj",
+            "obj",
+            metadata={"is_watertight": True, "holes_filled": 3},
+        )
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_data_path(self):
+        """get_asset raises KeyError -> falls back to get_data('raw_mesh_path')."""
+        from backend.graph.strategies.heal.neural import NeuralHealStrategy
+
+        strategy = NeuralHealStrategy(config=MagicMock(
+            neural_enabled=True,
+            neural_endpoint="http://gpu:8090",
+            neural_timeout=60,
+            health_check_path="/health",
+        ))
+
+        ctx = MagicMock()
+        ctx.get_asset.side_effect = KeyError("raw_mesh")
+        ctx.get_data.return_value = "/tmp/fallback.glb"
+        ctx.put_asset = MagicMock()
+        ctx.dispatch_progress = AsyncMock()
+
+        mock_response = {
+            "mesh_uri": "/tmp/repaired.obj",
+            "metrics": {},
+        }
+
+        with patch.object(strategy, "_post", new_callable=AsyncMock,
+                          return_value=mock_response) as mock_post:
+            await strategy.execute(ctx)
+
+        ctx.get_data.assert_called_with("raw_mesh_path")
+        mock_post.assert_awaited_once_with("/v1/repair", {
+            "mesh_uri": "/tmp/fallback.glb",
+        })
+
+    @pytest.mark.asyncio
+    async def test_raises_when_no_mesh_available(self):
+        """Neither asset nor data path -> raises ValueError."""
+        from backend.graph.strategies.heal.neural import NeuralHealStrategy
+
+        strategy = NeuralHealStrategy(config=MagicMock(
+            neural_enabled=True,
+            neural_endpoint="http://gpu:8090",
+        ))
+
+        ctx = MagicMock()
+        ctx.get_asset.side_effect = KeyError("raw_mesh")
+        ctx.get_data.return_value = None
+        ctx.dispatch_progress = AsyncMock()
+
+        with pytest.raises(ValueError, match="No raw mesh found"):
+            await strategy.execute(ctx)
+
+    def test_inherits_neural_strategy(self):
+        from backend.graph.strategies.heal.neural import NeuralHealStrategy
+        from backend.graph.strategies.neural import NeuralStrategy
+
+        assert issubclass(NeuralHealStrategy, NeuralStrategy)
