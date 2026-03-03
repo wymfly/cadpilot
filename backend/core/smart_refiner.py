@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import warnings
 from typing import Any
 
 from langchain.chains import LLMChain, SequentialChain, TransformChain
@@ -156,6 +157,11 @@ class SmartCompareChain(SequentialChain):
     """阶段 4a: VL 模型对比原图和渲染图"""
 
     def __init__(self, structured: bool = False) -> None:
+        warnings.warn(
+            "SmartCompareChain is deprecated. Use build_compare_chain() from backend.graph.chains.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         compare_template = _STRUCTURED_COMPARE_PROMPT if structured else _COMPARE_PROMPT
         prompt = ChatPromptTemplate(
             input_variables=[
@@ -210,6 +216,11 @@ class SmartFixChain(SequentialChain):
     """阶段 4b: Coder 模型根据修改指令修正代码"""
 
     def __init__(self) -> None:
+        warnings.warn(
+            "SmartFixChain is deprecated. Use build_fix_chain() from backend.graph.chains.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         prompt = ChatPromptTemplate(
             input_variables=["code", "fix_instructions"],
             messages=[

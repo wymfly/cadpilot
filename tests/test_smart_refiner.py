@@ -1,8 +1,11 @@
 """Tests for SmartRefiner three-layer defense."""
 
+import warnings
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from backend.knowledge.part_types import (
     BaseBodySpec,

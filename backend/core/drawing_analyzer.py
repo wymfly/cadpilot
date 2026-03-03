@@ -1,5 +1,6 @@
 import json
 import re
+import warnings
 from typing import Any, Union
 
 from langchain.chains import LLMChain, SequentialChain, TransformChain
@@ -226,6 +227,11 @@ class DrawingAnalyzerChain(SequentialChain):
     """阶段1：VL 模型分析工程图纸，输出结构化 DrawingSpec"""
 
     def __init__(self) -> None:
+        warnings.warn(
+            "DrawingAnalyzerChain is deprecated. Use build_vision_analysis_chain() from backend.graph.chains.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         prompt = ChatPromptTemplate(
             input_variables=["image_type", "image_data"],
             messages=[

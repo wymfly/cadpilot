@@ -1,4 +1,5 @@
 import re
+import warnings
 from typing import Any, Union
 
 from langchain.chains import LLMChain, SequentialChain, TransformChain
@@ -42,6 +43,11 @@ class CodeGeneratorChain(SequentialChain):
     """阶段2：Coder 模型根据 ModelingContext 生成 CadQuery 代码"""
 
     def __init__(self) -> None:
+        warnings.warn(
+            "CodeGeneratorChain is deprecated. Use build_code_gen_chain() from backend.graph.chains.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         prompt = ChatPromptTemplate(
             input_variables=["modeling_context"],
             messages=[
