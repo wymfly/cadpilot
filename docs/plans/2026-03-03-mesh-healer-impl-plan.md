@@ -1425,7 +1425,11 @@ class TestFallbackIntegration:
 
     @pytest.mark.asyncio
     async def test_auto_neural_disabled_algorithm_fails_hard_error(self):
-        """auto 模式 + neural disabled + algorithm 失败 → 硬错误，trace 只含 algorithm。"""
+        """auto 模式 + neural disabled + algorithm 失败 → 硬错误（raise）。
+
+        _wrap_node re-raises when non_fatal=False (default), so the
+        exception propagates instead of returning a result dict.
+        """
         from backend.graph.builder_new import PipelineBuilder
         from backend.graph.descriptor import NodeDescriptor, NodeStrategy
 
@@ -1466,12 +1470,9 @@ class TestFallbackIntegration:
             "node_trace": [],
         }
 
-        # Should propagate as error — all strategies exhausted
-        result = await wrapped(state)
-        traces = result.get("node_trace", [])
-        assert len(traces) == 1
-        entry = traces[0]
-        assert entry.get("error") is not None
+        # _wrap_node re-raises when non_fatal=False → exception propagates
+        with pytest.raises(RuntimeError, match="No strategy succeeded"):
+            await wrapped(state)
 ```
 
 **Step 2: 运行测试**
@@ -1513,3 +1514,13 @@ Expected: 所有 mesh_healer 测试 PASS
 git add -A
 git commit -m "fix: resolve regression issues from mesh_healer migration"
 ```
+
+---
+
+### Follow-up (out of scope)
+
+**builder_new.py fallback trace on error path:**
+当前 `_wrap_node` except 分支在 `non_fatal=False` 时 re-raise，不会将 `ctx._fallback_trace` 写入 `node_trace`。这是基础设施层问题，影响所有双通道节点（不仅 mesh_healer）。建议在后续基础设施任务中修复 `_wrap_node` except 分支，使其在 re-raise 前也提取 `ctx._fallback_trace`。
+
+**diagnose() 自相交检测限制:**
+当前 `diagnose()` 使用非流形边比率和缺失面比率作为 severe 判定的启发式代理。真正的自相交检测（face-face intersection）需要 O(n²) 或空间索引，不适合快速诊断。manifold-but-self-intersecting 的 mesh 可能被分级为 moderate，但升级链仍会通过 MeshLib 体素化修复它们，功能不受影响。
