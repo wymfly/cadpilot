@@ -49,6 +49,12 @@ app.add_middleware(
 
 # V1 统一路由
 app.include_router(v1_router, prefix="/api/v1")
+
+# Pipeline asset export (non-versioned — serves LangGraph-managed assets)
+from backend.api.routes.export import router as export_router
+
+app.include_router(export_router, prefix="/api")
+
 register_error_handlers(app)
 
 # 旧版路由已全部迁移至 V1，legacy 文件已删除（Phase 5b）
