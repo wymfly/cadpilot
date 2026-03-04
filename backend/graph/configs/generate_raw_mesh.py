@@ -21,20 +21,26 @@ class GenerateRawMeshConfig(BaseNodeConfig):
 
     # Hunyuan3D (SaaS + local)
     hunyuan3d_api_key: str | None = Field(
-        default=None, json_schema_extra={"x-sensitive": True},
+        default=None, json_schema_extra={"x-sensitive": True, "x-scope": "system"},
     )
-    hunyuan3d_endpoint: str | None = None
+    hunyuan3d_endpoint: str | None = Field(
+        default=None, json_schema_extra={"x-scope": "system"},
+    )
 
     # Tripo3D (SaaS only)
     tripo3d_api_key: str | None = Field(
-        default=None, json_schema_extra={"x-sensitive": True},
+        default=None, json_schema_extra={"x-sensitive": True, "x-scope": "system"},
     )
 
     # SPAR3D (local only)
-    spar3d_endpoint: str | None = None
+    spar3d_endpoint: str | None = Field(
+        default=None, json_schema_extra={"x-scope": "system"},
+    )
 
     # TRELLIS (local only)
-    trellis_endpoint: str | None = None
+    trellis_endpoint: str | None = Field(
+        default=None, json_schema_extra={"x-scope": "system"},
+    )
 
     # Common
     timeout: int = 120

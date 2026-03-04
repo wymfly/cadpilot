@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from backend.graph.configs.neural import NeuralStrategyConfig
 
@@ -20,7 +20,7 @@ class MeshHealerConfig(NeuralStrategyConfig):
     voxel_resolution: int = 128
     retopo_threshold: int = 100000
     retopo_enabled: bool = False
-    retopo_endpoint: str | None = None
+    retopo_endpoint: str | None = Field(default=None, json_schema_extra={"x-scope": "system"})
     retopo_target_faces: int = 50000
 
     @model_validator(mode="after")

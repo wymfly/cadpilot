@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from backend.graph.configs.base import BaseNodeConfig
 
@@ -18,8 +18,8 @@ class SliceToGcodeConfig(BaseNodeConfig):
     strategy: str = "prusaslicer"
 
     # CLI paths (auto-detected via shutil.which if None)
-    prusaslicer_path: str | None = None
-    orcaslicer_path: str | None = None
+    prusaslicer_path: str | None = Field(default=None, json_schema_extra={"x-scope": "system"})
+    orcaslicer_path: str | None = Field(default=None, json_schema_extra={"x-scope": "system"})
 
     # Slicing parameters
     layer_height: float = 0.2  # mm, range 0.05-0.6
