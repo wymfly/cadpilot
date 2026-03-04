@@ -117,6 +117,7 @@ class ConfirmRequest(BaseModel):
     confirmed_spec: dict[str, Any] | None = None
     base_body_method: str = "extrude"
     disclaimer_accepted: bool = True
+    pipeline_config_updates: dict[str, dict] | None = None
 
 
 class RegenerateResponse(BaseModel):
@@ -645,6 +646,10 @@ async def confirm_job(job_id: str, body: ConfirmRequest, request: Request) -> Ev
             "disclaimer_accepted": body.disclaimer_accepted,
         },
     }
+    # Include pipeline config updates for confirm_with_user_node to merge
+    if body.pipeline_config_updates:
+        resume_data["pipeline_config_updates"] = body.pipeline_config_updates
+
     if is_organic and body.confirmed_spec:
         spec_overrides = body.confirmed_spec
         if "quality_mode" in spec_overrides:

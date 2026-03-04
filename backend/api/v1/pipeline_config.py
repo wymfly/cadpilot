@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from backend.models.pipeline_config import PRESETS, get_tooltips
 
@@ -12,13 +13,29 @@ router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
 
 @router.get("/tooltips")
-async def get_pipeline_tooltips() -> dict[str, Any]:
-    return {k: v.model_dump() for k, v in get_tooltips().items()}
+async def get_pipeline_tooltips() -> JSONResponse:
+    data = {k: v.model_dump() for k, v in get_tooltips().items()}
+    return JSONResponse(
+        content=data,
+        headers={
+            "Deprecation": "true",
+            "Sunset": "2026-06-01",
+            "Link": '</api/v1/pipeline/nodes>; rel="successor-version"',
+        },
+    )
 
 
 @router.get("/presets")
-async def get_pipeline_presets() -> list[dict[str, Any]]:
-    return [{"name": k, **v.model_dump()} for k, v in PRESETS.items()]
+async def get_pipeline_presets() -> JSONResponse:
+    data = [{"name": k, **v.model_dump()} for k, v in PRESETS.items()]
+    return JSONResponse(
+        content=data,
+        headers={
+            "Deprecation": "true",
+            "Sunset": "2026-06-01",
+            "Link": '</api/v1/pipeline/node-presets>; rel="successor-version"',
+        },
+    )
 
 
 @router.get("/nodes")
