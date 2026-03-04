@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
 
 from backend.graph.system_config import system_config_store
 from backend.models.pipeline_config import PRESETS, get_tooltips
+
+_MASKED_RE = re.compile(r"^.{0,3}\*{4}.{0,4}$")
+
+
+def _is_masked(value: str) -> bool:
+    """Return True if value matches our masking output format."""
+    return value == "****" or bool(_MASKED_RE.match(value))
+
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
@@ -279,7 +288,7 @@ async def update_system_config(request: Request) -> Any:
         s_set = sensitive_lookup.get(node_name, set())
         clean_node: dict[str, Any] = {}
         for field_name, field_value in node_config.items():
-            if field_name in s_set and isinstance(field_value, str) and "****" in field_value:
+            if field_name in s_set and isinstance(field_value, str) and _is_masked(field_value):
                 continue
             clean_node[field_name] = field_value
         if clean_node:
