@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import re
 import threading
 from typing import Any, Awaitable, Callable, TYPE_CHECKING
 
@@ -147,11 +148,17 @@ def register_node(
 # Schema post-processing
 # ---------------------------------------------------------------------------
 
+_SENSITIVE_PATTERN = re.compile(r"(api_key|secret|password)", re.IGNORECASE)
+
+
 def enhance_config_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Post-process Pydantic v2 JSON schema: inject x-sensitive for sensitive fields.
 
     Pydantic v2 natively handles description, minimum/maximum, and json_schema_extra
     (including x-group), so this function only adds x-sensitive auto-detection.
     """
-    # Placeholder — T3 agent will implement
+    props = schema.get("properties", {})
+    for field_name, field_schema in props.items():
+        if _SENSITIVE_PATTERN.search(field_name):
+            field_schema["x-sensitive"] = True
     return schema

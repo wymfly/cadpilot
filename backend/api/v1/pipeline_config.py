@@ -47,7 +47,10 @@ async def list_pipeline_nodes() -> dict[str, Any]:
         }
         # Add config JSON schema if available
         if desc.config_model:
-            node_info["config_schema"] = desc.config_model.model_json_schema()
+            from backend.graph.registry import enhance_config_schema
+            node_info["config_schema"] = enhance_config_schema(
+                desc.config_model.model_json_schema()
+            )
         nodes.append(node_info)
     return {"nodes": nodes}
 
@@ -114,6 +117,34 @@ async def validate_pipeline_config(request: Request) -> dict[str, Any]:
 
 @router.get("/strategy-availability")
 async def get_strategy_availability() -> dict[str, Any]:
-    """返回各节点策略的运行时可用性。(T2 实现)"""
-    # Placeholder — T2 agent will implement
-    raise NotImplementedError("Phase 1 T2 will implement")
+    """返回各节点策略的运行时可用性。"""
+    from backend.graph.discovery import discover_nodes
+    from backend.graph.registry import registry
+
+    discover_nodes()
+
+    result: dict[str, dict[str, dict[str, Any]]] = {}
+    for name, desc in registry.all().items():
+        if not desc.strategies:
+            continue
+
+        strat_status: dict[str, dict[str, Any]] = {}
+        for strat_name, strat_cls in desc.strategies.items():
+            try:
+                config = desc.config_model() if desc.config_model else None
+                instance = strat_cls(config=config)
+                available = instance.check_available()
+                entry: dict[str, Any] = {"available": available}
+                if not available:
+                    reason = getattr(instance, "unavailable_reason", "不可用")
+                    entry["reason"] = reason
+                strat_status[strat_name] = entry
+            except Exception as exc:
+                strat_status[strat_name] = {
+                    "available": False,
+                    "reason": str(exc),
+                }
+
+        result[name] = strat_status
+
+    return result
