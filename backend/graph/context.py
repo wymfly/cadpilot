@@ -17,6 +17,7 @@ from typing import Any
 
 from backend.graph.configs.base import BaseNodeConfig
 from backend.graph.descriptor import NodeDescriptor, NodeStrategy
+from backend.graph.system_config import system_config_store
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,14 @@ class NodeContext:
         node_configs = state.get("pipeline_config", {})
         raw_config = node_configs.get(desc.name, {})
         config_cls = desc.config_model or BaseNodeConfig
-        config = config_cls(**raw_config) if raw_config else config_cls()
+
+        # Merge: Pydantic default < system_config < per-request
+        system_defaults = system_config_store.get_node(desc.name)
+        if system_defaults:
+            merged = {**system_defaults, **raw_config}
+        else:
+            merged = raw_config
+        config = config_cls(**merged) if merged else config_cls()
 
         return cls(
             job_id=state.get("job_id", ""),
