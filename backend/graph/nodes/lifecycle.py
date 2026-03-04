@@ -140,9 +140,19 @@ async def confirm_with_user_node(state: CadJobState) -> dict[str, Any]:
 
     By the time this node executes, LangGraph has already merged the
     resume payload into state (confirmed_params / confirmed_spec / disclaimer_accepted).
-    We just advance the status.
+    We advance the status and merge any pipeline_config_updates into pipeline_config.
     """
-    return {"status": "confirmed", "_reasoning": {"confirmation": "user confirmed parameters"}}
+    result: dict[str, Any] = {"status": "confirmed", "_reasoning": {"confirmation": "user confirmed parameters"}}
+
+    # Merge pipeline_config_updates into pipeline_config for runtime skip
+    updates = state.get("pipeline_config_updates")
+    if updates:
+        current_config = dict(state.get("pipeline_config") or {})
+        for node_name, node_updates in updates.items():
+            current_config.setdefault(node_name, {}).update(node_updates)
+        result["pipeline_config"] = current_config
+
+    return result
 
 
 @register_node(

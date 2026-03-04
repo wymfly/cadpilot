@@ -6,10 +6,11 @@ import {
   CloseCircleOutlined,
   LoadingOutlined,
   ClockCircleOutlined,
+  MinusCircleOutlined,
 } from '@ant-design/icons';
 import { useDesignTokens } from '../../theme/useDesignTokens.ts';
 
-export type NodeStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type NodeStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
 interface NodeCardData {
   label: string;
@@ -25,6 +26,7 @@ const STATUS_CONFIG: Record<NodeStatus, { color: string; icon: ReactNode }> = {
   running: { color: 'processing', icon: <LoadingOutlined /> },
   completed: { color: 'success', icon: <CheckCircleOutlined /> },
   failed: { color: 'error', icon: <CloseCircleOutlined /> },
+  skipped: { color: 'default', icon: <MinusCircleOutlined /> },
 };
 
 function formatMs(ms: number): string {

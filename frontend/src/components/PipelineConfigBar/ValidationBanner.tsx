@@ -28,7 +28,7 @@ export default function ValidationBanner({ config, inputType }: ValidationBanner
       abortRef.current = controller;
 
       setLoading(true);
-      validatePipelineConfig(inputType ?? null, config)
+      validatePipelineConfig(inputType ?? null, config, controller.signal)
         .then((data) => {
           if (!controller.signal.aborted) {
             setResult(data);

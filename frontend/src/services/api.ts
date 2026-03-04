@@ -69,11 +69,12 @@ export async function getNodePresets(): Promise<NodeLevelPreset[]> {
 export async function validatePipelineConfig(
   inputType: string | null,
   config: Record<string, NodeLevelConfig>,
+  signal?: AbortSignal,
 ): Promise<PipelineValidateResponse> {
   const { data } = await api.post<PipelineValidateResponse>('/v1/pipeline/validate', {
     input_type: inputType,
     config,
-  });
+  }, { signal });
   return data;
 }
 

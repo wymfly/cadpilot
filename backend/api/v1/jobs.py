@@ -653,7 +653,9 @@ async def confirm_job(job_id: str, body: ConfirmRequest, request: Request) -> Ev
         from backend.graph.resolver import DependencyResolver
 
         discover_nodes()
-        merged_config = {**job.pipeline_config} if job.pipeline_config else {}
+        # Job model doesn't store pipeline_config; start from empty baseline.
+        # The resolver validates topology regardless of baseline.
+        merged_config: dict[str, dict] = {}
         for node_name, updates in body.pipeline_config_updates.items():
             merged_config.setdefault(node_name, {}).update(updates)
         try:

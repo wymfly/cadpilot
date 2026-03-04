@@ -158,15 +158,8 @@ test.describe('Pipeline Configuration', () => {
 
   test('validate API called and banner shown', async ({ page }) => {
     let validateCalled = false;
-    await mockPipelineApis(page, {
-      validateResponse: {
-        valid: true,
-        node_count: 3,
-        topology: ['analyze_drawing', 'generate_raw_mesh', 'mesh_repair'],
-      },
-    });
 
-    // Track validate calls
+    // Register tracking route BEFORE mockPipelineApis so it takes precedence
     await page.route('**/api/v1/pipeline/validate', async (route) => {
       validateCalled = true;
       await route.fulfill({
@@ -178,12 +171,14 @@ test.describe('Pipeline Configuration', () => {
       });
     });
 
+    await mockPipelineApis(page);
+
     await page.goto('/precision');
     await expect(page.getByText('管道配置')).toBeVisible();
 
-    // ValidationBanner should appear after debounce
     // Wait for the 300ms debounce + API response
     await page.waitForTimeout(500);
+    expect(validateCalled).toBe(true);
   });
 
   test('all-disabled returns invalid banner', async ({ page }) => {

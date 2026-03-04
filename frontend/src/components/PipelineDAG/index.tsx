@@ -19,6 +19,7 @@ export interface NodeState {
   reasoning?: Record<string, string> | null;
   outputsSummary?: Record<string, unknown> | null;
   error?: string;
+  reason?: string;
 }
 
 const nodeTypes = { pipelineNode: NodeCard };
@@ -72,6 +73,12 @@ export default function PipelineDAG({ inputType, events }: PipelineDAGProps) {
             status: 'failed',
             elapsedMs: evtAny.elapsed_ms as number,
             error: evtAny.error as string,
+          });
+          break;
+        case 'node.skipped':
+          states.set(node, {
+            status: 'skipped',
+            reason: evtAny.reason as string,
           });
           break;
       }

@@ -50,6 +50,7 @@ class CadJobState(TypedDict, total=False):
 
     # ── Pipeline configuration ──
     pipeline_config: dict | None  # PipelineConfig.model_dump()
+    pipeline_config_updates: dict | None  # HITL updates from confirm
     token_stats: dict | None      # TokenTracker.get_stats()
 
     # ── Status & error ──
