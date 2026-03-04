@@ -62,6 +62,7 @@ export interface PipelineNodeDescriptor {
   non_fatal: boolean;
   description: string | null;
   config_schema?: Record<string, unknown>;
+  fallback_chain?: string[];
 }
 
 /** Per-node config (enabled + strategy + custom params) */
@@ -86,4 +87,14 @@ export interface PipelineValidateResponse {
   node_count?: number;
   topology?: string[];
   interrupt_before?: string[];
+}
+
+/** Strategy availability per node — GET /pipeline/strategy-availability */
+export interface StrategyAvailabilityMap {
+  [nodeName: string]: {
+    [strategyName: string]: {
+      available: boolean;
+      reason?: string;
+    };
+  };
 }

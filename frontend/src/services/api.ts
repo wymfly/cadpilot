@@ -6,6 +6,7 @@ import type {
   NodeLevelPreset,
   NodeLevelConfig,
   PipelineValidateResponse,
+  StrategyAvailabilityMap,
 } from '../types/pipeline.ts';
 import type { BenchmarkSummary, BenchmarkReport } from '../types/benchmark.ts';
 import type { ParametricTemplate, ValidateResponse } from '../types/template.ts';
@@ -73,6 +74,11 @@ export async function validatePipelineConfig(
     input_type: inputType,
     config,
   });
+  return data;
+}
+
+export async function getStrategyAvailability(): Promise<StrategyAvailabilityMap> {
+  const { data } = await api.get<StrategyAvailabilityMap>('/v1/pipeline/strategy-availability');
   return data;
 }
 
