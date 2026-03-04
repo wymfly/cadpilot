@@ -373,7 +373,8 @@ async def create_drawing_job(
         _raw_cfg = _json.loads(pipeline_config)
     except (ValueError, TypeError):
         _raw_cfg = {}
-    _bp = _raw_cfg.get("_breakpoints") if isinstance(_raw_cfg, dict) else None
+    _bp_raw = _raw_cfg.get("_breakpoints") if isinstance(_raw_cfg, dict) else None
+    _bp = _bp_raw if isinstance(_bp_raw, list) else None
 
     initial_state: dict[str, Any] = {
         "job_id": job_id,
@@ -816,8 +817,9 @@ async def resume_job(job_id: str, body: ResumeRequest, request: Request) -> Even
             except Exception:
                 logger_api.warning("Failed to update job %s to completed", job_id)
 
-        except Exception:
+        except BaseException:
             # R3-C3-6 fix: rollback status on stream failure
+            # BaseException catches asyncio.CancelledError (client disconnect)
             try:
                 await update_job(job_id, status=JobStatus.BREAKPOINT)
             except Exception:

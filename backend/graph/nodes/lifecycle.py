@@ -9,7 +9,7 @@ from langchain_core.callbacks import adispatch_custom_event
 
 from backend.graph.registry import register_node
 from backend.graph.state import CadJobState, STATE_TO_ORM_MAPPING
-from backend.models.job import create_job, update_job
+from backend.models.job import create_job, get_job, update_job
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +97,14 @@ async def _safe_dispatch(event_name: str, payload: dict[str, Any]) -> None:
     is_entry=True, produces=["job_info"])
 async def create_job_node(state: CadJobState) -> dict[str, Any]:
     """Create DB Job record and dispatch job.created event."""
-    await create_job(
-        job_id=state["job_id"],
-        input_type=state["input_type"],
-        input_text=state.get("input_text") or "",
-    )
+    # Check if job already exists (breakpoint mode pre-creates in API layer)
+    existing = await get_job(state["job_id"])
+    if existing is None:
+        await create_job(
+            job_id=state["job_id"],
+            input_type=state["input_type"],
+            input_text=state.get("input_text") or "",
+        )
     # Persist optional fields to DB
     extra_updates: dict[str, Any] = {}
     if state.get("image_path"):

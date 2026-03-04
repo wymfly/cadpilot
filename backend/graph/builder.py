@@ -64,7 +64,9 @@ def _last_completed_node(node_trace: list[dict[str, Any]]) -> str | None:
     """
     for entry in reversed(node_trace):
         if not entry.get("skipped"):
-            return entry["node"]
+            name = entry.get("node")
+            if name:
+                return name
     return None
 
 
