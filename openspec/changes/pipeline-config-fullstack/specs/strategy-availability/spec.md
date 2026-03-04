@@ -2,7 +2,7 @@
 
 ### Requirement: Strategy availability endpoint
 
-The system SHALL expose a `GET /api/v1/pipeline/strategy-availability` endpoint that returns the runtime availability status of each strategy for each node.
+The system SHALL expose a `GET /api/v1/pipeline/strategy-availability` endpoint that returns the runtime availability status of each strategy for each node. Each strategy's `check_available()` SHALL be called with the actual `config_model` instance (populated from current pipeline_config or defaults), not a bare `BaseNodeConfig()`.
 
 #### Scenario: All strategies available
 - **WHEN** `GET /pipeline/strategy-availability` is called
@@ -17,6 +17,11 @@ The system SHALL expose a `GET /api/v1/pipeline/strategy-availability` endpoint 
 #### Scenario: Strategy instantiation error
 - **WHEN** a strategy class raises an exception during `__init__` or `check_available()`
 - **THEN** the response for that strategy contains `{"available": false, "reason": "<exception message>"}`
+
+#### Scenario: Strategy checked with actual config
+- **WHEN** a strategy's `check_available()` depends on config values (e.g., API endpoint URL)
+- **THEN** the endpoint instantiates the strategy with `config=desc.config_model()` (using defaults from Pydantic model)
+- **AND** the availability check reflects actual runtime conditions
 
 #### Scenario: Nodes without strategies are excluded
 - **WHEN** a node has no registered strategies (`desc.strategies` is empty or None)

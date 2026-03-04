@@ -4,7 +4,7 @@
 
 The system SHALL pause the drawing generation pipeline after Stage 1 (DrawingAnalyzer produces DrawingSpec) using LangGraph `interrupt_before=["confirm_with_user_node"]` to pause before the confirm node, and SHALL resume via `Command(resume=...)` when the user confirms. The `job.awaiting_confirmation` event is dispatched by the preceding analysis node (not the confirm node itself, since `interrupt_before` pauses execution before the node runs).
 
-The confirm endpoint SHALL accept an optional `pipeline_config_updates` field in the request body, which is deep-merged into `state["pipeline_config"]` before resuming the graph.
+The confirm endpoint SHALL accept an optional `pipeline_config_updates` field in the request body. Config updates are passed through `resume_data` (inside `Command(resume=...)`) and applied by the `confirm_with_user_node` before returning, ensuring atomic state transition without race conditions.
 
 #### Scenario: Normal drawing upload flow
 - **WHEN** a user uploads an engineering drawing via POST /api/v1/jobs/upload
@@ -20,10 +20,23 @@ The confirm endpoint SHALL accept an optional `pipeline_config_updates` field in
 - **AND** a new SSE stream is returned for the generation progress
 - **AND** the confirmed params are stored in `CadJobState.confirmed_spec`
 
-#### Scenario: Pipeline resumes with config updates
+#### Scenario: Pipeline resumes with config updates via resume_data
 - **WHEN** a user calls POST /api/v1/jobs/{job_id}/confirm with `pipeline_config_updates: {"mesh_repair": {"strategy": "trimesh"}}`
-- **THEN** the endpoint deep-merges `pipeline_config_updates` into `state["pipeline_config"]` before calling `Command(resume=...)`
+- **THEN** the endpoint includes `pipeline_config_updates` in the `resume_data` dict passed to `Command(resume=...)`
+- **AND** `confirm_with_user_node` reads `pipeline_config_updates` from `resume_data` and deep-merges into `state["pipeline_config"]`
+- **AND** the merge happens atomically within the node's state return (not via separate `aupdate_state` call)
 - **AND** subsequent nodes read the updated config via `NodeContext.from_state()`
+
+#### Scenario: Config updates validated before resume
+- **WHEN** a user calls POST /api/v1/jobs/{job_id}/confirm with `pipeline_config_updates`
+- **THEN** the endpoint validates the updated config topology before resuming (calls internal validate logic)
+- **AND** if validation fails, returns HTTP 400 with the validation error
+- **AND** the graph is NOT resumed (remains in interrupted state)
+
+#### Scenario: Invalid pipeline_config_updates format
+- **WHEN** a user calls confirm with `pipeline_config_updates: {"mesh_repair": "invalid"}`
+- **THEN** the endpoint returns HTTP 422 with Pydantic validation error
+- **AND** the graph is NOT resumed
 
 #### Scenario: User confirms DrawingSpec without changes
 - **WHEN** a user calls POST /api/v1/jobs/{id}/confirm with the original DrawingSpec and `disclaimer_accepted=true`
@@ -69,7 +82,7 @@ The `ConfirmRequest` Pydantic model SHALL include an optional `pipeline_config_u
 #### Scenario: Confirm request with pipeline config updates
 - **WHEN** a confirm request body contains `{"confirmed_params": {...}, "pipeline_config_updates": {"node_a": {"timeout": 180}}}`
 - **THEN** the request is accepted and validated by Pydantic
-- **AND** `pipeline_config_updates` is processed before graph resume
+- **AND** `pipeline_config_updates` is included in `resume_data` for `Command(resume=...)`
 
 #### Scenario: Confirm request without pipeline config updates
 - **WHEN** a confirm request body contains `{"confirmed_params": {...}}` (no pipeline_config_updates)

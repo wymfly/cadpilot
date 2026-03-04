@@ -36,25 +36,29 @@ The frontend SHALL provide a `SchemaForm` component that accepts a JSON Schema (
 - **WHEN** `config_schema` contains `enabled` and `strategy` properties
 - **THEN** `SchemaForm` does NOT render them (they are handled by NodeConfigCard header)
 
-### Requirement: Config schema enhancement from Pydantic metadata
+#### Scenario: Unsupported type renders read-only display
+- **WHEN** `config_schema` contains a property with `"type": "object"` or `"type": "array"`
+- **THEN** `SchemaForm` renders a read-only `Typography.Text` showing the JSON value
+- **AND** does NOT attempt to render nested form controls (complex types unsupported in v1)
 
-The backend SHALL enrich `config_schema` JSON Schema generation with metadata from Pydantic Field definitions.
+### Requirement: Config schema enhancement — x-sensitive auto-detection
 
-#### Scenario: Field description extracted
-- **WHEN** a config_model has `Field(description="超时时间（秒）")`
-- **THEN** the generated schema property includes `"description": "超时时间（秒）"`
+The backend SHALL post-process `config_schema` from Pydantic v2's native `model_json_schema()` to inject `x-sensitive: true` for fields whose names contain `api_key`, `secret`, or `password`. All other schema metadata (description, minimum/maximum, x-group via `json_schema_extra`) is already handled natively by Pydantic v2 and requires no custom extraction logic.
 
-#### Scenario: Numeric constraints extracted
-- **WHEN** a config_model has `Field(ge=10, le=600)`
-- **THEN** the generated schema property includes `"minimum": 10, "maximum": 600`
-
-#### Scenario: Custom x-group extracted
-- **WHEN** a config_model has `Field(json_schema_extra={"x-group": "高级"})`
-- **THEN** the generated schema property includes `"x-group": "高级"`
+Note: `x-sensitive` is a **UI-only marker** for rendering `Input.Password` in the frontend. It does NOT provide backend security. SSE event payloads SHALL sanitize sensitive field values (mask to `"***"`) to prevent leaking secrets through the event stream.
 
 #### Scenario: Sensitive field auto-detected
 - **WHEN** a config_model field name contains `api_key`, `secret`, or `password`
 - **THEN** the generated schema property includes `"x-sensitive": true`
+
+#### Scenario: Pydantic v2 native metadata preserved
+- **WHEN** a config_model has `Field(description="超时时间（秒）", ge=10, le=600, json_schema_extra={"x-group": "高级"})`
+- **THEN** the generated schema property includes `"description": "超时时间（秒）"`, `"minimum": 10`, `"maximum": 600`, `"x-group": "高级"` — all from Pydantic v2's native `model_json_schema()`, no custom extraction needed
+
+#### Scenario: SSE events sanitize sensitive config values
+- **WHEN** a node's config contains `api_key: "sk-abc123"`
+- **AND** the node dispatches SSE events containing config data
+- **THEN** the `api_key` value in the SSE payload is masked as `"***"`
 
 ### Requirement: NodeConfigCard with collapsible design
 
@@ -70,7 +74,7 @@ Each node SHALL be rendered as a collapsible card in the CustomPanel, with heade
 
 ### Requirement: ValidationBanner real-time validation
 
-The frontend SHALL display a ValidationBanner that validates the current pipeline config by calling `POST /pipeline/validate` with 300ms debounce after any config change.
+The frontend SHALL display a ValidationBanner that validates the current pipeline config by calling `POST /pipeline/validate` with 300ms debounce after any config change. The component SHALL use `AbortController` to cancel in-flight requests when a new validation is triggered, preventing stale responses from overwriting current state.
 
 #### Scenario: Valid config shows success banner
 - **WHEN** the current config is valid
@@ -80,6 +84,7 @@ The frontend SHALL display a ValidationBanner that validates the current pipelin
 - **WHEN** a core dependency is disabled (e.g., `generate_raw_mesh` depends on `mesh_healer` which is disabled)
 - **THEN** a red banner shows "✗ 无效 — generate_raw_mesh 的依赖 mesh_healer 已禁用"
 
-#### Scenario: Debounced validation
+#### Scenario: Debounced validation with request cancellation
 - **WHEN** the user rapidly toggles multiple node switches within 300ms
 - **THEN** only one validate API call is made after the last change
+- **AND** any in-flight previous request is aborted via `AbortController.abort()`

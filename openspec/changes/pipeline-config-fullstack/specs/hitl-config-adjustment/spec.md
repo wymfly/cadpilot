@@ -20,3 +20,9 @@ The HITL ConfirmDialog SHALL include a collapsible "高级配置" section that a
 - **AND** the existing `pipeline_config` has `{"mesh_repair": {"enabled": true, "strategy": "manifold"}}`
 - **THEN** the merged config is `{"mesh_repair": {"enabled": true, "strategy": "manifold", "timeout": 300}}`
 - **AND** subsequent nodes read the merged config via `NodeContext.from_state()`
+
+#### Scenario: HITL config changes validated before confirm
+- **WHEN** the user modifies config in the HITL dialog and clicks confirm
+- **THEN** the frontend calls `POST /pipeline/validate` with the merged config before sending confirm request
+- **AND** if validation fails, shows error in the dialog and blocks confirm
+- **AND** if validation passes, proceeds with the confirm request
