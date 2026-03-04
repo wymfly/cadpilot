@@ -361,4 +361,22 @@ export async function getAvailableModels(): Promise<ModelOption[]> {
   return data.models;
 }
 
+// System Config API
+export async function getSystemConfigSchema(): Promise<Record<string, { properties: Record<string, unknown> }>> {
+  const { data } = await api.get<Record<string, { properties: Record<string, unknown> }>>('/v1/pipeline/system-config-schema');
+  return data;
+}
+
+export async function getSystemConfig(): Promise<Record<string, Record<string, unknown>>> {
+  const { data } = await api.get<Record<string, Record<string, unknown>>>('/v1/pipeline/system-config');
+  return data;
+}
+
+export async function updateSystemConfig(
+  config: Record<string, Record<string, unknown>>,
+): Promise<{ ok: boolean }> {
+  const { data } = await api.put<{ ok: boolean }>('/v1/pipeline/system-config', config);
+  return data;
+}
+
 export default api;

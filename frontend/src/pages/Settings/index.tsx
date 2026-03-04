@@ -1,7 +1,8 @@
 import { Typography, Tabs } from 'antd';
-import { SettingOutlined, PrinterOutlined } from '@ant-design/icons';
+import { SettingOutlined, PrinterOutlined, ApiOutlined } from '@ant-design/icons';
 import ModelConfigPanel from './ModelConfigPanel.tsx';
 import PrintConfigPanel from './PrintConfigPanel.tsx';
+import SystemConfigPanel from './SystemConfigPanel.tsx';
 
 const { Title } = Typography;
 
@@ -16,8 +17,7 @@ export default function Settings() {
             key: 'models',
             label: (
               <span>
-                <SettingOutlined />
-                模型配置
+                <SettingOutlined /> 模型配置
               </span>
             ),
             children: <ModelConfigPanel />,
@@ -26,11 +26,19 @@ export default function Settings() {
             key: 'print',
             label: (
               <span>
-                <PrinterOutlined />
-                打印配置
+                <PrinterOutlined /> 打印配置
               </span>
             ),
             children: <PrintConfigPanel />,
+          },
+          {
+            key: 'system',
+            label: (
+              <span>
+                <ApiOutlined /> 系统配置
+              </span>
+            ),
+            children: <SystemConfigPanel />,
           },
         ]}
       />
