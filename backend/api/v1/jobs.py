@@ -310,19 +310,29 @@ async def create_job_endpoint(body: CreateJobRequest, request: Request) -> Event
 
     logger_api = logging.getLogger(__name__)
 
+    has_breakpoints = bool(body.breakpoints)
+
     async def event_stream() -> AsyncGenerator[dict[str, str], None]:
-        async for event in cad_graph.astream_events(initial_state, config=config, version="v2"):
-            if event["event"] == "on_custom_event":
-                name = event["name"]
-                data = event["data"]
-                emit_event(job_id, name, data)
-                # R4-P1-C: update DB BEFORE yield — client disconnect must not skip status update
-                if name == "node.breakpoint":
-                    try:
-                        await update_job(job_id, status=JobStatus.BREAKPOINT)
-                    except Exception:
-                        logger_api.warning("Failed to update job %s to breakpoint", job_id)
-                yield _sse(name, data)
+        try:
+            async for event in cad_graph.astream_events(initial_state, config=config, version="v2"):
+                if event["event"] == "on_custom_event":
+                    name = event["name"]
+                    data = event["data"]
+                    emit_event(job_id, name, data)
+                    # R4-P1-C: update DB BEFORE yield — client disconnect must not skip status update
+                    if name == "node.breakpoint":
+                        try:
+                            await update_job(job_id, status=JobStatus.BREAKPOINT)
+                        except Exception:
+                            logger_api.warning("Failed to update job %s to breakpoint", job_id)
+                    yield _sse(name, data)
+        except BaseException:
+            if has_breakpoints:
+                try:
+                    await update_job(job_id, status=JobStatus.BREAKPOINT)
+                except Exception:
+                    pass
+            raise
 
     return EventSourceResponse(event_stream())
 
@@ -394,20 +404,29 @@ async def create_drawing_job(
         await create_job(job_id, input_type="drawing", input_text="")
 
     logger_api = logging.getLogger(__name__)
+    has_breakpoints = bool(_bp)
 
     async def event_stream() -> AsyncGenerator[dict[str, str], None]:
-        async for event in cad_graph.astream_events(initial_state, config=config, version="v2"):
-            if event["event"] == "on_custom_event":
-                name = event["name"]
-                data = event["data"]
-                emit_event(job_id, name, data)
-                # R4-P1-C: update DB BEFORE yield — client disconnect must not skip status update
-                if name == "node.breakpoint":
-                    try:
-                        await update_job(job_id, status=JobStatus.BREAKPOINT)
-                    except Exception:
-                        logger_api.warning("Failed to update job %s to breakpoint", job_id)
-                yield _sse(name, data)
+        try:
+            async for event in cad_graph.astream_events(initial_state, config=config, version="v2"):
+                if event["event"] == "on_custom_event":
+                    name = event["name"]
+                    data = event["data"]
+                    emit_event(job_id, name, data)
+                    # R4-P1-C: update DB BEFORE yield — client disconnect must not skip status update
+                    if name == "node.breakpoint":
+                        try:
+                            await update_job(job_id, status=JobStatus.BREAKPOINT)
+                        except Exception:
+                            logger_api.warning("Failed to update job %s to breakpoint", job_id)
+                    yield _sse(name, data)
+        except BaseException:
+            if has_breakpoints:
+                try:
+                    await update_job(job_id, status=JobStatus.BREAKPOINT)
+                except Exception:
+                    pass
+            raise
 
     return EventSourceResponse(event_stream())
 
