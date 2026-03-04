@@ -200,7 +200,7 @@ async def get_system_config() -> dict[str, Any]:
         s_set = sensitive_fields.get(node_name, set())
         for k, v in node_config.items():
             if k in s_set and isinstance(v, str) and v:
-                if len(v) <= 8:
+                if len(v) < 12:
                     masked_node[k] = "****"
                 else:
                     masked_node[k] = v[:3] + "****" + v[-4:]
@@ -231,8 +231,15 @@ async def update_system_config(request: Request) -> Any:
             media_type="application/json",
         )
 
-    # Validate: only system-scope fields allowed
+    # Validate node names, config types, and scope — build sensitive lookup
+    sensitive_lookup: dict[str, set[str]] = {}
     for node_name, node_config in body.items():
+        if not isinstance(node_config, dict):
+            return Response(
+                status_code=400,
+                content=json.dumps({"error": f"Config for '{node_name}' must be a JSON object"}),
+                media_type="application/json",
+            )
         try:
             desc = registry.get(node_name)
         except KeyError:
@@ -249,6 +256,14 @@ async def update_system_config(request: Request) -> Any:
             )
         schema = enhance_config_schema(desc.config_model.model_json_schema())
         props = schema.get("properties", {})
+        # Collect sensitive fields
+        s_fields = set()
+        for fname, fschema in props.items():
+            if fschema.get("x-sensitive"):
+                s_fields.add(fname)
+        if s_fields:
+            sensitive_lookup[node_name] = s_fields
+        # Scope check
         for field_name in node_config:
             field_schema = props.get(field_name, {})
             if field_schema.get("x-scope") != "system":
@@ -258,11 +273,22 @@ async def update_system_config(request: Request) -> Any:
                     media_type="application/json",
                 )
 
-    # Type validation via config_model
+    # Filter out masked sensitive values BEFORE validation (F1+R2-1 fix)
+    clean_body: dict[str, dict[str, Any]] = {}
     for node_name, node_config in body.items():
+        s_set = sensitive_lookup.get(node_name, set())
+        clean_node: dict[str, Any] = {}
+        for field_name, field_value in node_config.items():
+            if field_name in s_set and isinstance(field_value, str) and "****" in field_value:
+                continue
+            clean_node[field_name] = field_value
+        if clean_node:
+            clean_body[node_name] = clean_node
+
+    # Type validation via config_model (runs on clean values only)
+    for node_name, node_config in clean_body.items():
         desc = registry.get(node_name)
         try:
-            # Validate submitted fields against Pydantic model
             desc.config_model(**node_config)
         except Exception as exc:
             return Response(
@@ -270,31 +296,6 @@ async def update_system_config(request: Request) -> Any:
                 content=json.dumps({"error": f"Validation error for '{node_name}': {exc}"}),
                 media_type="application/json",
             )
-
-    # Build sensitive field lookup for masked value detection
-    sensitive_lookup: dict[str, set[str]] = {}
-    for node_name in body:
-        desc = registry.get(node_name)
-        schema = enhance_config_schema(desc.config_model.model_json_schema())
-        s_fields = set()
-        for fname, fschema in schema.get("properties", {}).items():
-            if fschema.get("x-sensitive"):
-                s_fields.add(fname)
-        if s_fields:
-            sensitive_lookup[node_name] = s_fields
-
-    # Filter out masked sensitive values before saving (F1 fix)
-    clean_body: dict[str, dict[str, Any]] = {}
-    for node_name, node_config in body.items():
-        s_set = sensitive_lookup.get(node_name, set())
-        clean_node: dict[str, Any] = {}
-        for field_name, field_value in node_config.items():
-            # Skip masked values — keep original secret
-            if field_name in s_set and isinstance(field_value, str) and "****" in field_value:
-                continue
-            clean_node[field_name] = field_value
-        if clean_node:
-            clean_body[node_name] = clean_node
 
     # Atomic deep merge per node (F2+F5 fix: TOCTOU-safe)
     if clean_body:
