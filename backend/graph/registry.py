@@ -156,11 +156,13 @@ def enhance_config_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Post-process Pydantic v2 JSON schema: inject x-sensitive for sensitive fields.
 
     Pydantic v2 natively handles description, minimum/maximum, and json_schema_extra
-    (including x-group), so this function only adds x-sensitive auto-detection.
+    (including x-group and explicit x-sensitive via Field metadata).  This function
+    adds x-sensitive auto-detection as a safety net for fields that lack explicit
+    annotation but have sensitive-looking names (api_key, secret, password).
     """
     schema = copy.deepcopy(schema)
     props = schema.get("properties", {})
     for field_name, field_schema in props.items():
-        if _SENSITIVE_PATTERN.search(field_name):
+        if "x-sensitive" not in field_schema and _SENSITIVE_PATTERN.search(field_name):
             field_schema["x-sensitive"] = True
     return schema

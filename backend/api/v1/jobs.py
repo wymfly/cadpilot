@@ -648,11 +648,9 @@ async def confirm_job(job_id: str, body: ConfirmRequest, request: Request) -> Ev
     }
     # Validate and include pipeline config updates
     if body.pipeline_config_updates is not None:
-        from backend.graph.discovery import discover_nodes
         from backend.graph.registry import registry
         from backend.graph.resolver import DependencyResolver
 
-        discover_nodes()
         # NOTE: Job ORM doesn't persist pipeline_config (it lives in LangGraph
         # graph state).  We validate updates against an empty baseline here,
         # which catches gross errors (e.g. all nodes disabled).  The full

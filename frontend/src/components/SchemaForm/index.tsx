@@ -117,6 +117,7 @@ function renderField(
 
 export default function SchemaForm({ schema, value, onChange }: SchemaFormProps) {
   const properties = schema.properties ?? {};
+  const requiredFields = new Set((schema.required as string[] | undefined) ?? []);
 
   // Filter and group
   const fields = Object.entries(properties).filter(([name]) => !SKIP_FIELDS.has(name));
@@ -148,6 +149,7 @@ export default function SchemaForm({ schema, value, onChange }: SchemaFormProps)
             <div key={name} style={{ marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <Text style={{ fontSize: 12, flex: '0 0 auto' }}>
+                  {requiredFields.has(name) && <span style={{ color: '#ff4d4f', marginRight: 2 }}>*</span>}
                   {prop.description ?? name}
                 </Text>
                 <div style={{ flex: 1, maxWidth: 200 }}>

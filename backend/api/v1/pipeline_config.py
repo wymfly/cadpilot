@@ -30,10 +30,7 @@ async def get_pipeline_presets(response: Response) -> list[dict[str, Any]]:
 @router.get("/nodes")
 async def list_pipeline_nodes() -> dict[str, Any]:
     """返回所有注册节点的描述符。"""
-    from backend.graph.discovery import discover_nodes
     from backend.graph.registry import registry
-
-    discover_nodes()
 
     nodes = []
     for name, desc in registry.all().items():
@@ -82,11 +79,8 @@ async def get_node_presets() -> list[dict[str, Any]]:
 @router.post("/validate")
 async def validate_pipeline_config(request: Request) -> dict[str, Any]:
     """验证 pipeline 配置的有效性。"""
-    from backend.graph.discovery import discover_nodes
     from backend.graph.registry import registry
     from backend.graph.resolver import DependencyResolver
-
-    discover_nodes()
 
     try:
         body = await request.json()
@@ -124,10 +118,7 @@ async def validate_pipeline_config(request: Request) -> dict[str, Any]:
 @router.get("/strategy-availability")
 async def get_strategy_availability() -> dict[str, Any]:
     """返回各节点策略的运行时可用性。"""
-    from backend.graph.discovery import discover_nodes
     from backend.graph.registry import registry
-
-    discover_nodes()
 
     result: dict[str, dict[str, dict[str, Any]]] = {}
     for name, desc in registry.all().items():

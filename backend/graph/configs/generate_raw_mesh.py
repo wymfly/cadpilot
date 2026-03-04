@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pydantic import Field
+
 from backend.graph.configs.base import BaseNodeConfig
 
 
@@ -18,11 +20,15 @@ class GenerateRawMeshConfig(BaseNodeConfig):
     strategy: str = "hunyuan3d"
 
     # Hunyuan3D (SaaS + local)
-    hunyuan3d_api_key: str | None = None
+    hunyuan3d_api_key: str | None = Field(
+        default=None, json_schema_extra={"x-sensitive": True},
+    )
     hunyuan3d_endpoint: str | None = None
 
     # Tripo3D (SaaS only)
-    tripo3d_api_key: str | None = None
+    tripo3d_api_key: str | None = Field(
+        default=None, json_schema_extra={"x-sensitive": True},
+    )
 
     # SPAR3D (local only)
     spar3d_endpoint: str | None = None

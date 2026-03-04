@@ -24,6 +24,10 @@ settings = Settings()
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
 
+    # Pre-discover all node modules (triggers @register_node decorators)
+    from backend.graph.discovery import discover_nodes
+    discover_nodes()
+
     # Initialize LangGraph CAD pipeline
     from backend.graph import get_compiled_graph
 
