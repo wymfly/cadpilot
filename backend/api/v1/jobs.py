@@ -9,9 +9,11 @@
 from __future__ import annotations
 
 import asyncio
+import json as _json
+import logging
 import uuid
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Literal
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -29,6 +31,7 @@ from backend.models.job import (
     JobStatus,
     create_job,
     get_job,
+    update_job,
 )
 
 # SSE 格式化辅助（pipeline helper 由 LangGraph 节点替代）
@@ -54,6 +57,10 @@ class CreateJobRequest(BaseModel):
     constraints: dict[str, Any] | None = None  # organic: {bounding_box, engineering_cuts}
     parent_job_id: str | None = None  # fork: link to parent (text only)
     pipeline_config: dict[str, Any] = Field(default_factory=dict)
+    breakpoints: list[str] | None = Field(
+        default=None,
+        description="节点名称列表，执行完毕后暂停。'__all__' 表示每个节点都暂停。",
+    )
 
 
 class CreateJobResponse(BaseModel):
@@ -108,6 +115,11 @@ class JobListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ResumeRequest(BaseModel):
+    """断点恢复请求。"""
+    action: Literal["continue", "step", "run"] = "continue"
 
 
 class ConfirmRequest(BaseModel):
@@ -291,11 +303,26 @@ async def create_job_endpoint(body: CreateJobRequest, request: Request) -> Event
         initial_state["organic_reference_image"] = body.reference_image
         initial_state["organic_constraints"] = body.constraints
 
+    if body.breakpoints:
+        initial_state["breakpoints"] = body.breakpoints
+        # R4-P1-D: breakpoint 模式需要 DB 持久化（resume 端点依赖 get_job/update_job）
+        await create_job(job_id, input_type=body.input_type, input_text=input_text or "")
+
+    logger_api = logging.getLogger(__name__)
+
     async def event_stream() -> AsyncGenerator[dict[str, str], None]:
         async for event in cad_graph.astream_events(initial_state, config=config, version="v2"):
             if event["event"] == "on_custom_event":
-                emit_event(job_id, event["name"], event["data"])
-                yield _sse(event["name"], event["data"])
+                name = event["name"]
+                data = event["data"]
+                emit_event(job_id, name, data)
+                # R4-P1-C: update DB BEFORE yield — client disconnect must not skip status update
+                if name == "node.breakpoint":
+                    try:
+                        await update_job(job_id, status=JobStatus.BREAKPOINT)
+                    except Exception:
+                        logger_api.warning("Failed to update job %s to breakpoint", job_id)
+                yield _sse(name, data)
 
     return EventSourceResponse(event_stream())
 
@@ -341,6 +368,13 @@ async def create_drawing_job(
     else:
         pipeline_cfg = parse_pipeline_config(dict(pc_dict))
 
+    # Parse breakpoints from pipeline_config JSON
+    try:
+        _raw_cfg = _json.loads(pipeline_config)
+    except (ValueError, TypeError):
+        _raw_cfg = {}
+    _bp = _raw_cfg.get("_breakpoints") if isinstance(_raw_cfg, dict) else None
+
     initial_state: dict[str, Any] = {
         "job_id": job_id,
         "input_type": "drawing",
@@ -353,11 +387,26 @@ async def create_drawing_job(
         "node_trace": [],
     }
 
+    if _bp:
+        initial_state["breakpoints"] = _bp
+        # R4-P1-D: breakpoint 模式需要 DB 持久化
+        await create_job(job_id, input_type="drawing", input_text="")
+
+    logger_api = logging.getLogger(__name__)
+
     async def event_stream() -> AsyncGenerator[dict[str, str], None]:
         async for event in cad_graph.astream_events(initial_state, config=config, version="v2"):
             if event["event"] == "on_custom_event":
-                emit_event(job_id, event["name"], event["data"])
-                yield _sse(event["name"], event["data"])
+                name = event["name"]
+                data = event["data"]
+                emit_event(job_id, name, data)
+                # R4-P1-C: update DB BEFORE yield — client disconnect must not skip status update
+                if name == "node.breakpoint":
+                    try:
+                        await update_job(job_id, status=JobStatus.BREAKPOINT)
+                    except Exception:
+                        logger_api.warning("Failed to update job %s to breakpoint", job_id)
+                yield _sse(name, data)
 
     return EventSourceResponse(event_stream())
 
@@ -692,6 +741,88 @@ async def confirm_job(job_id: str, body: ConfirmRequest, request: Request) -> Ev
             if event["event"] == "on_custom_event":
                 emit_event(job_id, event["name"], event["data"])
                 yield _sse(event["name"], event["data"])
+
+    return EventSourceResponse(event_stream())
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/jobs/{job_id}/resume — 断点恢复
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{job_id}/resume")
+async def resume_job(job_id: str, body: ResumeRequest, request: Request) -> EventSourceResponse:
+    """从断点恢复管道执行。"""
+    from langgraph.types import Command
+
+    job = await get_job(job_id)
+    if job is None:
+        raise JobNotFoundError(job_id)
+
+    if job.status != JobStatus.BREAKPOINT:
+        raise InvalidJobStateError(
+            job_id,
+            current=job.status.value,
+            expected="breakpoint",
+        )
+
+    # Transition out of breakpoint (R2-C2-5)
+    await update_job(job_id, status=JobStatus.GENERATING)
+
+    cad_graph = request.app.state.cad_graph
+    config = {"configurable": {"thread_id": job_id}}
+    resume_data: dict[str, Any] = {"action": body.action}
+    logger_api = logging.getLogger(__name__)
+
+    async def event_stream() -> AsyncGenerator[dict[str, str], None]:
+        # R4-P1-A: LangGraph re-executes the interrupted node on resume.
+        # The wrapper's _safe_dispatch("node.breakpoint") fires again (replay).
+        # Skip the first node.breakpoint event to avoid:
+        # 1) sending duplicate SSE to client
+        # 2) update_job(BREAKPOINT) reverting status mid-execution
+        bp_replay_consumed = False
+
+        try:
+            async for event in cad_graph.astream_events(
+                Command(resume=resume_data),
+                config=config,
+                version="v2",
+            ):
+                if event["event"] == "on_custom_event":
+                    name = event["name"]
+                    data = event["data"]
+
+                    # R4-P1-A: skip replayed breakpoint event
+                    if name == "node.breakpoint" and not bp_replay_consumed:
+                        bp_replay_consumed = True
+                        continue
+
+                    emit_event(job_id, name, data)
+
+                    # R4-P1-C: update DB BEFORE yield — client disconnect must not skip status update
+                    if name == "node.breakpoint":
+                        try:
+                            await update_job(job_id, status=JobStatus.BREAKPOINT)
+                        except Exception:
+                            logger_api.warning("Failed to update job %s to breakpoint", job_id)
+
+                    yield _sse(name, data)
+
+            # R4-P1-A: stream completed normally — update final status
+            try:
+                current = await get_job(job_id)
+                if current and current.status == JobStatus.GENERATING:
+                    await update_job(job_id, status=JobStatus.COMPLETED)
+            except Exception:
+                logger_api.warning("Failed to update job %s to completed", job_id)
+
+        except Exception:
+            # R3-C3-6 fix: rollback status on stream failure
+            try:
+                await update_job(job_id, status=JobStatus.BREAKPOINT)
+            except Exception:
+                pass
+            raise
 
     return EventSourceResponse(event_stream())
 

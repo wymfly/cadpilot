@@ -43,8 +43,8 @@ class TestWrapNodeSkip:
 
         return PipelineBuilder()
 
-    async def test_skip_emits_events_and_returns_empty(self, mock_dispatch):
-        """Disabled node: emit node.started + node.skipped, return {}, don't execute fn."""
+    async def test_skip_emits_events_and_returns_skip_trace(self, mock_dispatch):
+        """Disabled node: emit node.skipped, return skip trace, don't execute fn."""
         desc = self._make_desc()
         wrapped = self._make_builder()._wrap_node(desc)
 
@@ -55,13 +55,19 @@ class TestWrapNodeSkip:
 
         result = await wrapped(state)
 
-        assert result == {}
+        # Returns skip trace entry (not empty dict)
+        assert result == {"node_trace": [{
+            "node": "test_node",
+            "skipped": True,
+            "elapsed_ms": 0,
+            "assets_produced": [],
+        }]}
         desc.fn.assert_not_called()
 
-        # Verify SSE events
+        # Only node.skipped event (no node.started for disabled nodes)
         events = [call.args[0] for call in mock_dispatch.call_args_list]
-        assert "node.started" in events
         assert "node.skipped" in events
+        assert "node.started" not in events
 
     async def test_skip_event_payload(self, mock_dispatch):
         """node.skipped event includes job_id, node, reason."""

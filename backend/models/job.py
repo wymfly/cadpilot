@@ -24,6 +24,7 @@ class JobStatus(str, Enum):
     INTENT_PARSED = "intent_parsed"
     AWAITING_CONFIRMATION = "awaiting_confirmation"
     AWAITING_DRAWING_CONFIRMATION = "awaiting_drawing_confirmation"
+    BREAKPOINT = "breakpoint"
     GENERATING = "generating"
     REFINING = "refining"
     COMPLETED = "completed"

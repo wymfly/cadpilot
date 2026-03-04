@@ -56,6 +56,18 @@ def _summarize_outputs(diff: dict[str, Any], max_len: int = 500) -> dict[str, An
     return summary
 
 
+def _last_completed_node(node_trace: list[dict[str, Any]]) -> str | None:
+    """Return the name of the last non-skipped node in trace.
+
+    R3-C3-1 fix: skip entries with {"skipped": True} to avoid
+    disabled nodes causing breakpoint misses.
+    """
+    for entry in reversed(node_trace):
+        if not entry.get("skipped"):
+            return entry["node"]
+    return None
+
+
 class PipelineBuilder:
     """Build a LangGraph StateGraph from a ResolvedPipeline."""
 
@@ -98,27 +110,24 @@ class PipelineBuilder:
         if interceptor_registry is not None:
             self._insert_interceptor_edges(workflow, resolved, interceptor_registry)
 
-        # Terminal nodes → END
+        # Terminal nodes → guard → END (R3 guard node architecture)
+        guard = self._make_bp_guard()
         for desc in resolved.ordered_nodes:
             if desc.is_terminal:
-                workflow.add_edge(desc.name, END)
+                guard_name = f"__bp_guard_{desc.name}__"
+                workflow.add_node(guard_name, guard)
+                workflow.add_edge(desc.name, guard_name)
+                workflow.add_edge(guard_name, END)
 
         return workflow
 
     def _wrap_node(self, desc: NodeDescriptor):
-        """Wrap a node function: NodeContext bridge + timing + SSE events."""
+        """Wrap a node function: NodeContext bridge + timing + SSE events + breakpoints."""
 
         async def wrapped(state: dict[str, Any]) -> dict[str, Any]:
             job_id = state.get("job_id", "unknown")
-            t0 = time.time()
 
-            await _safe_dispatch("node.started", {
-                "job_id": job_id,
-                "node": desc.name,
-                "timestamp": t0,
-            })
-
-            # Runtime skip: check if node is disabled in pipeline_config
+            # ── Disabled check FIRST (R2-G2-3: before breakpoint check) ──
             node_cfg = (state.get("pipeline_config") or {}).get(desc.name, {})
             if not node_cfg.get("enabled", True):
                 logger.info("Node %s skipped (disabled)", desc.name)
@@ -127,20 +136,60 @@ class PipelineBuilder:
                     "node": desc.name,
                     "reason": "disabled",
                 })
-                return {}
+                # R2-G2-3: write skip trace to advance node_trace
+                return {"node_trace": [{
+                    "node": desc.name,
+                    "skipped": True,
+                    "elapsed_ms": 0,
+                    "assets_produced": [],
+                }]}
+
+            # ── Pre-execution breakpoint (OUTSIDE try/except) ──
+            bp_list = state.get("breakpoints") or []
+            breakpoint_update: dict[str, Any] = {}
+            if bp_list:
+                node_trace = state.get("node_trace") or []
+                last_completed = _last_completed_node(node_trace)
+                if last_completed and (last_completed in bp_list or "__all__" in bp_list):
+                    from langgraph.types import interrupt
+
+                    await _safe_dispatch("node.breakpoint", {
+                        "job_id": job_id,
+                        "paused_after": last_completed,
+                        "next_node": desc.name,
+                    })
+
+                    resume_val = interrupt({
+                        "paused_after": last_completed,
+                        "next_node": desc.name,
+                        "status": "breakpoint",
+                    })
+
+                    if isinstance(resume_val, dict) and "action" in resume_val:
+                        action = resume_val["action"]
+                        if action == "step":
+                            breakpoint_update["breakpoints"] = ["__all__"]
+                        elif action == "run":
+                            breakpoint_update["breakpoints"] = []
+
+            # ── Normal execution (existing code structure) ──
+            t0 = time.time()
+            await _safe_dispatch("node.started", {
+                "job_id": job_id,
+                "node": desc.name,
+                "timestamp": t0,
+            })
 
             try:
                 ctx = NodeContext.from_state(state, desc)
                 result = await desc.fn(ctx)
                 elapsed_ms = round((time.time() - t0) * 1000)
 
-                # Legacy nodes return dicts; new-style nodes return None
                 if isinstance(result, dict):
                     diff = result
                 else:
                     diff = ctx.to_state_diff()
 
-                # Build trace entry
                 reasoning = diff.pop("_reasoning", None)
                 trace_entry = {
                     "node": desc.name,
@@ -148,15 +197,15 @@ class PipelineBuilder:
                     "reasoning": reasoning,
                     "assets_produced": list(diff.get("assets", {}).keys()),
                 }
-
-                # Merge fallback trace under namespace to avoid key collision
                 if hasattr(ctx, '_fallback_trace') and ctx._fallback_trace:
                     trace_entry["fallback"] = ctx._fallback_trace
 
-                # Inject trace into diff
                 if "node_trace" not in diff:
                     diff["node_trace"] = []
                 diff["node_trace"].append(trace_entry)
+
+                if breakpoint_update:
+                    diff.update(breakpoint_update)
 
                 await _safe_dispatch("node.completed", {
                     "job_id": job_id,
@@ -179,16 +228,57 @@ class PipelineBuilder:
                 })
                 if desc.non_fatal:
                     logger.warning("Non-fatal node '%s' failed: %s", desc.name, exc)
-                    return {"node_trace": [{
+                    diff = {"node_trace": [{
                         "node": desc.name,
                         "elapsed_ms": elapsed_ms,
                         "error": str(exc),
                         "non_fatal": True,
                     }]}
+                    # R3-G3-3 fix: preserve breakpoint state update
+                    if breakpoint_update:
+                        diff.update(breakpoint_update)
+                    return diff
                 raise
 
         wrapped.__name__ = f"wrapped_{desc.name}"
         return wrapped
+
+    def _make_bp_guard(self) -> Any:
+        """Create a lightweight breakpoint guard node for terminal → END."""
+
+        async def bp_guard(state: dict[str, Any]) -> dict[str, Any]:
+            bp_list = state.get("breakpoints") or []
+            if not bp_list:
+                return {}
+
+            node_trace = state.get("node_trace") or []
+            last_completed = _last_completed_node(node_trace)
+            if last_completed and (last_completed in bp_list or "__all__" in bp_list):
+                from langgraph.types import interrupt
+
+                job_id = state.get("job_id", "unknown")
+                await _safe_dispatch("node.breakpoint", {
+                    "job_id": job_id,
+                    "paused_after": last_completed,
+                    "next_node": "__end__",
+                })
+
+                resume_val = interrupt({
+                    "paused_after": last_completed,
+                    "next_node": "__end__",
+                    "status": "breakpoint",
+                })
+
+                if isinstance(resume_val, dict):
+                    action = resume_val.get("action")
+                    if action == "run":
+                        return {"breakpoints": []}
+                    # R4-P2-A: "step" at terminal = continue (no next node).
+                    # Guard returns {} → graph proceeds to END normally.
+            return {}
+
+        bp_guard.__name__ = "__bp_guard__"
+        return bp_guard
 
     def _get_intercepted_edges(
         self,
