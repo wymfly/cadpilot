@@ -16,7 +16,6 @@ dependencies = [
     "rlpycairo>=0.3.0",
     "loguru>=0.7.2",
     "langchainhub>=0.1.15",
-
     "numpy>=1.26.4",
     "python-dotenv>=1.0.1",
     "langchain-anthropic>=0.3.0,<1.0",
