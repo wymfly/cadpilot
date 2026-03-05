@@ -1,1 +1,1 @@
-"""3D mesh generation strategies — multi-model with dual deployment."""
+"""3D mesh generation strategies — local GPU server endpoints."""
