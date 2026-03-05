@@ -1,15 +1,15 @@
 """boolean_assemble — manifold3d voxel repair gate + boolean difference cuts.
 
 Replaces the boolean_cuts stub. Strategy-based node that:
-  1. Checks if scaled_mesh is manifold (watertight)
+  1. Checks if shelled_mesh is manifold (watertight)
   2. Non-manifold -> voxelization repair via manifold3d (with 2x retry)
   3. Executes boolean difference cuts (FlatBottomCut, HoleCut, SlotCut)
   4. Produces final_mesh asset
 
 Passthrough conditions:
-  - No engineering_cuts -> passthrough scaled_mesh as final_mesh
+  - No engineering_cuts -> passthrough shelled_mesh as final_mesh
   - quality_mode="draft" -> passthrough
-  - No scaled_mesh -> skipped_no_input
+  - No shelled_mesh -> skipped_no_input
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 @register_node(
     name="boolean_assemble",
     display_name="布尔装配",
-    requires=["scaled_mesh"],
+    requires=["shelled_mesh"],
     produces=["final_mesh"],
     input_types=["organic"],
     config_model=BooleanAssembleConfig,
@@ -41,13 +41,13 @@ async def boolean_assemble_node(ctx: NodeContext) -> None:
     """Execute boolean assembly: manifold gate + boolean difference cuts.
 
     Passthrough conditions checked before strategy dispatch:
-    - No scaled_mesh -> skipped_no_input
+    - No shelled_mesh -> skipped_no_input
     - No engineering_cuts -> passthrough_no_cuts
     - quality_mode="draft" -> passthrough_draft
     """
     # Guard: no input mesh
-    if not ctx.has_asset("scaled_mesh"):
-        logger.warning("boolean_assemble: no scaled_mesh asset, skipping")
+    if not ctx.has_asset("shelled_mesh"):
+        logger.warning("boolean_assemble: no shelled_mesh asset, skipping")
         ctx.put_data("boolean_assemble_status", "skipped_no_input")
         return
 
@@ -74,8 +74,8 @@ async def boolean_assemble_node(ctx: NodeContext) -> None:
 
 
 def _passthrough(ctx: NodeContext, status: str) -> None:
-    """Pass scaled_mesh through as final_mesh."""
-    scaled = ctx.get_asset("scaled_mesh")
+    """Pass shelled_mesh through as final_mesh."""
+    scaled = ctx.get_asset("shelled_mesh")
     ctx.put_data("boolean_assemble_status", status)
     ctx.put_asset(
         "final_mesh", scaled.path, "mesh",

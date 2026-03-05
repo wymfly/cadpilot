@@ -54,23 +54,28 @@ class TestMeshNodeRegistration:
     def test_boolean_assemble_registered(self) -> None:
         desc = registry.get("boolean_assemble")
         assert desc.display_name == "布尔装配"
-        assert desc.requires == ["scaled_mesh"]
+        assert desc.requires == ["shelled_mesh"]
         assert desc.produces == ["final_mesh"]
         assert desc.input_types == ["organic"]
 
     def test_pipeline_chain_produces_matches_requires(self) -> None:
-        """Verify the dependency chain: repair -> scale -> boolean_assemble."""
+        """Verify the dependency chain: repair -> scale -> shell -> boolean_assemble."""
         repair = registry.get("mesh_healer")
         scale = registry.get("mesh_scale")
+        shell = registry.get("shell_node")
         assemble = registry.get("boolean_assemble")
 
         # repair produces what scale requires
         assert "watertight_mesh" in repair.produces
         assert "watertight_mesh" in scale.requires
 
-        # scale produces what boolean_assemble requires
+        # scale produces what shell_node requires
         assert "scaled_mesh" in scale.produces
-        assert "scaled_mesh" in assemble.requires
+        assert "scaled_mesh" in shell.requires
+
+        # shell_node produces what boolean_assemble requires
+        assert "shelled_mesh" in shell.produces
+        assert "shelled_mesh" in assemble.requires
 
         # boolean_assemble produces final_mesh
         assert "final_mesh" in assemble.produces
@@ -162,12 +167,12 @@ class TestMeshScaleNode:
 class TestBooleanAssembleNode:
     @pytest.mark.asyncio
     async def test_passthrough_without_cuts(self) -> None:
-        """No engineering_cuts -> passthrough scaled_mesh as final_mesh."""
+        """No engineering_cuts -> passthrough shelled_mesh as final_mesh."""
         from backend.graph.nodes.boolean_assemble import boolean_assemble_node
 
         ctx = _make_ctx(
             "boolean_assemble",
-            assets={"scaled_mesh": "/tmp/scaled.glb"},
+            assets={"shelled_mesh": "/tmp/shelled.glb"},
         )
         await boolean_assemble_node(ctx)
         assert ctx.has_asset("final_mesh")

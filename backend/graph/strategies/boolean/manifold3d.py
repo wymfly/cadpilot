@@ -1,7 +1,7 @@
 """Manifold3DStrategy — manifold check gate + boolean difference cuts.
 
 Flow:
-  1. Load scaled_mesh -> is_manifold_check (trimesh.is_watertight)
+  1. Load shelled_mesh -> is_manifold_check (trimesh.is_watertight)
   2. Manifold -> execute boolean cuts directly
   3. Non-manifold -> force_voxelize(resolution) via manifold3d
   4. Recheck -> manifold -> execute boolean cuts
@@ -40,7 +40,7 @@ class Manifold3DStrategy(NodeStrategy):
         skip_on_non_manifold = getattr(config, "skip_on_non_manifold", False)
 
         # 1. Load mesh
-        asset = ctx.get_asset("scaled_mesh")
+        asset = ctx.get_asset("shelled_mesh")
         mesh = await asyncio.to_thread(trimesh.load, asset.path, force="mesh")
 
         # 2. Get cuts from organic_spec

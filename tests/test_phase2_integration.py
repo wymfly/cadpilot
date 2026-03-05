@@ -165,13 +165,13 @@ class TestOrganicPipelineE2E:
         # ---- Node 4: boolean_assemble ----
         from backend.graph.nodes.boolean_assemble import boolean_assemble_node
 
-        # Use the scaled path from ctx3
+        # Use the scaled path from ctx3 as shelled_mesh (passthrough equivalent)
         scaled_asset_path = ctx3.get_asset("scaled_mesh").path
 
         ctx4 = _make_ctx(
             "boolean_assemble",
             data={"organic_spec": {"engineering_cuts": []}},
-            assets={"scaled_mesh": scaled_asset_path},
+            assets={"shelled_mesh": scaled_asset_path},
         )
 
         await boolean_assemble_node(ctx4)
@@ -207,7 +207,8 @@ class TestOrganicPipelineE2E:
         # generate_raw_mesh (produces raw_mesh)
         # -> mesh_healer (requires raw_mesh, produces watertight_mesh)
         # -> mesh_scale (requires watertight_mesh, produces scaled_mesh)
-        # -> boolean_assemble (requires scaled_mesh, produces final_mesh)
+        # -> shell_node (requires scaled_mesh, produces shelled_mesh)
+        # -> boolean_assemble (requires shelled_mesh, produces final_mesh)
         # -> slice_to_gcode (requires final_mesh|scaled_mesh|watertight_mesh, produces gcode_bundle)
 
         gen = registry.get("generate_raw_mesh")
@@ -222,7 +223,7 @@ class TestOrganicPipelineE2E:
         assert "watertight_mesh" in heal.produces
         assert "watertight_mesh" in scale.requires
         assert "scaled_mesh" in scale.produces
-        assert "scaled_mesh" in assemble.requires
+        assert "shelled_mesh" in assemble.requires
         assert "final_mesh" in assemble.produces
         # slice_to_gcode uses OR dependency (includes Phase 3 optimized meshes)
         or_group = slicer.requires[0]
@@ -249,7 +250,7 @@ class TestOrganicPipelineE2E:
         await mesh_scale_node(ctx_scale)
         assert ctx_scale.get_data("mesh_scale_status") == "skipped_no_input"
 
-        # boolean_assemble: no scaled_mesh -> skip
+        # boolean_assemble: no shelled_mesh -> skip
         ctx_bool = _make_ctx("boolean_assemble")
         await boolean_assemble_node(ctx_bool)
         assert ctx_bool.get_data("boolean_assemble_status") == "skipped_no_input"

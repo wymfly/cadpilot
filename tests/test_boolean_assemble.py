@@ -92,7 +92,7 @@ def _save_mesh_to_tmp(mesh: trimesh.Trimesh) -> str:
 
 def _make_ctx(
     *,
-    has_scaled_mesh: bool = True,
+    has_shelled_mesh: bool = True,
     mesh: trimesh.Trimesh | None = None,
     organic_spec: OrganicSpec | None = None,
     config_overrides: dict | None = None,
@@ -102,11 +102,11 @@ def _make_ctx(
     asset_reg = AssetRegistry()
 
     mesh_path = ""
-    if has_scaled_mesh:
+    if has_shelled_mesh:
         if mesh is None:
             mesh = _make_test_mesh()
         mesh_path = _save_mesh_to_tmp(mesh)
-        asset_reg.put("scaled_mesh", mesh_path, "mesh", "mesh_scale")
+        asset_reg.put("shelled_mesh", mesh_path, "mesh", "shell_node")
 
     data: dict = {}
     if organic_spec is not None:
@@ -138,7 +138,7 @@ class TestBooleanAssembleRegistration:
     def test_boolean_assemble_registered(self) -> None:
         desc = registry.get("boolean_assemble")
         assert desc.display_name == "布尔装配"
-        assert desc.requires == ["scaled_mesh"]
+        assert desc.requires == ["shelled_mesh"]
         assert desc.produces == ["final_mesh"]
         assert desc.input_types == ["organic"]
 
@@ -193,17 +193,17 @@ class TestBooleanAssemblePassthrough:
 
     @pytest.mark.asyncio
     async def test_passthrough_when_no_cuts(self) -> None:
-        """No engineering_cuts -> passthrough scaled_mesh as final_mesh."""
+        """No engineering_cuts -> passthrough shelled_mesh as final_mesh."""
         from backend.graph.nodes.boolean_assemble import boolean_assemble_node
 
         spec = _make_organic_spec(engineering_cuts=[])
-        ctx = _make_ctx(has_scaled_mesh=True, organic_spec=spec)
+        ctx = _make_ctx(has_shelled_mesh=True, organic_spec=spec)
 
         await boolean_assemble_node(ctx)
 
         assert ctx.has_asset("final_mesh")
-        # Path should match scaled_mesh (passthrough)
-        scaled_path = ctx.get_asset("scaled_mesh").path
+        # Path should match shelled_mesh (passthrough)
+        scaled_path = ctx.get_asset("shelled_mesh").path
         final_path = ctx.get_asset("final_mesh").path
         assert final_path == scaled_path
         assert ctx.get_data("boolean_assemble_status") == "passthrough_no_cuts"
@@ -213,7 +213,7 @@ class TestBooleanAssemblePassthrough:
         """No organic_spec -> passthrough (no cuts to apply)."""
         from backend.graph.nodes.boolean_assemble import boolean_assemble_node
 
-        ctx = _make_ctx(has_scaled_mesh=True, organic_spec=None)
+        ctx = _make_ctx(has_shelled_mesh=True, organic_spec=None)
 
         await boolean_assemble_node(ctx)
 
@@ -229,7 +229,7 @@ class TestBooleanAssemblePassthrough:
             quality_mode="draft",
             engineering_cuts=[FlatBottomCut(offset=2.0)],
         )
-        ctx = _make_ctx(has_scaled_mesh=True, organic_spec=spec)
+        ctx = _make_ctx(has_shelled_mesh=True, organic_spec=spec)
 
         await boolean_assemble_node(ctx)
 
@@ -237,11 +237,11 @@ class TestBooleanAssemblePassthrough:
         assert ctx.get_data("boolean_assemble_status") == "passthrough_draft"
 
     @pytest.mark.asyncio
-    async def test_skips_when_no_scaled_mesh(self) -> None:
-        """No scaled_mesh -> skipped_no_input, no final_mesh produced."""
+    async def test_skips_when_no_shelled_mesh(self) -> None:
+        """No shelled_mesh -> skipped_no_input, no final_mesh produced."""
         from backend.graph.nodes.boolean_assemble import boolean_assemble_node
 
-        ctx = _make_ctx(has_scaled_mesh=False)
+        ctx = _make_ctx(has_shelled_mesh=False)
 
         await boolean_assemble_node(ctx)
 
@@ -768,7 +768,7 @@ class TestBooleanCutOperations:
             quality_mode="draft",
             engineering_cuts=[FlatBottomCut(offset=2.0)],
         )
-        ctx = _make_ctx(has_scaled_mesh=True, organic_spec=spec)
+        ctx = _make_ctx(has_shelled_mesh=True, organic_spec=spec)
 
         await boolean_assemble_node(ctx)
 
@@ -869,7 +869,7 @@ class TestBooleanAssembleNodeIntegration:
         spec = _make_organic_spec(
             engineering_cuts=[FlatBottomCut(offset=2.0)],
         )
-        ctx = _make_ctx(has_scaled_mesh=True, organic_spec=spec)
+        ctx = _make_ctx(has_shelled_mesh=True, organic_spec=spec)
 
         # Mock the strategy's execute method
         mock_execute = AsyncMock()
@@ -887,7 +887,7 @@ class TestBooleanAssembleNodeIntegration:
         from backend.graph.nodes.boolean_assemble import boolean_assemble_node
 
         spec = _make_organic_spec(engineering_cuts=[])
-        ctx = _make_ctx(has_scaled_mesh=True, organic_spec=spec)
+        ctx = _make_ctx(has_shelled_mesh=True, organic_spec=spec)
 
         await boolean_assemble_node(ctx)
 
